@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:mock": "tsx __tests__/providers/mock-provider.test.ts",
+    "demo:mock": "tsx scripts/demo-mock-provider.ts"
   },
   "dependencies": {
     "react": "^19.0.0",
@@ -22,6 +24,7 @@
     "postcss": "^8",
     "autoprefixer": "^10.0.1",
     "eslint": "^9",
-    "eslint-config-next": "^15.1.6"
+    "eslint-config-next": "^15.1.6",
+    "tsx": "^4.7.0"
   }
 }
