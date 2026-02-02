@@ -26,62 +26,74 @@ async function handleVerifyMode(
         const modelStreams = models.map(async (requestedModel) => {
           const modelId = requestedModel;
           
-          // Route this specific model
-          const routingDecision = modelRouter.route({
-            prompt,
-            promptLength: prompt.length,
-            requestedModel,
-          });
+          try {
+            // Route this specific model
+            const routingDecision = modelRouter.route({
+              prompt,
+              promptLength: prompt.length,
+              requestedModel,
+            });
 
-          // Send routing decision for this model
-          const routingMessage = {
-            type: "routing",
-            modelId,
-            routing: {
-              model: routingDecision.model,
-              reason: routingDecision.reason,
-              confidence: routingDecision.confidence,
-            },
-          };
-          const sseRouting = `data: ${JSON.stringify(routingMessage)}\n\n`;
-          controller.enqueue(encoder.encode(sseRouting));
-
-          // Create provider and stream
-          const provider = new MockProvider(50);
-          const response = provider.stream(prompt, {
-            model: routingDecision.model,
-            maxTokens,
-          });
-
-          // Stream chunks
-          for await (const chunk of response.chunks) {
-            const data = {
-              type: "chunk",
+            // Send routing decision for this model
+            const routingMessage = {
+              type: "routing",
               modelId,
-              content: chunk.content,
-              done: chunk.done,
+              routing: {
+                model: routingDecision.model,
+                reason: routingDecision.reason,
+                confidence: routingDecision.confidence,
+              },
             };
-            const sseMessage = `data: ${JSON.stringify(data)}\n\n`;
-            controller.enqueue(encoder.encode(sseMessage));
-          }
+            const sseRouting = `data: ${JSON.stringify(routingMessage)}\n\n`;
+            controller.enqueue(encoder.encode(sseRouting));
 
-          // Send metadata
-          const metadata = await response.metadata;
-          const metadataMessage = {
-            type: "metadata",
-            modelId,
-            metadata,
-          };
-          const sseMetadata = `data: ${JSON.stringify(metadataMessage)}\n\n`;
-          controller.enqueue(encoder.encode(sseMetadata));
+            // Create provider and stream
+            const provider = new MockProvider(50);
+            const response = provider.stream(prompt, {
+              model: routingDecision.model,
+              maxTokens,
+            });
+
+            // Stream chunks
+            for await (const chunk of response.chunks) {
+              const data = {
+                type: "chunk",
+                modelId,
+                content: chunk.content,
+                done: chunk.done,
+              };
+              const sseMessage = `data: ${JSON.stringify(data)}\n\n`;
+              controller.enqueue(encoder.encode(sseMessage));
+            }
+
+            // Send metadata
+            const metadata = await response.metadata;
+            const metadataMessage = {
+              type: "metadata",
+              modelId,
+              metadata,
+            };
+            const sseMetadata = `data: ${JSON.stringify(metadataMessage)}\n\n`;
+            controller.enqueue(encoder.encode(sseMetadata));
+          } catch (error) {
+            // Isolate error to this specific panel
+            const errorMessage = {
+              type: "error",
+              modelId,
+              error: error instanceof Error ? error.message : "Unknown error",
+            };
+            const sseError = `data: ${JSON.stringify(errorMessage)}\n\n`;
+            controller.enqueue(encoder.encode(sseError));
+          }
         });
 
-        // Wait for all streams to complete
-        await Promise.all(modelStreams);
+        // Use allSettled so one failure doesn't stop others
+        await Promise.allSettled(modelStreams);
 
         // Close the stream
         controller.close();
       } catch (error) {
+        // Global error (affects entire stream, not isolated to one panel)
         const errorMessage = {
           type: "error",
           error: error instanceof Error ? error.message : "Unknown error",

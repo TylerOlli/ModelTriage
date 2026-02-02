@@ -58,7 +58,46 @@ When one model errors, it should not affect other models' execution or display.
 
 ### Solution: Per-Panel Error Handling
 
-**Error Card Display** (IMPROVED)
+**API-Level Isolation** (IMPLEMENTED)
+
+Each model's processing is wrapped in try-catch:
+
+```typescript:26:62:src/app/api/stream/route.ts
+const modelStreams = models.map(async (requestedModel) => {
+  const modelId = requestedModel;
+  
+  try {
+    // Route this specific model
+    const routingDecision = modelRouter.route({
+      prompt,
+      promptLength: prompt.length,
+      requestedModel,
+    });
+
+    // Send routing, stream chunks, send metadata...
+    // (full implementation in route.ts)
+  } catch (error) {
+    // Isolate error to this specific panel
+    const errorMessage = {
+      type: "error",
+      modelId,  // ← Key: includes modelId
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+    const sseError = `data: ${JSON.stringify(errorMessage)}\n\n`;
+    controller.enqueue(encoder.encode(sseError));
+  }
+});
+
+// Use allSettled so one failure doesn't stop others
+await Promise.allSettled(modelStreams);
+```
+
+**Key Changes:**
+- Each model wrapped in try-catch
+- Errors sent with `modelId` for panel isolation
+- `Promise.allSettled` instead of `Promise.all` (one failure doesn't stop all)
+
+**UI-Level Error Card Display** (IMPLEMENTED)
 ```typescript:747:782:src/app/page.tsx
 <div className="mb-4">
   <div className="flex items-center justify-between mb-2">

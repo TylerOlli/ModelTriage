@@ -72,10 +72,26 @@ Sent once after streaming completes.
 
 Sent if an error occurs during streaming.
 
+**Per-Model Error (Verify Mode):**
+
+Isolated to a specific panel. Other models continue processing.
+
 ```json
 {
   "type": "error",
-  "error": "Error message"
+  "modelId": "model-1",
+  "error": "Provider timeout"
+}
+```
+
+**Global Error:**
+
+Affects the entire stream (all panels in Verify Mode).
+
+```json
+{
+  "type": "error",
+  "error": "Invalid request"
 }
 ```
 

@@ -106,17 +106,41 @@ if (data.type === "error") {
 
 #### API Implementation
 
-The `/api/stream` route sends errors with `modelId` for isolation:
+The `/api/stream` route wraps each model's processing in try-catch blocks and sends errors with `modelId` for isolation:
 
 ```typescript
-// Per-model error
+const modelStreams = models.map(async (requestedModel) => {
+  const modelId = requestedModel;
+  
+  try {
+    // ... routing, streaming logic ...
+  } catch (error) {
+    // Isolate error to this specific panel
+    const errorMessage = {
+      type: "error",
+      modelId,  // Isolates to this panel only
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+    const sseError = `data: ${JSON.stringify(errorMessage)}\n\n`;
+    controller.enqueue(encoder.encode(sseError));
+  }
+});
+
+// Use allSettled so one failure doesn't stop others
+await Promise.allSettled(modelStreams);
+```
+
+**Event types:**
+
+```typescript
+// Per-model error (isolated to one panel)
 {
   type: "error",
   modelId: "model-1",
   error: "Provider timeout"
 }
 
-// Global error (stream-level)
+// Global error (stream-level, affects all panels)
 {
   type: "error",
   error: "Invalid request"
