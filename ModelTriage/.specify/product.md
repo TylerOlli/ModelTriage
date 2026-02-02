@@ -35,3 +35,5 @@ This reduces cognitive load while increasing trust in AI-assisted work.
 - Enterprise features such as organizations, permissions, or audit logs
 - Automated actions taken on external systems
 - Fully learned or self-optimizing routing in the initial release
+
+> If a feature is not described in this file, it must not be implemented.
