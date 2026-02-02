@@ -85,6 +85,9 @@ The main application interface provides:
 - **Error handling** - Graceful error messages with partial output preservation
 - **Cancel functionality** - Ability to stop streaming (partial output preserved)
 - **Input validation** - Character counter and length enforcement
+- **Clear action** - Reset results and prompt (preserves Verify Mode settings)
+- **Try again** - Quick error recovery with one click
+- **Helpful instructions** - Explains single-answer vs Verify Mode before first use
 
 **Routing Logic (priority order):**
 - Analytical tasks → `mock-quality-1` (e.g., "Compare React and Vue")

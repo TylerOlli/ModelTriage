@@ -118,9 +118,11 @@ The warning appears in orange (`text-orange-600`) and only when the mode is acti
 ### Clearing Data
 
 Users can clear persisted data by:
-1. Clearing browser localStorage manually
-2. Clearing the prompt (persistence auto-removes it)
+1. **Clear button** - Removes prompt from localStorage and clears textarea
+2. Clearing browser localStorage manually
 3. Using browser dev tools → Application → Local Storage
+
+**Note:** The Clear button only removes the prompt; Verify Mode and model count settings are preserved.
 
 ## Privacy
 
@@ -165,10 +167,11 @@ localStorage is supported in all modern browsers:
    - Toggle Verify Mode OFF → Warning disappears
 
 5. **Test Prompt clearing:**
-   - Clear the prompt completely
-   - Wait 1 second
+   - Type some text in the prompt
+   - Wait for debounce (1 second)
+   - Click the Clear button
    - Refresh page
-   - ✓ Prompt should be empty
+   - ✓ Prompt should be empty (not restored)
 
 ### Browser Console Testing
 

@@ -336,8 +336,28 @@ export default function Home() {
     }
   };
 
+  const handleClear = () => {
+    // Reset single-answer mode state
+    setResponse("");
+    setError(null);
+    setRouting(null);
+    setMetadata(null);
+
+    // Reset Verify Mode state
+    setModelPanels({});
+    setDiffSummary(null);
+    setDiffError(null);
+
+    // Clear prompt text and remove from localStorage
+    setPrompt("");
+    localStorage.removeItem("lastPrompt");
+  };
+
   const characterCount = prompt.length;
   const isOverLimit = characterCount > 4000;
+  
+  // Check if we have any results to show
+  const hasResults = response || error || Object.keys(modelPanels).length > 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -458,6 +478,16 @@ export default function Home() {
                   Cancel
                 </button>
               )}
+
+              {hasResults && !isStreaming && (
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition-colors"
+                >
+                  Clear
+                </button>
+              )}
             </div>
           </div>
         </form>
@@ -552,14 +582,23 @@ export default function Home() {
                 {/* Error Display */}
                 {error && (
                   <div className="bg-red-50 rounded-lg border border-red-200 p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="text-red-600 text-lg">⚠️</span>
-                      <div>
-                        <h3 className="text-sm font-semibold text-red-900 mb-1">
-                          Error
-                        </h3>
-                        <p className="text-sm text-red-700">{error}</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <span className="text-red-600 text-lg">⚠️</span>
+                        <div>
+                          <h3 className="text-sm font-semibold text-red-900 mb-1">
+                            Error
+                          </h3>
+                          <p className="text-sm text-red-700">{error}</p>
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={handleClear}
+                        className="px-4 py-1 text-sm bg-white text-red-700 border border-red-300 rounded-lg hover:bg-red-50 font-medium transition-colors"
+                      >
+                        Try Again
+                      </button>
                     </div>
                   </div>
                 )}
@@ -567,33 +606,75 @@ export default function Home() {
             )}
 
             {/* Instructions */}
-            {!response && !isStreaming && (
+            {!response && !isStreaming && !error && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">
                   How it works
                 </h3>
-                <ul className="space-y-2 text-sm text-gray-600">
-                  <li className="flex items-start gap-2">
-                    <span className="text-blue-600 mt-0.5">•</span>
-                    <span>Enter your prompt in the text area above</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-blue-600 mt-0.5">•</span>
-                    <span>
-                      The model will be automatically selected based on your prompt
-                    </span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-blue-600 mt-0.5">•</span>
-                    <span>
-                      Responses stream in real-time as they&apos;re generated
-                    </span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-blue-600 mt-0.5">•</span>
-                    <span>Maximum prompt length: 4,000 characters</span>
-                  </li>
-                </ul>
+                
+                <div className="space-y-4">
+                  {/* Single-Answer Mode */}
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-900 mb-2">
+                      🎯 Single-Answer Mode (Default)
+                    </h4>
+                    <ul className="space-y-1.5 text-sm text-gray-600">
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-600 mt-0.5">•</span>
+                        <span>
+                          Submit a prompt and get one AI response
+                        </span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-600 mt-0.5">•</span>
+                        <span>
+                          Model is automatically selected based on your prompt type
+                        </span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-600 mt-0.5">•</span>
+                        <span>
+                          Fast and cost-effective for most use cases
+                        </span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  {/* Verify Mode */}
+                  <div className="pt-3 border-t border-gray-200">
+                    <h4 className="text-sm font-medium text-gray-900 mb-2">
+                      ⚡ Verify Mode (Optional)
+                    </h4>
+                    <ul className="space-y-1.5 text-sm text-gray-600">
+                      <li className="flex items-start gap-2">
+                        <span className="text-orange-600 mt-0.5">•</span>
+                        <span>
+                          Compare responses from 2-3 models side-by-side
+                        </span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-orange-600 mt-0.5">•</span>
+                        <span>
+                          See differences, agreements, and potential conflicts
+                        </span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-orange-600 mt-0.5">•</span>
+                        <span>
+                          Higher cost and latency - best for critical decisions
+                        </span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  {/* General Info */}
+                  <div className="pt-3 border-t border-gray-200 text-xs text-gray-500">
+                    <p>
+                      Maximum prompt length: 4,000 characters • 
+                      Responses stream in real-time
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
           </>
