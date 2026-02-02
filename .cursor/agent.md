@@ -8,10 +8,17 @@ You must follow the specifications in:
 - .specify/user-stories.md
 - .specify/requirements.md
 
-Do not add features, behaviors, or architecture that are not explicitly defined in those files.
+Process rules:
+- Before implementing any task, read the relevant sections of the .specify files.
+- Do not add features, behaviors, or architecture not explicitly defined in those files.
+- If a request is out of scope or unclear, stop and say which spec file is missing the requirement, then ask what to change in the specs.
 
-Default to MockProvider unless USE_LIVE_PROVIDERS=true.
+Cost and safety rules:
+- Default to MockProvider unless USE_LIVE_PROVIDERS=true.
+- Do not call paid providers unless USE_LIVE_PROVIDERS=true.
+- Enforce all hard limits, rate limits, and Verify Mode defaults defined in .specify/conventions.md.
+- All database writes must be gated behind ENABLE_DB_WRITES.
 
-Enforce all hard limits, cost controls, and Verify Mode defaults defined in conventions.
-
-If a requested change is not supported by the specs, you must say so and ask for clarification before proceeding.
+Work output rules:
+- For each change, explicitly state which requirement(s) from .specify/requirements.md it implements.
+- Keep tasks small and incremental. Do not implement multiple major features in one change set.
