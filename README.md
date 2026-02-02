@@ -88,6 +88,95 @@ Run integration tests (requires dev server running):
 npm run test:stream   # Test streaming API
 ```
 
+## Deploy to Vercel
+
+ModelTriage is ready for zero-config deployment on Vercel.
+
+### Quick Deploy
+
+1. **Import your repository:**
+   - Go to [vercel.com](https://vercel.com)
+   - Click "New Project"
+   - Import your Git repository
+
+2. **Configure (no environment variables needed):**
+   - Framework Preset: **Next.js** (auto-detected)
+   - Build Command: `npm run build` (default)
+   - Output Directory: `.next` (default)
+   - **Environment Variables:** None required for MVP
+
+3. **Deploy:**
+   - Click "Deploy"
+   - Wait for build to complete (~2-3 minutes)
+
+### Verify Deployment
+
+After deployment, test the following:
+
+**✅ Single-Answer Mode:**
+1. Enter a prompt (e.g., "Explain React hooks")
+2. Verify response streams progressively (not all at once)
+3. Check routing explanation displays correctly
+4. Verify metadata shows (model, latency, tokens)
+
+**✅ Verify Mode:**
+1. Enable Verify Mode toggle
+2. Select 2 or 3 models
+3. Enter a prompt
+4. Verify both/all panels stream independently
+5. Check diff summary appears after streaming completes
+
+**✅ Error Handling:**
+1. Test empty prompt (should show validation)
+2. Test prompt > 4,000 characters (should show error)
+3. Cancel a streaming request (should preserve partial output)
+
+### Deployment Notes
+
+**Runtime:**
+- The `/api/stream` endpoint uses Node.js runtime (not Edge) for optimal SSE streaming
+- This is configured in `src/app/api/stream/route.ts` with `export const runtime = "nodejs"`
+
+**MockProvider:**
+- The app uses MockProvider by default (zero external API calls)
+- No API keys or secrets required
+- All responses are deterministic and work offline
+
+**Environment Variables:**
+- None required for MVP
+- Future flags (`USE_LIVE_PROVIDERS`, `ENABLE_DB_WRITES`) are not yet implemented
+
+**Streaming:**
+- SSE streaming works out-of-the-box on Vercel
+- No additional configuration needed
+- Chunks are not buffered (progressive rendering confirmed)
+
+**Limitations:**
+- Serverless function timeout: 10 seconds on free tier (sufficient for MockProvider)
+- Concurrent executions: 100 on free tier (ample for testing)
+
+### Troubleshooting Deployment
+
+**Problem: Streaming appears buffered**
+- **Cause:** Browser caching or CDN edge caching
+- **Solution:** Hard refresh (Cmd+Shift+R / Ctrl+Shift+R)
+- **Verification:** Open DevTools → Network → check EventStream tab
+
+**Problem: Build fails with TypeScript errors**
+- **Cause:** Type errors in code
+- **Solution:** Run `npm run build` locally to identify issues
+- **Fix:** Run `npm run lint` and resolve errors
+
+**Problem: 404 on API routes**
+- **Cause:** Incorrect file structure
+- **Solution:** Verify `src/app/api/stream/route.ts` exists
+- **Verification:** Check deployment logs for file tree
+
+**Problem: Application crashes**
+- **Cause:** Missing dependencies
+- **Solution:** Verify `package.json` includes all dependencies
+- **Check:** Deployment logs for "Module not found" errors
+
 ## How It Works
 
 ### Streaming (High-Level)
@@ -218,6 +307,7 @@ See `docs/` for detailed technical documentation:
 ### Core Documentation
 - `architecture.md` - System architecture, folder structure, SSE event contract, and MockProvider rationale
 - `development.md` - Development commands, workflow, and troubleshooting guide
+- `deployment-checklist.md` - Vercel deployment verification and post-deployment testing
 
 ### Feature Documentation
 - `streaming-api.md` - SSE endpoint reference
