@@ -24,7 +24,8 @@ npm run test:stream   # Test streaming API (requires dev server)
 ```
 
 Test the streaming API in your browser:
-- Open [http://localhost:3000/test-stream.html](http://localhost:3000/test-stream.html)
+- Main app: [http://localhost:3000](http://localhost:3000)
+- API test page: [http://localhost:3000/test-stream.html](http://localhost:3000/test-stream.html)
 
 ## Tech Stack
 
@@ -38,13 +39,14 @@ Test the streaming API in your browser:
 
 ```
 modeltriage/
-├── app/                  # App Router directory
-│   ├── api/             # API routes
-│   │   └── stream/      # SSE streaming endpoint
-│   ├── layout.tsx       # Root layout
-│   ├── page.tsx         # Home page
-│   └── globals.css      # Global styles
-├── lib/                  # Core library code
+├── src/
+│   └── app/             # App Router directory
+│       ├── api/         # API routes
+│       │   └── stream/  # SSE streaming endpoint
+│       ├── layout.tsx   # Root layout
+│       ├── page.tsx     # Home page
+│       └── globals.css  # Global styles
+├── lib/                 # Core library code
 │   └── providers/       # LLM provider interfaces and implementations
 │       ├── types.ts     # Provider interface definitions
 │       ├── mock-provider.ts  # Mock provider for development
@@ -58,6 +60,26 @@ modeltriage/
 ├── docs/                # Documentation
 └── package.json         # Dependencies
 ```
+
+## Features
+
+### Single-Answer Mode (MVP)
+
+The main application interface provides:
+
+- **Prompt input** - Text area for entering prompts (max 4,000 characters)
+- **Real-time streaming** - Responses stream progressively as they're generated
+- **Loading states** - Clear visual feedback during streaming
+- **Metadata display** - Shows model, provider, latency, and token usage
+- **Error handling** - Graceful error messages with partial output preservation
+- **Cancel functionality** - Ability to stop streaming (partial output preserved)
+- **Input validation** - Character counter and length enforcement
+
+**Not yet implemented:**
+- Verify Mode (multi-model comparison)
+- Model routing explanation
+- Feedback/rating system
+- Rate limiting UI
 
 ## MockProvider
 
