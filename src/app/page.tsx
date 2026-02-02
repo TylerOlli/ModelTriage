@@ -312,17 +312,22 @@ export default function Home() {
         setDiffError("Could not generate diff summary");
       }
     } catch (err) {
-      if (err instanceof Error && err.name !== "AbortError") {
-        // Set global error for verify mode
-        Object.keys(initialPanels).forEach((modelId) => {
-          setModelPanels((prev) => ({
-            ...prev,
-            [modelId]: {
-              ...prev[modelId],
-              error: err.message,
-            },
-          }));
-        });
+      if (err instanceof Error) {
+        if (err.name === "AbortError") {
+          // Stream was cancelled - panels already marked in handleCancel
+          // Do nothing here, let the finally block clean up
+        } else {
+          // Set error for all panels
+          Object.keys(initialPanels).forEach((modelId) => {
+            setModelPanels((prev) => ({
+              ...prev,
+              [modelId]: {
+                ...prev[modelId],
+                error: err.message,
+              },
+            }));
+          });
+        }
       }
     } finally {
       setIsStreaming(false);
@@ -331,8 +336,33 @@ export default function Home() {
   };
 
   const handleCancel = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    try {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        
+        // Mark all active panels as cancelled in Verify Mode
+        if (verifyMode && Object.keys(modelPanels).length > 0) {
+          setModelPanels((prevPanels) => {
+            const updatedPanels = { ...prevPanels };
+            Object.keys(updatedPanels).forEach((modelId) => {
+              // Only mark as cancelled if not already completed (no metadata yet)
+              if (!updatedPanels[modelId].metadata) {
+                updatedPanels[modelId] = {
+                  ...updatedPanels[modelId],
+                  error: "Cancelled by user",
+                };
+              }
+            });
+            return updatedPanels;
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Error during cancel:", err);
+    } finally {
+      // Always reset streaming state to prevent stuck UI
+      setIsStreaming(false);
+      abortControllerRef.current = null;
     }
   };
 
