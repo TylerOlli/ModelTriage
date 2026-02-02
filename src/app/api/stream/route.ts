@@ -154,7 +154,17 @@ export async function POST(request: Request) {
 
     // Verify Mode: multiple models
     if (models && Array.isArray(models)) {
-      // Enforce max 3 models per spec
+      // Enforce min 2, max 3 models per spec
+      if (models.length < 2) {
+        return new Response(
+          JSON.stringify({ error: "Verify Mode requires at least 2 models" }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
       if (models.length > 3) {
         return new Response(
           JSON.stringify({ error: "Maximum 3 models allowed in Verify Mode" }),

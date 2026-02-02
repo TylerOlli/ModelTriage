@@ -18,15 +18,26 @@ The streaming API endpoint provides Server-Sent Events (SSE) for real-time LLM r
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `prompt` | string | Yes | - | The input prompt (max 4,000 characters) |
-| `model` | string | No | `"mock-model-1"` | Model identifier |
+| `model` | string | No | `"mock-model-1"` | Model identifier (single-answer mode) |
+| `models` | string[] | No | - | Array of model identifiers (Verify Mode, 2-3 models) |
 | `maxTokens` | number | No | `800` | Maximum output tokens |
 
-### Example Request
+### Example Requests
+
+**Single-Answer Mode:**
 
 ```bash
 curl -X POST http://localhost:3000/api/stream \
   -H "Content-Type: application/json" \
   -d '{"prompt": "Hello, how are you?"}'
+```
+
+**Verify Mode (2-3 models):**
+
+```bash
+curl -X POST http://localhost:3000/api/stream \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Compare React and Vue", "models": ["model-1", "model-2"]}'
 ```
 
 ## Response
@@ -110,6 +121,18 @@ Returned for validation errors:
 ```json
 {
   "error": "Prompt exceeds maximum length of 4,000 characters"
+}
+```
+
+```json
+{
+  "error": "Verify Mode requires at least 2 models"
+}
+```
+
+```json
+{
+  "error": "Maximum 3 models allowed in Verify Mode"
 }
 ```
 
