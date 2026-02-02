@@ -104,7 +104,8 @@ Multi-model comparison with side-by-side panels:
 - **Independent panels** - Each model has its own streaming panel
 - **Error isolation** - One model failure doesn't affect others
 - **Diff summary** - Highlights agreement, disagreement, omissions, and conflicts
-- **Cost warning** - Clearly labeled as higher cost and latency
+- **Cost warning** - Conditionally displayed only when Verify Mode is ON
+- **State persistence** - Remembers Verify Mode, model count, and last prompt
 
 **Not yet implemented:**
 - Feedback/rating system

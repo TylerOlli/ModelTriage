@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { diffAnalyzer } from "@/lib/diff";
 import type { DiffSummary } from "@/lib/diff";
 
@@ -48,6 +48,49 @@ export default function Home() {
   const [diffError, setDiffError] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Load persisted state on mount
+  useEffect(() => {
+    const persistedVerifyMode = localStorage.getItem("verifyMode");
+    const persistedModelCount = localStorage.getItem("modelCount");
+    const persistedPrompt = localStorage.getItem("lastPrompt");
+
+    if (persistedVerifyMode !== null) {
+      setVerifyMode(persistedVerifyMode === "true");
+    }
+    if (persistedModelCount !== null) {
+      const count = parseInt(persistedModelCount, 10);
+      if (count === 2 || count === 3) {
+        setModelCount(count);
+      }
+    }
+    if (persistedPrompt) {
+      setPrompt(persistedPrompt);
+    }
+  }, []);
+
+  // Persist Verify Mode state
+  useEffect(() => {
+    localStorage.setItem("verifyMode", verifyMode.toString());
+  }, [verifyMode]);
+
+  // Persist model count
+  useEffect(() => {
+    localStorage.setItem("modelCount", modelCount.toString());
+  }, [modelCount]);
+
+  // Persist prompt (debounced to avoid excessive writes)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (prompt.trim()) {
+        localStorage.setItem("lastPrompt", prompt);
+      } else {
+        localStorage.removeItem("lastPrompt");
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [prompt]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -317,7 +360,10 @@ export default function Home() {
                 Verify Mode
               </h3>
               <p className="text-sm text-gray-600">
-                Compare responses from multiple models (higher cost and latency)
+                Compare responses from multiple models
+                {verifyMode && (
+                  <span className="text-orange-600 font-medium"> (higher cost and latency)</span>
+                )}
               </p>
             </div>
             <button
