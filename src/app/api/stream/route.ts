@@ -9,16 +9,114 @@ import { modelRouter } from "@/lib/routing";
 // Force Node.js runtime (not Edge)
 export const runtime = "nodejs";
 
+/**
+ * Handle Verify Mode - stream multiple models in parallel
+ */
+async function handleVerifyMode(
+  prompt: string,
+  models: string[],
+  maxTokens: number
+): Promise<Response> {
+  const encoder = new TextEncoder();
+  
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        // Route each model and start streaming
+        const modelStreams = models.map(async (requestedModel) => {
+          const modelId = requestedModel;
+          
+          // Route this specific model
+          const routingDecision = modelRouter.route({
+            prompt,
+            promptLength: prompt.length,
+            requestedModel,
+          });
+
+          // Send routing decision for this model
+          const routingMessage = {
+            type: "routing",
+            modelId,
+            routing: {
+              model: routingDecision.model,
+              reason: routingDecision.reason,
+              confidence: routingDecision.confidence,
+            },
+          };
+          const sseRouting = `data: ${JSON.stringify(routingMessage)}\n\n`;
+          controller.enqueue(encoder.encode(sseRouting));
+
+          // Create provider and stream
+          const provider = new MockProvider(50);
+          const response = provider.stream(prompt, {
+            model: routingDecision.model,
+            maxTokens,
+          });
+
+          // Stream chunks
+          for await (const chunk of response.chunks) {
+            const data = {
+              type: "chunk",
+              modelId,
+              content: chunk.content,
+              done: chunk.done,
+            };
+            const sseMessage = `data: ${JSON.stringify(data)}\n\n`;
+            controller.enqueue(encoder.encode(sseMessage));
+          }
+
+          // Send metadata
+          const metadata = await response.metadata;
+          const metadataMessage = {
+            type: "metadata",
+            modelId,
+            metadata,
+          };
+          const sseMetadata = `data: ${JSON.stringify(metadataMessage)}\n\n`;
+          controller.enqueue(encoder.encode(sseMetadata));
+        });
+
+        // Wait for all streams to complete
+        await Promise.all(modelStreams);
+
+        // Close the stream
+        controller.close();
+      } catch (error) {
+        const errorMessage = {
+          type: "error",
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+        const sseError = `data: ${JSON.stringify(errorMessage)}\n\n`;
+        controller.enqueue(encoder.encode(sseError));
+        controller.close();
+      }
+    },
+
+    cancel() {
+      console.log("Verify mode stream cancelled by client");
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
+  });
+}
+
 interface StreamRequest {
   prompt: string;
   model?: string;
+  models?: string[]; // For Verify Mode
   maxTokens?: number;
 }
 
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as StreamRequest;
-    const { prompt, model, maxTokens } = body;
+    const { prompt, model, models, maxTokens } = body;
 
     // Validate prompt
     if (!prompt || typeof prompt !== "string") {
@@ -42,6 +140,23 @@ export async function POST(request: Request) {
       );
     }
 
+    // Verify Mode: multiple models
+    if (models && Array.isArray(models)) {
+      // Enforce max 3 models per spec
+      if (models.length > 3) {
+        return new Response(
+          JSON.stringify({ error: "Maximum 3 models allowed in Verify Mode" }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      return handleVerifyMode(prompt, models, maxTokens || 800);
+    }
+
+    // Single-answer mode
     // Route to appropriate model
     const routingDecision = modelRouter.route({
       prompt,

@@ -43,19 +43,28 @@ modeltriage/
 ├── src/
 │   └── app/             # App Router directory
 │       ├── api/         # API routes
-│       │   └── stream/  # SSE streaming endpoint
+│       │   └── stream/  # SSE streaming endpoint (single + verify mode)
 │       ├── layout.tsx   # Root layout
-│       ├── page.tsx     # Home page
+│       ├── page.tsx     # Home page with Verify Mode UI
 │       └── globals.css  # Global styles
 ├── lib/                 # Core library code
-│   └── providers/       # LLM provider interfaces and implementations
-│       ├── types.ts     # Provider interface definitions
-│       ├── mock-provider.ts  # Mock provider for development
+│   ├── providers/       # LLM provider interfaces and implementations
+│   │   ├── types.ts     # Provider interface definitions
+│   │   ├── mock-provider.ts  # Mock provider for development
+│   │   └── index.ts     # Exports
+│   ├── routing/         # Model routing logic
+│   │   ├── types.ts     # Routing types
+│   │   ├── router.ts    # Rules-based router
+│   │   └── index.ts     # Exports
+│   └── diff/            # Diff analysis for Verify Mode
+│       ├── types.ts     # Diff types
+│       ├── analyzer.ts  # Diff analyzer
 │       └── index.ts     # Exports
 ├── public/              # Static files
 │   └── test-stream.html # Stream API test client
 ├── __tests__/           # Test files
-│   └── providers/       # Provider tests
+│   ├── providers/       # Provider tests
+│   └── routing/         # Routing tests
 ├── scripts/             # Utility scripts
 ├── .specify/            # Product specifications
 ├── docs/                # Documentation
@@ -85,10 +94,22 @@ The main application interface provides:
 - Short prompts (< 50 chars) → `mock-fast-1`
 - General prompts → `mock-balanced-1` (fallback)
 
+### Verify Mode (Optional)
+
+Multi-model comparison with side-by-side panels:
+
+- **Toggle control** - Enable/disable Verify Mode (default: OFF)
+- **Model selection** - Choose 2 or 3 models (default: 2, max: 3)
+- **Parallel execution** - All models stream simultaneously
+- **Independent panels** - Each model has its own streaming panel
+- **Error isolation** - One model failure doesn't affect others
+- **Diff summary** - Highlights agreement, disagreement, omissions, and conflicts
+- **Cost warning** - Clearly labeled as higher cost and latency
+
 **Not yet implemented:**
-- Verify Mode (multi-model comparison)
 - Feedback/rating system
 - Rate limiting UI
+- Real providers (still using MockProvider)
 
 ## MockProvider
 
