@@ -19,6 +19,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 Test the MockProvider:
 ```bash
 npm run test:mock     # Run unit tests
+npm run test:routing  # Test model routing
 npm run demo:mock     # Run streaming demo
 npm run test:stream   # Test streaming API (requires dev server)
 ```
@@ -68,6 +69,7 @@ modeltriage/
 The main application interface provides:
 
 - **Prompt input** - Text area for entering prompts (max 4,000 characters)
+- **Smart routing** - Automatic model selection with explanation
 - **Real-time streaming** - Responses stream progressively as they're generated
 - **Loading states** - Clear visual feedback during streaming
 - **Metadata display** - Shows model, provider, latency, and token usage
@@ -75,9 +77,16 @@ The main application interface provides:
 - **Cancel functionality** - Ability to stop streaming (partial output preserved)
 - **Input validation** - Character counter and length enforcement
 
+**Routing Logic (priority order):**
+- Analytical tasks → `mock-quality-1` (e.g., "Compare React and Vue")
+- Code-related prompts → `mock-code-1` (e.g., "Write a function...")
+- Creative writing → `mock-quality-1`
+- Long prompts (> 1000 chars) → `mock-quality-1`
+- Short prompts (< 50 chars) → `mock-fast-1`
+- General prompts → `mock-balanced-1` (fallback)
+
 **Not yet implemented:**
 - Verify Mode (multi-model comparison)
-- Model routing explanation
 - Feedback/rating system
 - Rate limiting UI
 

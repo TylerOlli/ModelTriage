@@ -4,6 +4,7 @@
  */
 
 import { MockProvider } from "@/lib/providers/mock-provider";
+import { modelRouter } from "@/lib/routing";
 
 // Force Node.js runtime (not Edge)
 export const runtime = "nodejs";
@@ -41,10 +42,17 @@ export async function POST(request: Request) {
       );
     }
 
+    // Route to appropriate model
+    const routingDecision = modelRouter.route({
+      prompt,
+      promptLength: prompt.length,
+      requestedModel: model,
+    });
+
     // Create provider and start streaming
     const provider = new MockProvider(50); // 50ms delay between chunks
     const response = provider.stream(prompt, {
-      model,
+      model: routingDecision.model,
       maxTokens: maxTokens || 800, // Default max tokens per spec
     });
 
@@ -53,6 +61,18 @@ export async function POST(request: Request) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
+          // Send routing decision first
+          const routingMessage = {
+            type: "routing",
+            routing: {
+              model: routingDecision.model,
+              reason: routingDecision.reason,
+              confidence: routingDecision.confidence,
+            },
+          };
+          const sseRouting = `data: ${JSON.stringify(routingMessage)}\n\n`;
+          controller.enqueue(encoder.encode(sseRouting));
+
           // Stream chunks as they arrive
           for await (const chunk of response.chunks) {
             const data = {

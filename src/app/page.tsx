@@ -7,6 +7,11 @@ export default function Home() {
   const [response, setResponse] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [routing, setRouting] = useState<{
+    model: string;
+    reason: string;
+    confidence: string;
+  } | null>(null);
   const [metadata, setMetadata] = useState<{
     model: string;
     provider: string;
@@ -30,6 +35,7 @@ export default function Home() {
     // Reset state
     setResponse("");
     setError(null);
+    setRouting(null);
     setMetadata(null);
     setIsStreaming(true);
 
@@ -72,7 +78,9 @@ export default function Home() {
           if (line.startsWith("data: ")) {
             const data = JSON.parse(line.slice(6));
 
-            if (data.type === "chunk") {
+            if (data.type === "routing") {
+              setRouting(data.routing);
+            } else if (data.type === "chunk") {
               setResponse((prev) => prev + data.content);
             } else if (data.type === "metadata") {
               setMetadata(data.metadata);
@@ -181,6 +189,24 @@ export default function Home() {
             <div className="flex items-center gap-3 text-gray-600">
               <div className="animate-spin w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full" />
               <span>Starting stream...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Routing Information */}
+        {routing && (
+          <div className="bg-indigo-50 rounded-lg border border-indigo-200 p-4 mb-4">
+            <div className="flex items-start gap-3">
+              <span className="text-indigo-600 text-lg">🎯</span>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-indigo-900 mb-1">
+                  Model Selection
+                </h3>
+                <p className="text-sm text-indigo-800 mb-2">
+                  <span className="font-medium">{routing.model}</span>
+                </p>
+                <p className="text-sm text-indigo-700">{routing.reason}</p>
+              </div>
             </div>
           </div>
         )}
