@@ -97,6 +97,12 @@ export default function Home() {
 
     if (!prompt.trim()) return;
 
+    // Prevent concurrent runs - defensive guard in addition to button disabled state
+    if (isStreaming || abortControllerRef.current) {
+      console.warn("Run already in progress, ignoring duplicate submit");
+      return;
+    }
+
     // Validate prompt length (4,000 character limit per spec)
     if (prompt.length > 4000) {
       setError("Prompt exceeds maximum length of 4,000 characters");
@@ -287,23 +293,23 @@ export default function Home() {
 
       // Generate diff summary after streaming completes
       try {
-        const responses = Object.values(initialPanels).map((panel) => ({
-          model: panel.routing?.model || panel.modelId,
-          content: panel.response,
-        }));
-
         // Get the final state
         setModelPanels((currentPanels) => {
-          const finalResponses = Object.values(currentPanels)
-            .filter((p) => p.response.length > 0)
-            .map((p) => ({
+          // Only use successfully completed panels (no error, has response, has metadata)
+          const successfulPanels = Object.values(currentPanels).filter(
+            (p) => !p.error && p.response.length > 0 && p.metadata
+          );
+
+          if (successfulPanels.length >= 2) {
+            const finalResponses = successfulPanels.map((p) => ({
               model: p.routing?.model || p.modelId,
               content: p.response,
             }));
-
-          if (finalResponses.length >= 2) {
             const summary = diffAnalyzer.analyze(finalResponses);
             setDiffSummary(summary);
+          } else if (successfulPanels.length === 1) {
+            // Not enough panels for comparison, but don't show error
+            setDiffSummary(null);
           }
 
           return currentPanels;
@@ -743,19 +749,34 @@ export default function Home() {
                       <h3 className="text-sm font-semibold text-gray-900">
                         Response
                       </h3>
-                      {isStreaming && !panel.metadata && (
+                      {isStreaming && !panel.metadata && !panel.error && (
                         <div className="animate-spin w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full" />
                       )}
                     </div>
-                    {panel.response ? (
-                      <pre className="whitespace-pre-wrap font-sans text-sm text-gray-800 leading-relaxed">
+                    
+                    {/* Show partial response if it exists */}
+                    {panel.response && (
+                      <pre className="whitespace-pre-wrap font-sans text-sm text-gray-800 leading-relaxed mb-3">
                         {panel.response}
                       </pre>
-                    ) : panel.error ? (
-                      <div className="text-sm text-red-600">
-                        Error: {panel.error}
+                    )}
+                    
+                    {/* Show error card if panel errored */}
+                    {panel.error ? (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="flex items-start gap-2">
+                          <span className="text-red-600 text-lg">❌</span>
+                          <div>
+                            <h4 className="text-sm font-semibold text-red-900 mb-1">
+                              Error
+                            </h4>
+                            <p className="text-sm text-red-700">
+                              {panel.error}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                    ) : (
+                    ) : !panel.response && (
                       <div className="text-sm text-gray-400">
                         Waiting for response...
                       </div>
@@ -858,6 +879,30 @@ export default function Home() {
                   Note: {diffError}
                 </p>
               </div>
+            )}
+            
+            {/* Show message when not enough successful panels for comparison */}
+            {!isStreaming && !diffSummary && !diffError && Object.keys(modelPanels).length > 0 && (
+              (() => {
+                const successfulCount = Object.values(modelPanels).filter(
+                  (p) => !p.error && p.response.length > 0 && p.metadata
+                ).length;
+                const errorCount = Object.values(modelPanels).filter((p) => p.error).length;
+                
+                if (errorCount > 0 && successfulCount < 2) {
+                  return (
+                    <div className="bg-blue-50 rounded-lg border border-blue-200 p-4">
+                      <p className="text-sm text-blue-800">
+                        ℹ Comparison requires at least 2 successful responses. 
+                        {successfulCount === 1 
+                          ? " Only 1 panel completed successfully."
+                          : " No panels completed successfully."}
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              })()
             )}
           </>
         )}
