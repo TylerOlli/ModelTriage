@@ -20,7 +20,11 @@ Test the MockProvider:
 ```bash
 npm run test:mock     # Run unit tests
 npm run demo:mock     # Run streaming demo
+npm run test:stream   # Test streaming API (requires dev server)
 ```
+
+Test the streaming API in your browser:
+- Open [http://localhost:3000/test-stream.html](http://localhost:3000/test-stream.html)
 
 ## Tech Stack
 
@@ -35,6 +39,8 @@ npm run demo:mock     # Run streaming demo
 ```
 modeltriage/
 ├── app/                  # App Router directory
+│   ├── api/             # API routes
+│   │   └── stream/      # SSE streaming endpoint
 │   ├── layout.tsx       # Root layout
 │   ├── page.tsx         # Home page
 │   └── globals.css      # Global styles
@@ -43,6 +49,8 @@ modeltriage/
 │       ├── types.ts     # Provider interface definitions
 │       ├── mock-provider.ts  # Mock provider for development
 │       └── index.ts     # Exports
+├── public/              # Static files
+│   └── test-stream.html # Stream API test client
 ├── __tests__/           # Test files
 │   └── providers/       # Provider tests
 ├── scripts/             # Utility scripts
@@ -66,6 +74,34 @@ By default, the application uses `MockProvider` unless `USE_LIVE_PROVIDERS=true`
 - No accidental API costs during development
 - Fast, reliable testing
 - Predictable behavior
+
+## Streaming API
+
+The `/api/stream` endpoint provides Server-Sent Events (SSE) streaming:
+
+**Endpoint:** `POST /api/stream`
+
+**Request body:**
+```json
+{
+  "prompt": "Your prompt here",
+  "model": "optional-model-name",
+  "maxTokens": 800
+}
+```
+
+**Response:** SSE stream with events:
+- `chunk` - Text chunks as they're generated
+- `metadata` - Final metadata (latency, tokens, cost)
+- `error` - Error information if something fails
+
+**Features:**
+- ✅ Node.js runtime (not Edge)
+- ✅ No buffering - chunks stream immediately
+- ✅ One stream per request
+- ✅ Clean stream closure on completion
+- ✅ Input validation (max 4,000 characters)
+- ✅ Max output tokens enforced (800 default)
 
 ## Specifications
 

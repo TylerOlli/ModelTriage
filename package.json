@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test:mock": "tsx __tests__/providers/mock-provider.test.ts",
-    "demo:mock": "tsx scripts/demo-mock-provider.ts"
+    "demo:mock": "tsx scripts/demo-mock-provider.ts",
+    "test:stream": "tsx scripts/test-stream-api.ts"
   },
   "dependencies": {
     "react": "^19.0.0",
