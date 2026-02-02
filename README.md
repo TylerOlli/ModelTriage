@@ -1,168 +1,230 @@
 # ModelTriage
 
-LLM decision and verification layer
+## What is ModelTriage?
 
-## Development
+ModelTriage is an LLM decision and verification layer that intelligently routes prompts to the most appropriate model and optionally runs multiple models in parallel for comparison. Instead of guessing which model to use, ModelTriage analyzes your prompt and explains why it selected a particular model (e.g., analytical tasks get routed to quality-focused models, code tasks to code-specialized models). Verify Mode allows side-by-side comparison of 2-3 models with automatic diff analysis to highlight agreements, disagreements, and conflicting assumptions. The system streams responses progressively using Server-Sent Events (SSE) for a responsive, real-time experience.
 
-Install dependencies:
+## MVP v1 Features
+
+This is the **MVP (Minimum Viable Product)** implementation. The following features are **fully implemented**:
+
+### ✅ Single-Answer Mode
+- Smart rules-based routing with human-readable explanation
+- Real-time SSE streaming (no buffering)
+- Loading states and partial output preservation
+- Model metadata (latency, tokens, provider)
+- Cancel functionality
+- Error handling with "Try again" action
+- Clear button to reset UI
+- Input validation (4,000 character max)
+
+### ✅ Verify Mode
+- Toggle to enable multi-model comparison (default: OFF)
+- Parallel execution of 2-3 models simultaneously
+- Side-by-side streaming panels (each model streams independently)
+- Per-panel error isolation (one failure doesn't affect others)
+- Diff summary showing agreement, disagreement, omissions, and conflicts
+- Cost warning displayed only when Verify Mode is ON
+- localStorage persistence for Verify Mode settings and last prompt
+
+### ✅ Routing Explanation
+- Every request shows which model was selected and why
+- Priority order: analytical → code → creative → long prompts → short prompts → general (fallback)
+- Example: "Compare React and Vue" routes to `mock-quality-1` because it's an analytical task
+
+### ✅ Diff Summary
+- Automatically compares outputs from multiple models in Verify Mode
+- Highlights:
+  - Agreement (what all models agree on)
+  - Disagreement (where models differ)
+  - Omissions (what some models include that others don't)
+  - Conflicting assumptions (different foundational approaches)
+
+## What is NOT Implemented (Intentional)
+
+The following are **explicitly out of scope** for MVP v1:
+
+- ❌ Real LLM providers (OpenAI, Anthropic, Google) - using MockProvider only
+- ❌ Database persistence (no user accounts, no saved sessions)
+- ❌ Feedback/rating system
+- ❌ Rate limiting UI
+- ❌ Retry logic (errors require manual "Try again")
+- ❌ Authentication or user management
+- ❌ Cost tracking or billing
+- ❌ Advanced diff features (semantic analysis, syntax highlighting)
+- ❌ Model performance benchmarking
+- ❌ Export/share functionality
+
+## Local Setup
+
+### Prerequisites
+- Node.js 18+ and npm
+
+### Installation
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Run the development server:**
+   ```bash
+   npm run dev
+   ```
+
+3. **Open the app:**
+   - Navigate to [http://localhost:3000](http://localhost:3000) in your browser
+
+### Testing
+
+Run unit tests:
 ```bash
-npm install
+npm run test:mock     # Test MockProvider
+npm run test:routing  # Test routing logic
 ```
 
-Run the development server:
+Run integration tests (requires dev server running):
 ```bash
-npm run dev
+npm run test:stream   # Test streaming API
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+## How It Works
 
-Test the MockProvider:
-```bash
-npm run test:mock     # Run unit tests
-npm run test:routing  # Test model routing
-npm run demo:mock     # Run streaming demo
-npm run test:stream   # Test streaming API (requires dev server)
-```
+### Streaming (High-Level)
 
-Test the streaming API in your browser:
-- Main app: [http://localhost:3000](http://localhost:3000)
-- API test page: [http://localhost:3000/test-stream.html](http://localhost:3000/test-stream.html)
+ModelTriage uses **Server-Sent Events (SSE)** to stream LLM responses in real-time:
 
-## Tech Stack
+1. **Client sends prompt** → `POST /api/stream` with prompt text
+2. **Server routes request** → Rules-based router selects appropriate model
+3. **Provider streams chunks** → MockProvider generates response chunks asynchronously
+4. **SSE delivers chunks** → Server forwards chunks to client as `data: {...}` events
+5. **UI renders progressively** → Client appends each chunk to the display in real-time
+6. **Metadata sent on completion** → Final event includes latency, tokens, and cost
 
+**Key benefits:**
+- No buffering delays (chunks appear immediately)
+- Partial output preserved if stream is cancelled or errors
+- Clean stream closure on completion
+- Multiple models can stream in parallel (Verify Mode)
+
+### Verify Mode (High-Level)
+
+When Verify Mode is enabled, the workflow changes:
+
+1. **Client sends prompt with model list** → `POST /api/stream` with `models: ["model-1", "model-2"]`
+2. **Server starts parallel streams** → Each model gets its own provider instance
+3. **Events are multiplexed** → SSE events include `modelId` to identify the source panel
+4. **Panels stream independently** → Each panel updates as its model streams
+5. **Error isolation** → If one model fails, others continue (failed panel shows error card)
+6. **Diff analysis runs after completion** → Compares successful outputs to generate summary
+
+**Key benefits:**
+- See how different models approach the same prompt
+- Identify which model provides the most complete or accurate answer
+- Catch hallucinations or omissions by comparing outputs
+- Understand trade-offs between speed, quality, and cost
+
+## Architecture
+
+### Tech Stack
 - **Framework:** Next.js 15 (App Router)
 - **Language:** TypeScript
 - **Styling:** Tailwind CSS
-- **Runtime:** Node.js
-- **Deployment:** Vercel
+- **Runtime:** Node.js (SSE streaming)
+- **Testing:** Jest + ts-jest
 
-## Project Structure
+### Project Structure
 
 ```
 modeltriage/
-├── src/
-│   └── app/             # App Router directory
-│       ├── api/         # API routes
-│       │   └── stream/  # SSE streaming endpoint (single + verify mode)
-│       ├── layout.tsx   # Root layout
-│       ├── page.tsx     # Home page with Verify Mode UI
-│       └── globals.css  # Global styles
-├── lib/                 # Core library code
-│   ├── providers/       # LLM provider interfaces and implementations
-│   │   ├── types.ts     # Provider interface definitions
-│   │   ├── mock-provider.ts  # Mock provider for development
-│   │   └── index.ts     # Exports
-│   ├── routing/         # Model routing logic
-│   │   ├── types.ts     # Routing types
-│   │   ├── router.ts    # Rules-based router
-│   │   └── index.ts     # Exports
-│   └── diff/            # Diff analysis for Verify Mode
-│       ├── types.ts     # Diff types
-│       ├── analyzer.ts  # Diff analyzer
-│       └── index.ts     # Exports
-├── public/              # Static files
-│   └── test-stream.html # Stream API test client
-├── __tests__/           # Test files
-│   ├── providers/       # Provider tests
-│   └── routing/         # Routing tests
-├── scripts/             # Utility scripts
-├── .specify/            # Product specifications
-├── docs/                # Documentation
-└── package.json         # Dependencies
+├── src/app/              # Next.js App Router
+│   ├── api/stream/       # SSE streaming endpoint
+│   ├── page.tsx          # Main UI with Verify Mode
+│   ├── layout.tsx        # Root layout
+│   └── globals.css       # Global styles
+├── lib/                  # Core library modules
+│   ├── providers/        # Provider interface + MockProvider
+│   ├── routing/          # Rules-based router
+│   └── diff/             # Diff analyzer for Verify Mode
+├── __tests__/            # Unit tests
+├── docs/                 # Technical documentation
+├── .specify/             # Product specifications (source of truth)
+└── package.json          # Dependencies and scripts
 ```
 
-## Features
+### Key Modules
 
-### Single-Answer Mode (MVP)
+**Provider Interface (`lib/providers/`):**
+- Defines the contract for all LLM providers
+- `MockProvider` implements this interface for development
+- Real providers (OpenAI, Anthropic) will implement the same interface
 
-The main application interface provides:
+**Router (`lib/routing/`):**
+- Rules-based model selection
+- Returns model name, reason, and confidence
+- Prioritizes analytical intents over code keyword matches
 
-- **Prompt input** - Text area for entering prompts (max 4,000 characters)
-- **Smart routing** - Automatic model selection with explanation
-- **Real-time streaming** - Responses stream progressively as they're generated
-- **Loading states** - Clear visual feedback during streaming
-- **Metadata display** - Shows model, provider, latency, and token usage
-- **Error handling** - Graceful error messages with partial output preservation
-- **Cancel functionality** - Ability to stop streaming (partial output preserved)
-- **Input validation** - Character counter and length enforcement
-- **Clear action** - Reset results and prompt (preserves Verify Mode settings)
-- **Try again** - Quick error recovery with one click
-- **Helpful instructions** - Explains single-answer vs Verify Mode before first use
+**Diff Analyzer (`lib/diff/`):**
+- Compares outputs from multiple models
+- Identifies agreement, disagreement, omissions, and conflicts
+- Runs client-side to avoid blocking streaming
 
-**Routing Logic (priority order):**
-- Analytical tasks → `mock-quality-1` (e.g., "Compare React and Vue")
-- Code-related prompts → `mock-code-1` (e.g., "Write a function...")
-- Creative writing → `mock-quality-1`
-- Long prompts (> 1000 chars) → `mock-quality-1`
-- Short prompts (< 50 chars) → `mock-fast-1`
-- General prompts → `mock-balanced-1` (fallback)
+**Streaming API (`src/app/api/stream/`):**
+- Single endpoint for both single-answer and Verify Mode
+- Validates input (prompt length, model count)
+- Streams SSE events with proper multiplexing for Verify Mode
+- Per-model error isolation (uses `Promise.allSettled`)
 
-### Verify Mode (Optional)
+## Future Flags (Not Yet Implemented)
 
-Multi-model comparison with side-by-side panels:
+The following environment variables are **reserved for future use** but do NOT currently work:
 
-- **Toggle control** - Enable/disable Verify Mode (default: OFF)
-- **Model selection** - Choose 2 or 3 models (default: 2, max: 3)
-- **Parallel execution** - All models stream simultaneously
-- **Independent panels** - Each model has its own streaming panel
-- **Error isolation** - One model failure doesn't affect others
-- **Diff summary** - Highlights agreement, disagreement, omissions, and conflicts
-- **Cost warning** - Conditionally displayed only when Verify Mode is ON
-- **State persistence** - Remembers Verify Mode, model count, and last prompt
+### `USE_LIVE_PROVIDERS=true` (Future)
+When implemented, this will:
+- Enable OpenAI, Anthropic, and Google providers
+- Require API keys in environment variables
+- Incur real API costs
 
-**Not yet implemented:**
-- Feedback/rating system
-- Rate limiting UI
-- Real providers (still using MockProvider)
+**Current behavior:** Only MockProvider is available regardless of this flag.
 
-## MockProvider
+### `ENABLE_DB_WRITES=true` (Future)
+When implemented, this will:
+- Enable session persistence to database
+- Save prompts, responses, and user ratings
+- Require database connection string
 
-The `MockProvider` simulates an LLM with streaming for development and testing:
+**Current behavior:** No database writes occur regardless of this flag. Only localStorage is used for UI settings.
 
-- **No external API calls** - Fully deterministic, works offline
-- **Streaming simulation** - Returns async iterators of text chunks
-- **Deterministic output** - Same prompt always produces the same response
-- **Provider interface** - Implements the standard `Provider` interface that real providers (OpenAI, Anthropic) will implement
+## Cost Control
 
-### Cost Control
-
-By default, the application uses `MockProvider` unless `USE_LIVE_PROVIDERS=true` is set. This ensures:
-- No accidental API costs during development
-- Fast, reliable testing
-- Predictable behavior
-
-## Streaming API
-
-The `/api/stream` endpoint provides Server-Sent Events (SSE) streaming:
-
-**Endpoint:** `POST /api/stream`
-
-**Request body:**
-```json
-{
-  "prompt": "Your prompt here",
-  "model": "optional-model-name",
-  "maxTokens": 800
-}
-```
-
-**Response:** SSE stream with events:
-- `chunk` - Text chunks as they're generated
-- `metadata` - Final metadata (latency, tokens, cost)
-- `error` - Error information if something fails
-
-**Features:**
-- ✅ Node.js runtime (not Edge)
-- ✅ No buffering - chunks stream immediately
-- ✅ One stream per request
-- ✅ Clean stream closure on completion
-- ✅ Input validation (max 4,000 characters)
-- ✅ Max output tokens enforced (800 default)
+By default, the application uses `MockProvider` to ensure:
+- ✅ No accidental API costs during development
+- ✅ Deterministic, reproducible testing
+- ✅ Offline development capability
+- ✅ Fast response times
 
 ## Specifications
 
 This project is built strictly according to specifications in `.specify/`:
-- `product.md` - Product definition
-- `conventions.md` - Technical conventions
-- `user-stories.md` - User stories
+- `product.md` - Product definition and scope
+- `conventions.md` - Technical conventions and limits
+- `user-stories.md` - User stories and acceptance criteria
 - `requirements.md` - Functional requirements
+
+## Documentation
+
+See `docs/` for detailed technical documentation:
+
+### Core Documentation
+- `architecture.md` - System architecture, folder structure, SSE event contract, and MockProvider rationale
+- `development.md` - Development commands, workflow, and troubleshooting guide
+
+### Feature Documentation
+- `streaming-api.md` - SSE endpoint reference
+- `verify-mode.md` - Verify Mode implementation details
+- `routing.md` - Routing logic and priority rules
+- `persistence.md` - localStorage usage
+- `ui-states.md` - Empty, loading, and error states
+- `streaming-controls.md` - Control locking and cancel behavior
+- `execution-correctness.md` - Concurrent run prevention and error isolation
+- `hardening-summary.md` - Robustness improvements overview
