@@ -717,7 +717,7 @@ export default function Home() {
                       <li className="flex items-start gap-2">
                         <span className="text-orange-600 mt-0.5">•</span>
                         <span>
-                          Compare responses from 2-3 models side-by-side
+                          Select and compare multiple models side-by-side
                         </span>
                       </li>
                       <li className="flex items-start gap-2">
