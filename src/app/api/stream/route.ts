@@ -11,8 +11,8 @@ export const runtime = "nodejs";
 
 // Hard limits
 const MAX_PROMPT_LENGTH = 8000;
-const DEFAULT_MAX_TOKENS = 800;
-const MAX_TOKENS_LIMIT = 1200;
+const DEFAULT_MAX_TOKENS = 16000; // High default for reasoning models (GPT-5 mini needs tokens for internal reasoning)
+const MAX_TOKENS_LIMIT = 32000; // Max limit for cost control
 const MODEL_TIMEOUT_MS = 30000; // 30 seconds
 
 // Rate limiting (in-memory, simple MVP)

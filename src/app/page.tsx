@@ -4,6 +4,38 @@ import { useState, useRef, useEffect } from "react";
 import { diffAnalyzer } from "@/lib/diff";
 import type { DiffSummary } from "@/lib/diff";
 
+/**
+ * Map error codes and types to user-friendly messages
+ */
+function getUserFriendlyError(error: string | null): string {
+  if (!error) return "Unexpected error";
+
+  const errorLower = error.toLowerCase();
+
+  if (errorLower.includes("timeout") || error === "timeout") {
+    return "Model timed out. Please try again.";
+  }
+  if (errorLower.includes("rate") || errorLower.includes("429") || error === "rate_limit") {
+    return "Too many requests. Please wait a moment and try again.";
+  }
+  if (errorLower.includes("provider") || error === "provider_error") {
+    return "Model error. Please try again.";
+  }
+  if (errorLower.includes("network") || errorLower.includes("connection")) {
+    return "Network error. Check your connection and try again.";
+  }
+  if (errorLower.includes("unauthorized") || errorLower.includes("401")) {
+    return "Authentication error. Please contact support.";
+  }
+
+  // Return the original error if it's already user-friendly (short and clear)
+  if (error.length < 100 && !error.includes("Error:") && !error.includes("Exception")) {
+    return error;
+  }
+
+  return "Unexpected error. Please try again.";
+}
+
 interface ModelPanel {
   modelId: string;
   routing: {
@@ -514,7 +546,7 @@ export default function Home() {
                 disabled={isStreaming || !prompt.trim() || isOverLimit}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium transition-colors"
               >
-                {isStreaming ? "Streaming..." : "Submit"}
+                {isStreaming ? "Processing..." : "Submit"}
               </button>
 
               {isStreaming && (
@@ -545,7 +577,7 @@ export default function Home() {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center gap-3 text-gray-600">
               <div className="animate-spin w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full" />
-              <span>Starting stream...</span>
+              <span>Getting response from model...</span>
             </div>
           </div>
         )}
@@ -572,7 +604,7 @@ export default function Home() {
             )}
 
             {/* Response Display */}
-            {(response || error) && (
+            {(response || error || metadata) && (
               <div className="space-y-4">
                 {response && (
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -583,7 +615,7 @@ export default function Home() {
                       {isStreaming && (
                         <div className="flex items-center gap-2 text-sm text-gray-600">
                           <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full" />
-                          <span>Streaming...</span>
+                          <span>Processing...</span>
                         </div>
                       )}
                     </div>
@@ -591,6 +623,23 @@ export default function Home() {
                       <pre className="whitespace-pre-wrap font-sans text-gray-800 leading-relaxed">
                         {response}
                       </pre>
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty Response Warning */}
+                {!response && !error && metadata && (
+                  <div className="bg-yellow-50 rounded-lg border border-yellow-200 p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="text-yellow-600 text-lg">⚠️</span>
+                      <div>
+                        <h3 className="text-sm font-semibold text-yellow-900 mb-1">
+                          Empty Response
+                        </h3>
+                        <p className="text-sm text-yellow-800">
+                          The model completed but returned no text. This may happen if all tokens were used for internal reasoning. Try a simpler prompt or consider the token limit.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -657,7 +706,7 @@ export default function Home() {
                           <h3 className="text-sm font-semibold text-red-900 mb-1">
                             Error
                           </h3>
-                          <p className="text-sm text-red-700">{error}</p>
+                          <p className="text-sm text-red-700">{getUserFriendlyError(error)}</p>
                         </div>
                       </div>
                       <button
@@ -804,7 +853,21 @@ export default function Home() {
                               Error
                             </h4>
                             <p className="text-sm text-red-700">
-                              {panel.error}
+                              {getUserFriendlyError(panel.error)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : !panel.response && panel.metadata ? (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <div className="flex items-start gap-2">
+                          <span className="text-yellow-600 text-lg">⚠️</span>
+                          <div>
+                            <h4 className="text-sm font-semibold text-yellow-900 mb-1">
+                              Empty Response
+                            </h4>
+                            <p className="text-sm text-yellow-800">
+                              The model completed but returned no text. This may happen if all tokens were used for internal reasoning. Try a simpler prompt or check the token limit warning above.
                             </p>
                           </div>
                         </div>
