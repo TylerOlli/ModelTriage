@@ -17,6 +17,7 @@ interface ModelPanel {
     provider: string;
     latency: number;
     tokenUsage?: { total: number };
+    finishReason?: string;
   } | null;
   error: string | null;
 }
@@ -40,6 +41,7 @@ export default function Home() {
     provider: string;
     latency: number;
     tokenUsage?: { total: number };
+    finishReason?: string;
   } | null>(null);
 
   // Verify Mode state
@@ -160,7 +162,10 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ 
+          prompt,
+          models: ["gpt-5-mini"]
+        }),
         signal: abortControllerRef.current.signal,
       });
 
@@ -169,38 +174,29 @@ export default function Home() {
         throw new Error(errorData.error || "Request failed");
       }
 
-      if (!res.body) {
-        throw new Error("No response body");
-      }
+      // Parse JSON response
+      const data = await res.json();
 
-      // Read SSE stream
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
+      // Handle results
+      if (data.results && data.results.length > 0) {
+        const result = data.results[0];
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const data = JSON.parse(line.slice(6));
-
-            if (data.type === "routing") {
-              setRouting(data.routing);
-            } else if (data.type === "chunk") {
-              setResponse((prev) => prev + data.content);
-            } else if (data.type === "metadata") {
-              setMetadata(data.metadata);
-            } else if (data.type === "error") {
-              throw new Error(data.error);
-            }
-          }
+        if (result.error) {
+          throw new Error(result.error);
         }
+
+        setResponse(result.text || "");
+        setMetadata({
+          model: result.model,
+          provider: "openai",
+          latency: result.latencyMs || 0,
+          tokenUsage: result.tokenUsage
+            ? { total: result.tokenUsage.totalTokens }
+            : undefined,
+          finishReason: result.finishReason,
+        });
+      } else {
+        throw new Error("No results returned");
       }
     } catch (err) {
       if (err instanceof Error) {
@@ -220,11 +216,12 @@ export default function Home() {
 
   const handleVerifyModeSubmit = async () => {
     // Reset state
-    const models = Array.from({ length: modelCount }, (_, i) => `model-${i + 1}`);
+    const models = Array.from({ length: modelCount }, () => "gpt-5-mini");
     const initialPanels: Record<string, ModelPanel> = {};
-    models.forEach((modelId) => {
-      initialPanels[modelId] = {
-        modelId,
+    models.forEach((modelId, i) => {
+      const panelId = `model-${i + 1}`;
+      initialPanels[panelId] = {
+        modelId: panelId,
         routing: null,
         response: "",
         metadata: null,
@@ -246,7 +243,10 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ prompt, models }),
+        body: JSON.stringify({ 
+          prompt, 
+          models
+        }),
         signal: abortControllerRef.current.signal,
       });
 
@@ -255,67 +255,36 @@ export default function Home() {
         throw new Error(errorData.error || "Request failed");
       }
 
-      if (!res.body) {
-        throw new Error("No response body");
-      }
+      // Parse JSON response
+      const data = await res.json();
 
-      // Read SSE stream
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
+      // Handle results and update panels
+      if (data.results && data.results.length > 0) {
+        data.results.forEach((result: any, index: number) => {
+          const panelId = `model-${index + 1}`;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const data = JSON.parse(line.slice(6));
-            const modelId = data.modelId;
-
-            if (data.type === "routing" && modelId) {
-              setModelPanels((prev) => ({
-                ...prev,
-                [modelId]: {
-                  ...prev[modelId],
-                  routing: data.routing,
-                },
-              }));
-            } else if (data.type === "chunk" && modelId) {
-              setModelPanels((prev) => ({
-                ...prev,
-                [modelId]: {
-                  ...prev[modelId],
-                  response: prev[modelId].response + data.content,
-                },
-              }));
-            } else if (data.type === "metadata" && modelId) {
-              setModelPanels((prev) => ({
-                ...prev,
-                [modelId]: {
-                  ...prev[modelId],
-                  metadata: data.metadata,
-                },
-              }));
-            } else if (data.type === "error") {
-              if (modelId) {
-                setModelPanels((prev) => ({
-                  ...prev,
-                  [modelId]: {
-                    ...prev[modelId],
-                    error: data.error,
+          setModelPanels((prev) => ({
+            ...prev,
+            [panelId]: {
+              ...prev[panelId],
+              response: result.text || "",
+              metadata: result.error
+                ? null
+                : {
+                    model: result.model,
+                    provider: "openai",
+                    latency: result.latencyMs || 0,
+                    tokenUsage: result.tokenUsage
+                      ? { total: result.tokenUsage.totalTokens }
+                      : undefined,
+                    finishReason: result.finishReason,
                   },
-                }));
-              } else {
-                throw new Error(data.error);
-              }
-            }
-          }
-        }
+              error: result.error || null,
+            },
+          }));
+        });
+      } else {
+        throw new Error("No results returned");
       }
 
       // Diff summary will be generated by useEffect after state updates complete
@@ -585,6 +554,26 @@ export default function Home() {
                   </div>
                 )}
 
+                {/* Token Limit Warning */}
+                {metadata?.finishReason === "length" && (
+                  <div className="bg-yellow-50 rounded-lg border border-yellow-200 p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="text-yellow-600 text-lg">⚠️</span>
+                      <div>
+                        <h3 className="text-sm font-semibold text-yellow-900 mb-1">
+                          Response Incomplete
+                        </h3>
+                        <p className="text-sm text-yellow-800">
+                          The response was cut off because the model reached its token
+                          limit. GPT-5 mini uses tokens for internal reasoning before
+                          generating output. Consider using a model with a higher token
+                          limit for complex queries.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Metadata */}
                 {metadata && (
                   <div className="bg-blue-50 rounded-lg border border-blue-200 p-4">
@@ -784,6 +773,23 @@ export default function Home() {
                       </div>
                     )}
                   </div>
+
+                  {/* Token Limit Warning */}
+                  {panel.metadata?.finishReason === "length" && (
+                    <div className="bg-yellow-50 rounded-lg border border-yellow-200 p-3 mb-3">
+                      <div className="flex items-start gap-2">
+                        <span className="text-yellow-600">⚠️</span>
+                        <div>
+                          <h4 className="text-xs font-semibold text-yellow-900 mb-1">
+                            Response Incomplete
+                          </h4>
+                          <p className="text-xs text-yellow-800">
+                            Response cut off due to token limit.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Metadata */}
                   {panel.metadata && (

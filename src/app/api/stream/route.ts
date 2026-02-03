@@ -1,134 +1,25 @@
 /**
- * Streaming API route using Server-Sent Events (SSE)
- * Streams LLM responses as they are generated
+ * LLM inference endpoint
+ * Processes prompts through one or more models in parallel
  */
 
-import { MockProvider } from "@/lib/providers/mock-provider";
-import { modelRouter } from "@/lib/routing";
+import { routeToProvider } from "@/lib/llm/router";
+import type { ModelId, LLMRequest } from "@/lib/llm/types";
 
 // Force Node.js runtime (not Edge)
 export const runtime = "nodejs";
 
-/**
- * Handle Verify Mode - stream multiple models in parallel
- */
-async function handleVerifyMode(
-  prompt: string,
-  models: string[],
-  maxTokens: number
-): Promise<Response> {
-  const encoder = new TextEncoder();
-  
-  const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        // Route each model and start streaming
-        const modelStreams = models.map(async (requestedModel) => {
-          const modelId = requestedModel;
-          
-          try {
-            // Route this specific model
-            const routingDecision = modelRouter.route({
-              prompt,
-              promptLength: prompt.length,
-              requestedModel,
-            });
-
-            // Send routing decision for this model
-            const routingMessage = {
-              type: "routing",
-              modelId,
-              routing: {
-                model: routingDecision.model,
-                reason: routingDecision.reason,
-                confidence: routingDecision.confidence,
-              },
-            };
-            const sseRouting = `data: ${JSON.stringify(routingMessage)}\n\n`;
-            controller.enqueue(encoder.encode(sseRouting));
-
-            // Create provider and stream
-            const provider = new MockProvider(50);
-            const response = provider.stream(prompt, {
-              model: routingDecision.model,
-              maxTokens,
-            });
-
-            // Stream chunks
-            for await (const chunk of response.chunks) {
-              const data = {
-                type: "chunk",
-                modelId,
-                content: chunk.content,
-                done: chunk.done,
-              };
-              const sseMessage = `data: ${JSON.stringify(data)}\n\n`;
-              controller.enqueue(encoder.encode(sseMessage));
-            }
-
-            // Send metadata
-            const metadata = await response.metadata;
-            const metadataMessage = {
-              type: "metadata",
-              modelId,
-              metadata,
-            };
-            const sseMetadata = `data: ${JSON.stringify(metadataMessage)}\n\n`;
-            controller.enqueue(encoder.encode(sseMetadata));
-          } catch (error) {
-            // Isolate error to this specific panel
-            const errorMessage = {
-              type: "error",
-              modelId,
-              error: error instanceof Error ? error.message : "Unknown error",
-            };
-            const sseError = `data: ${JSON.stringify(errorMessage)}\n\n`;
-            controller.enqueue(encoder.encode(sseError));
-          }
-        });
-
-        // Use allSettled so one failure doesn't stop others
-        await Promise.allSettled(modelStreams);
-
-        // Close the stream
-        controller.close();
-      } catch (error) {
-        // Global error (affects entire stream, not isolated to one panel)
-        const errorMessage = {
-          type: "error",
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
-        const sseError = `data: ${JSON.stringify(errorMessage)}\n\n`;
-        controller.enqueue(encoder.encode(sseError));
-        controller.close();
-      }
-    },
-
-    cancel() {
-      console.log("Verify mode stream cancelled by client");
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
-    },
-  });
-}
-
-interface StreamRequest {
+interface InferenceRequest {
   prompt: string;
-  model?: string;
-  models?: string[]; // For Verify Mode
+  models: string[];
+  temperature?: number;
   maxTokens?: number;
 }
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as StreamRequest;
-    const { prompt, model, models, maxTokens } = body;
+    const body = (await request.json()) as InferenceRequest;
+    const { prompt, models, temperature, maxTokens } = body;
 
     // Validate prompt
     if (!prompt || typeof prompt !== "string") {
@@ -141,10 +32,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Enforce max prompt length (4,000 characters per spec)
-    if (prompt.length > 4000) {
+    if (prompt.trim().length === 0) {
       return new Response(
-        JSON.stringify({ error: "Prompt exceeds maximum length of 4,000 characters" }),
+        JSON.stringify({ error: "Prompt cannot be empty" }),
         {
           status: 400,
           headers: { "Content-Type": "application/json" },
@@ -152,117 +42,82 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify Mode: multiple models
-    if (models && Array.isArray(models)) {
-      // Enforce min 2, max 3 models per spec
-      if (models.length < 2) {
-        return new Response(
-          JSON.stringify({ error: "Verify Mode requires at least 2 models" }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      if (models.length > 3) {
-        return new Response(
-          JSON.stringify({ error: "Maximum 3 models allowed in Verify Mode" }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      return handleVerifyMode(prompt, models, maxTokens || 800);
+    // Validate models array
+    if (!models || !Array.isArray(models) || models.length === 0) {
+      return new Response(
+        JSON.stringify({
+          error: "Models is required and must be a non-empty array",
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     }
 
-    // Single-answer mode
-    // Route to appropriate model
-    const routingDecision = modelRouter.route({
-      prompt,
-      promptLength: prompt.length,
-      requestedModel: model,
-    });
-
-    // Create provider and start streaming
-    const provider = new MockProvider(50); // 50ms delay between chunks
-    const response = provider.stream(prompt, {
-      model: routingDecision.model,
-      maxTokens: maxTokens || 800, // Default max tokens per spec
-    });
-
-    // Create SSE stream
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          // Send routing decision first
-          const routingMessage = {
-            type: "routing",
-            routing: {
-              model: routingDecision.model,
-              reason: routingDecision.reason,
-              confidence: routingDecision.confidence,
-            },
-          };
-          const sseRouting = `data: ${JSON.stringify(routingMessage)}\n\n`;
-          controller.enqueue(encoder.encode(sseRouting));
-
-          // Stream chunks as they arrive
-          for await (const chunk of response.chunks) {
-            const data = {
-              type: "chunk",
-              content: chunk.content,
-              done: chunk.done,
-            };
-
-            // Format as SSE
-            const sseMessage = `data: ${JSON.stringify(data)}\n\n`;
-            controller.enqueue(encoder.encode(sseMessage));
-          }
-
-          // Send metadata when streaming completes
-          const metadata = await response.metadata;
-          const metadataMessage = {
-            type: "metadata",
-            metadata,
-          };
-
-          const sseMetadata = `data: ${JSON.stringify(metadataMessage)}\n\n`;
-          controller.enqueue(encoder.encode(sseMetadata));
-
-          // Close the stream
-          controller.close();
-        } catch (error) {
-          // Send error event
-          const errorMessage = {
-            type: "error",
-            error: error instanceof Error ? error.message : "Unknown error",
-          };
-
-          const sseError = `data: ${JSON.stringify(errorMessage)}\n\n`;
-          controller.enqueue(encoder.encode(sseError));
-          controller.close();
+    // Validate each model is a string
+    if (!models.every((m) => typeof m === "string")) {
+      return new Response(
+        JSON.stringify({ error: "All models must be strings" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
         }
-      },
+      );
+    }
 
-      cancel() {
-        // Client disconnected - clean up if needed
-        console.log("Stream cancelled by client");
-      },
+    // Call LLM router in parallel for each model
+    const llmRequest: LLMRequest = {
+      prompt,
+      temperature,
+      maxTokens,
+    };
+
+    const results = await Promise.allSettled(
+      models.map((modelId) =>
+        routeToProvider(modelId as ModelId, llmRequest)
+      )
+    );
+
+    // Format results
+    const formattedResults = results.map((result, index) => {
+      const modelId = models[index];
+
+      if (result.status === "fulfilled") {
+        return {
+          modelId,
+          success: true,
+          ...result.value,
+        };
+      } else {
+        return {
+          modelId,
+          success: false,
+          text: "",
+          model: modelId as ModelId,
+          latencyMs: 0,
+          error: result.reason?.message || "Unknown error",
+        };
+      }
     });
 
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-      },
+    console.log("API Response:", {
+      resultsCount: formattedResults.length,
+      firstResult: formattedResults[0]
+        ? {
+            success: formattedResults[0].success,
+            textLength: formattedResults[0].text?.length || 0,
+            hasError: !!formattedResults[0].error,
+          }
+        : null,
+    });
+
+    return new Response(JSON.stringify({ results: formattedResults }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error in stream route:", error);
+    console.error("Error in inference route:", error);
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : "Internal server error",
