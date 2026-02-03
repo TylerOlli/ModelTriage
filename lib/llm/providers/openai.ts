@@ -3,27 +3,30 @@
  */
 
 import OpenAI from "openai";
-import type { LLMRequest, LLMResponse } from "../types";
+import type { LLMRequest, LLMResponse, ModelId } from "../types";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export async function runOpenAI(request: LLMRequest): Promise<LLMResponse> {
+export async function runOpenAI(
+  request: LLMRequest,
+  modelId: ModelId
+): Promise<LLMResponse> {
   const startTime = Date.now();
 
   try {
     const completion = await client.chat.completions.create({
-      model: "gpt-5-mini",
+      model: modelId,
       messages: [
         {
           role: "user",
           content: request.prompt,
         },
       ],
-      // GPT-5 mini only supports temperature of 1 (default)
+      // GPT-5 models only support temperature of 1 (default)
       // temperature: request.temperature ?? 1,
-      // GPT-5 mini is a reasoning model - needs more tokens for internal reasoning + output
+      // Reasoning models need more tokens for internal reasoning + output
       max_completion_tokens: request.maxTokens ?? 16000,
     });
 
@@ -31,6 +34,7 @@ export async function runOpenAI(request: LLMRequest): Promise<LLMResponse> {
     const text = completion.choices[0]?.message?.content || "";
 
     console.log("OpenAI Full Response:", {
+      model: modelId,
       choices: completion.choices,
       finishReason: completion.choices[0]?.finish_reason,
       refusal: completion.choices[0]?.message?.refusal,
@@ -38,6 +42,7 @@ export async function runOpenAI(request: LLMRequest): Promise<LLMResponse> {
     });
 
     console.log("OpenAI Response:", {
+      model: modelId,
       text: text.substring(0, 100),
       textLength: text.length,
       latencyMs,
@@ -48,7 +53,7 @@ export async function runOpenAI(request: LLMRequest): Promise<LLMResponse> {
 
     return {
       text,
-      model: "gpt-5-mini",
+      model: modelId,
       latencyMs,
       finishReason: completion.choices[0]?.finish_reason || undefined,
       tokenUsage: completion.usage
@@ -65,7 +70,7 @@ export async function runOpenAI(request: LLMRequest): Promise<LLMResponse> {
 
     return {
       text: "",
-      model: "gpt-5-mini",
+      model: modelId,
       latencyMs,
       error: errorMessage,
     };

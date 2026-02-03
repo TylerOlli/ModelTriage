@@ -26,7 +26,17 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [verifyMode, setVerifyMode] = useState(false);
-  const [modelCount, setModelCount] = useState(2);
+
+  // Model selection state
+  const [selectedModels, setSelectedModels] = useState<string[]>([
+    "gpt-5-mini",
+    "gpt-5.2",
+  ]);
+
+  const availableModels = [
+    { id: "gpt-5-mini", label: "GPT-5 Mini", description: "Fast reasoning" },
+    { id: "gpt-5.2", label: "GPT-5.2", description: "Advanced reasoning" },
+  ];
 
   // Single-answer mode state
   const [response, setResponse] = useState("");
@@ -54,17 +64,10 @@ export default function Home() {
   // Load persisted state on mount
   useEffect(() => {
     const persistedVerifyMode = localStorage.getItem("verifyMode");
-    const persistedModelCount = localStorage.getItem("modelCount");
     const persistedPrompt = localStorage.getItem("lastPrompt");
 
     if (persistedVerifyMode !== null) {
       setVerifyMode(persistedVerifyMode === "true");
-    }
-    if (persistedModelCount !== null) {
-      const count = parseInt(persistedModelCount, 10);
-      if (count === 2 || count === 3) {
-        setModelCount(count);
-      }
     }
     if (persistedPrompt) {
       setPrompt(persistedPrompt);
@@ -76,10 +79,25 @@ export default function Home() {
     localStorage.setItem("verifyMode", verifyMode.toString());
   }, [verifyMode]);
 
-  // Persist model count
+  // Load persisted model selection
   useEffect(() => {
-    localStorage.setItem("modelCount", modelCount.toString());
-  }, [modelCount]);
+    const persistedModels = localStorage.getItem("selectedModels");
+    if (persistedModels) {
+      try {
+        const parsed = JSON.parse(persistedModels);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSelectedModels(parsed);
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
+  }, []);
+
+  // Persist model selection
+  useEffect(() => {
+    localStorage.setItem("selectedModels", JSON.stringify(selectedModels));
+  }, [selectedModels]);
 
   // Persist prompt (debounced to avoid excessive writes)
   useEffect(() => {
@@ -94,10 +112,10 @@ export default function Home() {
     return () => clearTimeout(timeoutId);
   }, [prompt]);
 
-  // Generate diff summary after Verify Mode streaming completes
+  // Generate diff summary after streaming completes with multiple models
   useEffect(() => {
-    // Only run when streaming completes in Verify Mode
-    if (!isStreaming && verifyMode && Object.keys(modelPanels).length > 0) {
+    // Only run when streaming completes and we have multiple model panels
+    if (!isStreaming && Object.keys(modelPanels).length > 1) {
       try {
         // Only use successfully completed panels (no error, has response, has metadata)
         const successfulPanels = Object.values(modelPanels).filter(
@@ -119,7 +137,7 @@ export default function Home() {
         setDiffError("Could not generate diff summary");
       }
     }
-  }, [isStreaming, verifyMode, modelPanels]);
+  }, [isStreaming, modelPanels]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,7 +182,7 @@ export default function Home() {
         },
         body: JSON.stringify({ 
           prompt,
-          models: ["gpt-5-mini"]
+          models: ["gpt-5-mini"]  // Single-answer mode uses default model
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -177,7 +195,7 @@ export default function Home() {
       // Parse JSON response
       const data = await res.json();
 
-      // Handle results
+      // Handle results - single-answer mode always has one result
       if (data.results && data.results.length > 0) {
         const result = data.results[0];
 
@@ -216,12 +234,11 @@ export default function Home() {
 
   const handleVerifyModeSubmit = async () => {
     // Reset state
-    const models = Array.from({ length: modelCount }, () => "gpt-5-mini");
+    const models = selectedModels;
     const initialPanels: Record<string, ModelPanel> = {};
-    models.forEach((modelId, i) => {
-      const panelId = `model-${i + 1}`;
-      initialPanels[panelId] = {
-        modelId: panelId,
+    models.forEach((modelId) => {
+      initialPanels[modelId] = {
+        modelId: modelId,
         routing: null,
         response: "",
         metadata: null,
@@ -261,7 +278,7 @@ export default function Home() {
       // Handle results and update panels
       if (data.results && data.results.length > 0) {
         data.results.forEach((result: any, index: number) => {
-          const panelId = `model-${index + 1}`;
+          const panelId = selectedModels[index];
 
           setModelPanels((prev) => ({
             ...prev,
@@ -408,31 +425,6 @@ export default function Home() {
               />
             </button>
           </div>
-
-          {verifyMode && (
-            <div className="pt-4 border-t border-gray-200">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Number of models (2-3)
-              </label>
-              <div className="flex gap-2">
-                {[2, 3].map((count) => (
-                  <button
-                    key={count}
-                    type="button"
-                    onClick={() => setModelCount(count)}
-                    disabled={isStreaming}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      modelCount === count
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    } ${isStreaming ? "opacity-50 cursor-not-allowed" : ""}`}
-                  >
-                    {count}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Prompt Input Form */}
@@ -449,7 +441,7 @@ export default function Home() {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Enter your prompt here..."
-              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-vertical ${
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-vertical bg-white text-gray-900 placeholder:text-gray-400 ${
                 isOverLimit ? "border-red-500" : "border-gray-300"
               }`}
               rows={6}
@@ -466,6 +458,55 @@ export default function Home() {
                 {characterCount} / 4,000 characters
               </span>
             </div>
+
+            {/* Model Picker - Only show in Advanced/Verify Mode */}
+            {verifyMode && (
+              <div className="mt-6">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Select Models to Compare
+                </label>
+              <div className="flex flex-wrap gap-3">
+                {availableModels.map((model) => (
+                  <label
+                    key={model.id}
+                    className={`flex items-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      selectedModels.includes(model.id)
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 bg-white hover:border-gray-300"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedModels.includes(model.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedModels([...selectedModels, model.id]);
+                        } else {
+                          // Don't allow unchecking if it's the last selected model
+                          if (selectedModels.length > 1) {
+                            setSelectedModels(
+                              selectedModels.filter((id) => id !== model.id)
+                            );
+                          }
+                        }
+                      }}
+                      disabled={isStreaming}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                    />
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {model.label}
+                      </div>
+                      <div className="text-xs text-gray-500">{model.description}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Selected: {selectedModels.length} model{selectedModels.length !== 1 ? "s" : ""}
+              </p>
+              </div>
+            )}
 
             <div className="flex gap-3 mt-4">
               <button
@@ -510,7 +551,7 @@ export default function Home() {
         )}
 
         {/* Single-Answer Mode Display */}
-        {!verifyMode && (
+        {!verifyMode && Object.keys(modelPanels).length === 0 && (
           <>
             {/* Routing Information */}
             {routing && (
@@ -708,10 +749,11 @@ export default function Home() {
         )}
 
         {/* Verify Mode Display */}
-        {verifyMode && Object.keys(modelPanels).length > 0 && (
+        {/* Multi-Model Comparison (works for both single-answer with multiple models and verify mode) */}
+        {Object.keys(modelPanels).length > 0 && (
           <>
             {/* Side-by-side Model Panels */}
-            <div className={`grid gap-6 mb-6 ${modelCount === 2 ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+            <div className={`grid gap-6 mb-6 ${selectedModels.length === 2 ? "md:grid-cols-2" : selectedModels.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
               {Object.entries(modelPanels).map(([modelId, panel]) => (
                 <div
                   key={modelId}

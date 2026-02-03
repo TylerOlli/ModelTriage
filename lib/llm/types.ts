@@ -2,7 +2,7 @@
  * LLM abstraction types
  */
 
-export type ModelId = "gpt-5-mini";
+export type ModelId = "gpt-5-mini" | "gpt-5.2";
 
 export interface LLMRequest {
   prompt: string;

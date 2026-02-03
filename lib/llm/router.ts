@@ -11,11 +11,12 @@ export async function routeToProvider(
 ): Promise<LLMResponse> {
   switch (modelId) {
     case "gpt-5-mini":
-      return runOpenAI(request);
+    case "gpt-5.2":
+      return runOpenAI(request, modelId);
 
     default:
       throw new Error(
-        `Unsupported model: ${modelId}. Only "gpt-5-mini" is currently supported.`
+        `Unsupported model: ${modelId}. Supported models: gpt-5-mini, gpt-5.2`
       );
   }
 }
