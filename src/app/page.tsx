@@ -69,9 +69,19 @@ export default function Home() {
     { id: "gpt-5-mini", label: "GPT-5 Mini", description: "Fast reasoning" },
     { id: "gpt-5.2", label: "GPT-5.2", description: "Advanced reasoning" },
     {
+      id: "claude-opus-4-5-20251101",
+      label: "Claude Opus 4.5",
+      description: "Best / Highest reasoning",
+    },
+    {
       id: "claude-sonnet-4-5-20250929",
       label: "Claude Sonnet 4.5",
-      description: "Anthropic's latest",
+      description: "Balanced",
+    },
+    {
+      id: "claude-haiku-4-5-20251001",
+      label: "Claude Haiku 4.5",
+      description: "Fast / Low cost",
     },
   ];
 

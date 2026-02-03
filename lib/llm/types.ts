@@ -2,7 +2,12 @@
  * LLM abstraction types
  */
 
-export type ModelId = "gpt-5-mini" | "gpt-5.2" | "claude-sonnet-4-5-20250929";
+export type ModelId =
+  | "gpt-5-mini"
+  | "gpt-5.2"
+  | "claude-opus-4-5-20251101"
+  | "claude-sonnet-4-5-20250929"
+  | "claude-haiku-4-5-20251001";
 
 export interface LLMRequest {
   prompt: string;
