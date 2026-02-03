@@ -4,6 +4,7 @@
 
 import type { ModelId, LLMRequest, LLMResponse } from "./types";
 import { runOpenAI } from "./providers/openai";
+import { runAnthropic } from "./providers/anthropic";
 
 export async function routeToProvider(
   modelId: ModelId,
@@ -14,9 +15,12 @@ export async function routeToProvider(
     case "gpt-5.2":
       return runOpenAI(request, modelId);
 
+    case "claude-sonnet-4-5-20250929":
+      return runAnthropic(request, modelId);
+
     default:
       throw new Error(
-        `Unsupported model: ${modelId}. Supported models: gpt-5-mini, gpt-5.2`
+        `Unsupported model: ${modelId}. Supported models: gpt-5-mini, gpt-5.2, claude-sonnet-4-5-20250929`
       );
   }
 }

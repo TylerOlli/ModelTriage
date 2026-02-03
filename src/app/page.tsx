@@ -68,6 +68,11 @@ export default function Home() {
   const availableModels = [
     { id: "gpt-5-mini", label: "GPT-5 Mini", description: "Fast reasoning" },
     { id: "gpt-5.2", label: "GPT-5.2", description: "Advanced reasoning" },
+    {
+      id: "claude-sonnet-4-5-20250929",
+      label: "Claude Sonnet 4.5",
+      description: "Anthropic's latest",
+    },
   ];
 
   // Prompt history state
@@ -122,7 +127,14 @@ export default function Home() {
       try {
         const parsed = JSON.parse(persistedModels);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setSelectedModels(parsed);
+          // Filter to only include valid model IDs that exist in availableModels
+          const validModelIds = availableModels.map((m) => m.id);
+          const validPersistedModels = parsed.filter((id) =>
+            validModelIds.includes(id)
+          );
+          if (validPersistedModels.length > 0) {
+            setSelectedModels(validPersistedModels);
+          }
         }
       } catch (e) {
         // Ignore parse errors
@@ -774,7 +786,7 @@ export default function Home() {
                       <div>
                         <span className="text-gray-600">Latency:</span>
                         <span className="ml-2 font-medium text-gray-900">
-                          {metadata.latency}ms
+                          {(metadata.latency / 1000).toFixed(1)} seconds
                         </span>
                       </div>
                       <div>
@@ -993,7 +1005,7 @@ export default function Home() {
                       <div>
                         <span className="text-gray-600">Latency:</span>
                         <span className="ml-2 font-medium text-gray-900">
-                          {panel.metadata.latency}ms
+                          {(panel.metadata.latency / 1000).toFixed(1)} seconds
                         </span>
                       </div>
                       <div>

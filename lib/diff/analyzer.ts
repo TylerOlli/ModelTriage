@@ -33,18 +33,18 @@ export class DiffAnalyzer {
 
     // Agreement: concepts present in all responses
     if (commonWords.length > 0) {
-      const sample = commonWords.slice(0, 5).join(", ");
+      const allCommonWords = commonWords.join(", ");
       summary.agreement.push(
-        `All models mention similar concepts: ${sample}${commonWords.length > 5 ? "..." : ""}`
+        `All models mention similar concepts: ${allCommonWords}`
       );
     }
 
     // Disagreement: unique content per model
     uniqueWords.forEach((unique, idx) => {
       if (unique.length > 0) {
-        const sample = unique.slice(0, 3).join(", ");
+        const allUniqueWords = unique.join(", ");
         summary.disagreement.push(
-          `${responses[idx].model} uniquely mentions: ${sample}${unique.length > 3 ? "..." : ""}`
+          `${responses[idx].model} uniquely mentions: ${allUniqueWords}`
         );
       }
     });
