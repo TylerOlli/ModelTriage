@@ -1037,60 +1037,57 @@ export default function Home() {
                   Comparison Summary
                 </h3>
 
-                {diffSummary.agreement.length > 0 && (
-                  <div className="mb-4">
-                    <h4 className="text-sm font-semibold text-green-900 mb-2">
-                      ✓ Agreement
+                {/* Common Ground */}
+                {diffSummary.commonGround.length > 0 && (
+                  <div className="mb-6">
+                    <h4 className="text-sm font-semibold text-green-900 mb-3">
+                      Common Ground
                     </h4>
-                    <ul className="space-y-1">
-                      {diffSummary.agreement.map((item, idx) => (
-                        <li key={idx} className="text-sm text-green-800">
-                          {item}
+                    <ul className="space-y-2">
+                      {diffSummary.commonGround.map((item, idx) => (
+                        <li key={idx} className="text-sm text-gray-700 leading-relaxed">
+                          • {item}
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
 
-                {diffSummary.disagreement.length > 0 && (
-                  <div className="mb-4">
-                    <h4 className="text-sm font-semibold text-orange-900 mb-2">
-                      ⚠ Disagreement
+                {/* Key Differences */}
+                {diffSummary.keyDifferences.length > 0 && (
+                  <div className="mb-6">
+                    <h4 className="text-sm font-semibold text-blue-900 mb-3">
+                      Key Differences
                     </h4>
-                    <ul className="space-y-1">
-                      {diffSummary.disagreement.map((item, idx) => (
-                        <li key={idx} className="text-sm text-orange-800">
-                          {item}
-                        </li>
+                    <div className="space-y-4">
+                      {diffSummary.keyDifferences.map((diff, idx) => (
+                        <div key={idx}>
+                          <h5 className="text-sm font-medium text-blue-800 mb-2">
+                            {diff.model}
+                          </h5>
+                          <ul className="space-y-1.5 ml-3">
+                            {diff.points.map((point, pIdx) => (
+                              <li key={pIdx} className="text-sm text-gray-700 leading-relaxed">
+                                • {point}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 )}
 
-                {diffSummary.omissions.length > 0 && (
-                  <div className="mb-4">
-                    <h4 className="text-sm font-semibold text-blue-900 mb-2">
-                      ℹ Omissions
-                    </h4>
-                    <ul className="space-y-1">
-                      {diffSummary.omissions.map((item, idx) => (
-                        <li key={idx} className="text-sm text-blue-800">
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {diffSummary.conflictingAssumptions.length > 0 && (
+                {/* Notable Gaps */}
+                {diffSummary.notableGaps.length > 0 && (
                   <div>
-                    <h4 className="text-sm font-semibold text-red-900 mb-2">
-                      ⚡ Conflicting Assumptions
+                    <h4 className="text-sm font-semibold text-orange-900 mb-3">
+                      Notable Gaps
                     </h4>
-                    <ul className="space-y-1">
-                      {diffSummary.conflictingAssumptions.map((item, idx) => (
-                        <li key={idx} className="text-sm text-red-800">
-                          {item}
+                    <ul className="space-y-2">
+                      {diffSummary.notableGaps.map((item, idx) => (
+                        <li key={idx} className="text-sm text-gray-700 leading-relaxed">
+                          • {item}
                         </li>
                       ))}
                     </ul>

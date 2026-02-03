@@ -7,9 +7,13 @@ export interface ModelResponse {
   content: string;
 }
 
+export interface ModelDifferences {
+  model: string;
+  points: string[];
+}
+
 export interface DiffSummary {
-  agreement: string[];
-  disagreement: string[];
-  omissions: string[];
-  conflictingAssumptions: string[];
+  commonGround: string[];
+  keyDifferences: ModelDifferences[];
+  notableGaps: string[];
 }
