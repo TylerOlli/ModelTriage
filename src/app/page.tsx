@@ -70,6 +70,10 @@ export default function Home() {
     { id: "gpt-5.2", label: "GPT-5.2", description: "Advanced reasoning" },
   ];
 
+  // Prompt history state
+  const [promptHistory, setPromptHistory] = useState<string[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+
   // Single-answer mode state
   const [response, setResponse] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -131,6 +135,26 @@ export default function Home() {
     localStorage.setItem("selectedModels", JSON.stringify(selectedModels));
   }, [selectedModels]);
 
+  // Load prompt history
+  useEffect(() => {
+    const savedHistory = localStorage.getItem("promptHistory");
+    if (savedHistory) {
+      try {
+        const parsed = JSON.parse(savedHistory);
+        if (Array.isArray(parsed)) {
+          setPromptHistory(parsed);
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
+  }, []);
+
+  // Persist prompt history
+  useEffect(() => {
+    localStorage.setItem("promptHistory", JSON.stringify(promptHistory));
+  }, [promptHistory]);
+
   // Persist prompt (debounced to avoid excessive writes)
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -171,10 +195,35 @@ export default function Home() {
     }
   }, [isStreaming, modelPanels]);
 
+  // Add prompt to history (dedupe consecutive duplicates, keep last 10)
+  const addToHistory = (submittedPrompt: string) => {
+    const trimmed = submittedPrompt.trim();
+    if (!trimmed) return;
+
+    setPromptHistory((prev) => {
+      // Don't add if it's the same as the most recent entry
+      if (prev.length > 0 && prev[0] === trimmed) {
+        return prev;
+      }
+
+      // Add to front, remove duplicates from rest, keep last 10
+      const filtered = prev.filter((p) => p !== trimmed);
+      return [trimmed, ...filtered].slice(0, 10);
+    });
+  };
+
+  const clearHistory = () => {
+    setPromptHistory([]);
+    localStorage.removeItem("promptHistory");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!prompt.trim()) return;
+
+    // Add to history before submitting
+    addToHistory(prompt);
 
     // Prevent concurrent runs - defensive guard in addition to button disabled state
     if (isStreaming || abortControllerRef.current) {
@@ -489,7 +538,49 @@ export default function Home() {
               >
                 {characterCount} / 4,000 characters
               </span>
+              {promptHistory.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowHistory(!showHistory)}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  {showHistory ? "Hide History" : "Show History"}
+                </button>
+              )}
             </div>
+
+            {/* Prompt History */}
+            {showHistory && promptHistory.length > 0 && (
+              <div className="mt-4 bg-gray-50 rounded-lg border border-gray-200 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-gray-900">
+                    Recent Prompts
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={clearHistory}
+                    className="text-xs text-red-600 hover:text-red-700 font-medium"
+                  >
+                    Clear History
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {promptHistory.map((historyItem, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => {
+                        setPrompt(historyItem);
+                        setShowHistory(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 bg-white hover:bg-blue-50 rounded border border-gray-200 hover:border-blue-300 transition-colors"
+                    >
+                      <span className="line-clamp-2">{historyItem}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Model Picker - Only show in Advanced/Verify Mode */}
             {verifyMode && (

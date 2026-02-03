@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 const MAX_PROMPT_LENGTH = 8000;
 const DEFAULT_MAX_TOKENS = 16000; // High default for reasoning models (GPT-5 mini needs tokens for internal reasoning)
 const MAX_TOKENS_LIMIT = 32000; // Max limit for cost control
-const MODEL_TIMEOUT_MS = 30000; // 30 seconds
+const MODEL_TIMEOUT_MS = 60000; // 60 seconds (reasoning models can take longer)
 
 // Rate limiting (in-memory, simple MVP)
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
@@ -88,7 +88,7 @@ async function runWithTimeout(
     routeToProvider(modelId, llmRequest),
     new Promise((_, reject) =>
       setTimeout(
-        () => reject(new Error("Model timeout after 30 seconds")),
+        () => reject(new Error("Model timeout after 60 seconds")),
         MODEL_TIMEOUT_MS
       )
     ),
