@@ -7,7 +7,9 @@ export type ModelId =
   | "gpt-5.2"
   | "claude-opus-4-5-20251101"
   | "claude-sonnet-4-5-20250929"
-  | "claude-haiku-4-5-20251001";
+  | "claude-haiku-4-5-20251001"
+  | "gemini-2.5-flash"
+  | "gemini-2.5-pro";
 
 export interface LLMRequest {
   prompt: string;

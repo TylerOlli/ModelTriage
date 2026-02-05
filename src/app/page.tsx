@@ -83,6 +83,16 @@ export default function Home() {
       label: "Claude Haiku 4.5",
       description: "Fast / Low cost",
     },
+    {
+      id: "gemini-2.5-flash",
+      label: "Gemini 2.5 Flash",
+      description: "Fast and efficient",
+    },
+    {
+      id: "gemini-2.5-pro",
+      label: "Gemini 2.5 Pro",
+      description: "Advanced capabilities",
+    },
   ];
 
   // Prompt history state

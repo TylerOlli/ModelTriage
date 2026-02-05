@@ -59,21 +59,21 @@ export class IntentRouter {
 Prompt: "${prompt}"
 
 Categories & Models:
-coding_quick → claude-sonnet-4-5-20250929
+coding_quick → claude-sonnet-4-5-20250929 OR gemini-2.5-flash
 coding_review → claude-opus-4-5-20251101
 coding_debug → gpt-5.2
-coding_complex_impl → gpt-5.2
-writing_light → claude-haiku-4-5-20251001
-writing_standard → claude-sonnet-4-5-20250929
+coding_complex_impl → gpt-5.2 OR gemini-2.5-pro
+writing_light → claude-haiku-4-5-20251001 OR gemini-2.5-flash
+writing_standard → claude-sonnet-4-5-20250929 OR gemini-2.5-pro
 writing_high_stakes → claude-opus-4-5-20251101
-analysis_standard → gpt-5-mini
-analysis_complex → gpt-5.2
+analysis_standard → gpt-5-mini OR gemini-2.5-flash
+analysis_complex → gpt-5.2 OR gemini-2.5-pro
 
 Required JSON format:
 {
   "intent": "coding|writing|analysis|unknown",
   "category": "<category_from_above>",
-  "chosenModel": "<model_from_above>",
+  "chosenModel": "<exact_model_id_from_above>",
   "confidence": 0.0-1.0,
   "reason": "<1 sentence why>"
 }
@@ -144,71 +144,41 @@ Output ONLY the JSON object, no other text.`;
   private routeByCategory(
     classification: ClassifierResponse
   ): RoutingDecision {
-    const { intent, category, confidence } = classification;
+    const { intent, category, confidence, chosenModel: classifierModel } = classification;
     let chosenModel: ModelId;
     let reason: string;
 
-    // Coding intent routing
-    if (intent === "coding") {
-      if (confidence < 0.6) {
-        chosenModel = "gpt-5-mini";
-        reason = "Low-confidence fallback for coding task";
-      } else if (category === "coding_quick") {
-        chosenModel = "claude-sonnet-4-5-20250929";
-        reason = classification.reason || "Quick coding task";
-      } else if (category === "coding_review") {
-        chosenModel = "claude-opus-4-5-20251101";
-        reason = classification.reason || "Code review task";
-      } else if (category === "coding_debug") {
-        chosenModel = "gpt-5.2";
-        reason = classification.reason || "Debugging task";
-      } else if (category === "coding_complex_impl") {
-        chosenModel = "gpt-5.2";
-        reason = classification.reason || "Complex implementation task";
-      } else {
-        // Unknown coding category
-        chosenModel = "gpt-5-mini";
-        reason = "Low-confidence fallback for unclear coding category";
-      }
+    // Valid model IDs (for validation)
+    const validModels: ModelId[] = [
+      "gpt-5-mini",
+      "gpt-5.2",
+      "claude-opus-4-5-20251101",
+      "claude-sonnet-4-5-20250929",
+      "claude-haiku-4-5-20251001",
+      "gemini-2.5-flash",
+      "gemini-2.5-pro",
+    ];
+
+    // If classifier returned a valid model and confidence is good, use it
+    if (
+      confidence >= 0.6 &&
+      classifierModel &&
+      validModels.includes(classifierModel as ModelId)
+    ) {
+      chosenModel = classifierModel as ModelId;
+      reason = classification.reason || `Selected ${chosenModel} for ${category}`;
     }
-    // Writing intent routing
-    else if (intent === "writing") {
-      if (confidence < 0.6) {
-        chosenModel = "claude-sonnet-4-5-20250929";
-        reason = "Low-confidence fallback for writing task";
-      } else if (category === "writing_light") {
-        chosenModel = "claude-haiku-4-5-20251001";
-        reason = classification.reason || "Light writing task";
-      } else if (category === "writing_standard") {
-        chosenModel = "claude-sonnet-4-5-20250929";
-        reason = classification.reason || "Standard writing task";
-      } else if (category === "writing_high_stakes") {
-        chosenModel = "claude-opus-4-5-20251101";
-        reason = classification.reason || "High-stakes writing task";
-      } else {
-        // Unknown writing category
-        chosenModel = "claude-sonnet-4-5-20250929";
-        reason = "Low-confidence fallback for unclear writing category";
-      }
-    }
-    // Analysis intent routing
-    else if (intent === "analysis") {
-      if (confidence < 0.6 || category === "analysis_standard") {
-        chosenModel = "gpt-5-mini";
-        reason =
-          confidence < 0.6
-            ? "Low-confidence fallback for analysis task"
-            : classification.reason || "Standard analysis task";
-      } else if (category === "analysis_complex") {
-        chosenModel = "gpt-5.2";
-        reason = classification.reason || "Complex analysis task";
-      } else {
-        chosenModel = "gpt-5-mini";
-        reason = "Fallback for unclear analysis category";
-      }
-    }
-    // Unknown intent
-    else {
+    // Fallback logic for low confidence or invalid model
+    else if (intent === "coding") {
+      chosenModel = "gpt-5-mini";
+      reason = "Low-confidence fallback for coding task";
+    } else if (intent === "writing") {
+      chosenModel = "claude-sonnet-4-5-20250929";
+      reason = "Low-confidence fallback for writing task";
+    } else if (intent === "analysis") {
+      chosenModel = "gpt-5-mini";
+      reason = "Low-confidence fallback for analysis task";
+    } else {
       chosenModel = "gpt-5-mini";
       reason = "Unknown intent, using general-purpose model";
     }
