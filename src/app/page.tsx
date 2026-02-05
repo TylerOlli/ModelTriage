@@ -5,6 +5,16 @@ import { diffAnalyzer } from "@/lib/diff";
 import type { DiffSummary } from "@/lib/diff";
 
 /**
+ * Map model ID to provider name
+ */
+function getProviderName(modelId: string): string {
+  if (modelId.startsWith("gpt-")) return "OpenAI";
+  if (modelId.startsWith("claude-")) return "Anthropic";
+  if (modelId.startsWith("gemini-")) return "Google";
+  return "Unknown";
+}
+
+/**
  * Map error codes and types to user-friendly messages
  */
 function getUserFriendlyError(error: string | null): string {
@@ -58,6 +68,11 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [verifyMode, setVerifyMode] = useState(false);
+
+  // Streaming stage tracking
+  const [streamingStage, setStreamingStage] = useState<
+    "connecting" | "routing" | "contacting" | "streaming" | null
+  >(null);
 
   // Model selection state
   const [selectedModels, setSelectedModels] = useState<string[]>([
@@ -340,6 +355,7 @@ export default function Home() {
     setRouting(null);
     setMetadata(null);
     setIsStreaming(true);
+    setStreamingStage("connecting"); // Initial stage
 
     // Create abort controller for cancellation
     abortControllerRef.current = new AbortController();
@@ -366,22 +382,40 @@ export default function Home() {
       // Parse SSE stream
       let currentModel: string | null = null;
       let textBuffer = "";
+      let hasReceivedChunk = false;
 
       for await (const { event, data } of parseSSE(res)) {
         if (event === "meta") {
+          // First meta event - show routing stage immediately for auto mode
+          if (data.status === "connected") {
+            // Initial connection established - show routing for auto mode
+            setStreamingStage("routing");
+          }
+          
           // Store routing metadata
           if (data.routing) {
             setRouting(data.routing);
+            // After routing completes, switch to contacting
+            if (data.routing.mode === "auto") {
+              setStreamingStage("contacting");
+            } else {
+              setStreamingStage("contacting");
+            }
           }
           if (data.models) {
             currentModel = data.models[0]; // Single answer mode has one model
           }
         } else if (event === "model_start") {
-          // Model is starting - could show loading indicator
-          // (already handled by loading state)
+          // Model is starting
+          setStreamingStage("contacting");
         } else if (event === "ping") {
           // Keep-alive ping, ignore
         } else if (event === "chunk") {
+          // First chunk arrived - switch to streaming stage
+          if (!hasReceivedChunk) {
+            setStreamingStage("streaming");
+            hasReceivedChunk = true;
+          }
           // Append delta to response incrementally
           textBuffer += data.delta;
           setResponse(textBuffer);
@@ -389,7 +423,7 @@ export default function Home() {
           // Update metadata when done
           setMetadata({
             model: data.model,
-            provider: "provider",
+            provider: getProviderName(data.model),
             latency: data.latencyMs || 0,
             tokenUsage: data.tokenUsage
               ? { total: data.tokenUsage.totalTokens }
@@ -421,6 +455,7 @@ export default function Home() {
       }
     } finally {
       setIsStreaming(false);
+      setStreamingStage(null);
       abortControllerRef.current = null;
     }
   };
@@ -443,6 +478,7 @@ export default function Home() {
     setDiffSummary(null);
     setDiffError(null);
     setIsStreaming(true);
+    setStreamingStage("connecting"); // Initial stage
 
     // Create abort controller
     abortControllerRef.current = new AbortController();
@@ -452,6 +488,8 @@ export default function Home() {
     models.forEach((modelId) => {
       textBuffers[modelId] = "";
     });
+
+    let hasReceivedAnyChunk = false;
 
     try {
       const res = await fetch("/api/stream", {
@@ -475,13 +513,21 @@ export default function Home() {
       // Parse SSE stream
       for await (const { event, data } of parseSSE(res)) {
         if (event === "meta") {
-          // Initial metadata event - could store routing if needed
+          // Manual mode - show contacting as soon as connected
+          if (streamingStage === "connecting") {
+            setStreamingStage("contacting");
+          }
         } else if (event === "model_start") {
-          // Model is starting - could show loading indicator per panel
-          // (already handled by loading state)
+          // Models are starting
+          setStreamingStage("contacting");
         } else if (event === "ping") {
           // Keep-alive ping, ignore
         } else if (event === "chunk") {
+          // First chunk arrived - switch to streaming stage
+          if (!hasReceivedAnyChunk) {
+            setStreamingStage("streaming");
+            hasReceivedAnyChunk = true;
+          }
           // Append delta to the specific model's response
           const modelId = data.model;
           textBuffers[modelId] += data.delta;
@@ -502,7 +548,7 @@ export default function Home() {
               ...prev[modelId],
               metadata: {
                 model: data.model,
-                provider: "provider",
+                provider: getProviderName(data.model),
                 latency: data.latencyMs || 0,
                 tokenUsage: data.tokenUsage
                   ? { total: data.tokenUsage.totalTokens }
@@ -548,6 +594,7 @@ export default function Home() {
       }
     } finally {
       setIsStreaming(false);
+      setStreamingStage(null);
       abortControllerRef.current = null;
     }
   };
@@ -579,6 +626,7 @@ export default function Home() {
     } finally {
       // Always reset streaming state to prevent stuck UI
       setIsStreaming(false);
+      setStreamingStage(null);
       abortControllerRef.current = null;
     }
   };
@@ -806,11 +854,16 @@ export default function Home() {
         </form>
 
         {/* Loading State */}
-        {isStreaming && !verifyMode && !response && (
+        {isStreaming && !verifyMode && !response && streamingStage && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center gap-3 text-gray-600">
               <div className="animate-spin w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full" />
-              <span>Getting response from model...</span>
+              <span>
+                {streamingStage === "connecting" && "Connecting..."}
+                {streamingStage === "routing" && "Routing..."}
+                {streamingStage === "contacting" && "Contacting models..."}
+                {streamingStage === "streaming" && "Streaming..."}
+              </span>
             </div>
           </div>
         )}
