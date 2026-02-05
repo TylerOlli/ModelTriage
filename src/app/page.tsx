@@ -30,6 +30,24 @@ function getFriendlyModelName(modelId: string): string {
   return modelMap[modelId] || modelId;
 }
 
+/**
+ * Convert confidence score to user-friendly label
+ * Returns null if confidence should not be displayed
+ */
+function confidenceToLabel(confidence?: number): string | null {
+  if (confidence === undefined || confidence === 0) {
+    return null;
+  }
+  
+  if (confidence >= 0.8) {
+    return "High confidence";
+  } else if (confidence >= 0.6) {
+    return "Medium confidence";
+  } else {
+    return "Low confidence (verify recommended)";
+  }
+}
+
 
 /**
  * Map error codes and types to user-friendly messages
@@ -427,10 +445,16 @@ export default function Home() {
           setStreamingStage("contacting");
         } else if (event === "routing_reason") {
           // Update routing reason with AI-generated explanation
+          console.log("Received routing_reason event:", data);
           if (data.reason) {
-            setRouting((prev) =>
-              prev ? { ...prev, reason: data.reason } : prev
-            );
+            console.log("Updating routing reason to:", data.reason);
+            setRouting((prev) => {
+              if (prev) {
+                console.log("Previous routing:", prev);
+                return { ...prev, reason: data.reason };
+              }
+              return prev;
+            });
           }
         } else if (event === "ping") {
           // Keep-alive ping, ignore
@@ -901,18 +925,20 @@ export default function Home() {
                 <div className="flex items-start gap-3">
                   <span className="text-indigo-600 text-lg">🎯</span>
                   <div className="flex-1">
-                    <h3 className="text-sm font-semibold text-indigo-900 mb-1">
-                      Auto-selected Model
-                    </h3>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-sm font-semibold text-indigo-900">
+                        Auto-selected Model
+                      </h3>
+                      {verifyMode && confidenceToLabel(routing.confidence) && (
+                        <span className="text-xs text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded">
+                          {confidenceToLabel(routing.confidence)}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-indigo-800 mb-2">
                       <span className="font-medium">
                         {routing.chosenModel ? getFriendlyModelName(routing.chosenModel) : routing.chosenModel}
                       </span>
-                      {routing.confidence !== undefined && routing.confidence > 0 && (
-                        <span className="ml-2 text-indigo-600">
-                          (confidence: {routing.confidence.toFixed(2)})
-                        </span>
-                      )}
                     </p>
                     <p className="text-sm text-indigo-700">
                       {routing.reason || "Selected as the best match for your request."}
@@ -1133,9 +1159,16 @@ export default function Home() {
                       <div className="flex items-start gap-2">
                         <span className="text-indigo-600">🎯</span>
                         <div className="flex-1">
-                          <h4 className="text-xs font-semibold text-indigo-900 mb-1">
-                            {getFriendlyModelName(panel.routing.model)}
-                          </h4>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="text-xs font-semibold text-indigo-900">
+                              {getFriendlyModelName(panel.routing.model)}
+                            </h4>
+                            {confidenceToLabel(Number(panel.routing.confidence)) && (
+                              <span className="text-xs text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded">
+                                {confidenceToLabel(Number(panel.routing.confidence))}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-indigo-700">
                             {panel.routing.reason}
                           </p>

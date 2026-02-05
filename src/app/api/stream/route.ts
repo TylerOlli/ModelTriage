@@ -368,6 +368,11 @@ export async function POST(request: Request) {
 
             // Generate custom routing reason asynchronously (don't block streaming)
             if (isAutoMode && routingMetadataStream.mode === "auto") {
+              console.log("Starting async routing reason generation for:", {
+                model: routingMetadataStream.chosenModel,
+                promptPreview: prompt.substring(0, 100),
+              });
+              
               intentRouter
                 .generateRoutingReason({
                   prompt,
@@ -376,17 +381,27 @@ export async function POST(request: Request) {
                   category: routingMetadataStream.category || "",
                 })
                 .then((customReason) => {
+                  console.log("Generated custom routing reason:", customReason);
                   // Send updated routing reason via SSE
-                  controller.enqueue(
-                    encoder.encode(
-                      formatSSE("routing_reason", {
-                        reason: customReason,
-                      })
-                    )
-                  );
+                  try {
+                    controller.enqueue(
+                      encoder.encode(
+                        formatSSE("routing_reason", {
+                          reason: customReason,
+                        })
+                      )
+                    );
+                    console.log("Sent routing_reason SSE event");
+                  } catch (enqueueErr) {
+                    console.error("Failed to enqueue routing_reason event:", enqueueErr);
+                  }
                 })
                 .catch((err) => {
-                  console.error("Failed to generate custom routing reason:", err);
+                  console.error("Failed to generate custom routing reason:", {
+                    error: err instanceof Error ? err.message : err,
+                    prompt: prompt.substring(0, 100),
+                    model: routingMetadataStream.chosenModel,
+                  });
                   // Don't send error event, just skip - fallback reason already displayed
                 });
             }

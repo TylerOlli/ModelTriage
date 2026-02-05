@@ -335,49 +335,47 @@ Output ONLY the JSON object, no other text.`;
 
     const modelDisplayName = modelDisplayNames[chosenModel] || chosenModel;
 
-    // Provide context hints based on intent/category to guide the explanation
-    const taskHints: Record<string, string> = {
-      coding_quick: "quick code generation or simple programming tasks",
-      coding_review: "code review, refactoring, or explaining existing code",
-      coding_debug: "debugging, troubleshooting, or analyzing errors",
-      coding_complex_impl: "complex implementations, algorithms, or system design",
-      writing_light: "quick writing, summaries, or casual content",
-      writing_standard: "professional writing and standard content",
-      writing_high_stakes: "important or nuanced communication",
-      analysis_standard: "research, analysis, or answering questions",
-      analysis_complex: "deep analysis and complex reasoning",
-    };
+    const explanationPrompt = `You are explaining why ${modelDisplayName} was selected to answer a user's request.
 
-    const taskHint = taskHints[category] || "general tasks";
+Write exactly ONE sentence that:
+1. Starts by describing what the user is asking about in natural language (e.g., "This request for help converting CSS to LESS...")
+2. Connects that task to a specific strength of ${modelDisplayName}
 
-    const explanationPrompt = `Write ONE short sentence (max 15 words) explaining why ${modelDisplayName} is a good fit for the user's request below.
+Format: "This [description of user's request] [benefits from / is well-suited to] ${modelDisplayName}'s [specific capability]."
 
-Guidelines:
-- Focus on what makes the model suitable for THIS specific task
-- Mention relevant strengths: speed, accuracy, code quality, writing clarity, debugging ability, or reasoning depth
-- DO NOT mention: routing, categories, confidence, internal logic, or "based on your prompt"
-- DO NOT compare to other models
-- Keep tone neutral and matter-of-fact
-- Output ONLY the sentence, no quotes, no preamble
+Examples:
+- "This request for help converting CSS to LESS benefits from ${modelDisplayName}'s strong code understanding and clear examples."
+- "This question about learning Python basics is well-suited to ${modelDisplayName}'s ability to provide clear explanations with practical examples."
+- "This debugging request benefits from ${modelDisplayName}'s systematic approach to analyzing errors."
 
-Context hint: This is about ${taskHint}
+Rules:
+- Reference the ACTUAL task in the prompt, not generic categories
+- Keep under 25 words
+- Do NOT use phrases like "best match", "chosen because", or "selected as"
+- Do NOT mention routing, categories, or confidence
 
-User request: "${prompt.substring(0, 200)}"
+User request: "${prompt.substring(0, 300)}"
 
 Your one-sentence explanation:`;
+
+    console.log("Generating routing reason for:", {
+      model: modelDisplayName,
+      promptPreview: prompt.substring(0, 100),
+      category,
+    });
 
     try {
       const response = await Promise.race([
         runOpenAI(
           {
             prompt: explanationPrompt,
-            maxTokens: 50,
+            maxTokens: 100,
             // Don't set temperature - GPT-5 models use default temp=1
           },
           this.CLASSIFIER_MODEL
         ),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Reason generation timeout")), 5000)
+          setTimeout(() => reject(new Error("Reason generation timeout")), 8000)
         ),
       ]);
 
@@ -391,6 +389,37 @@ Your one-sentence explanation:`;
       // Remove quotes if present
       reason = reason.replace(/^["']|["']$/g, "");
       
+      // Remove any leading phrase like "Your one-sentence explanation:" if present
+      reason = reason.replace(/^(Your one-sentence explanation:|Explanation:)/i, "").trim();
+      
+      // Reject truly generic phrases that don't reference the task
+      const forbiddenPhrases = [
+        "best match for this request",
+        "selected as the best",
+        "chosen because it is",
+        "general-purpose",
+      ];
+      
+      const isGeneric = forbiddenPhrases.some(phrase => 
+        reason.toLowerCase().includes(phrase)
+      );
+      
+      // Check if it references the user's task (more lenient check)
+      const hasTaskReference = 
+        /this (question|request|task|prompt|code|debugging|writing|learning|conversion|help)/i.test(reason) ||
+        /the (request|question|task|prompt|code)/i.test(reason) ||
+        /(for|about|regarding|concerning) (help|code|debugging|converting|learning|writing|analyzing)/i.test(reason);
+      
+      if (isGeneric) {
+        console.log("❌ Rejecting generic routing reason:", reason);
+        throw new Error("Generated explanation uses forbidden generic phrases");
+      }
+      
+      if (!hasTaskReference || reason.length < 25) {
+        console.log("❌ Rejecting non-specific routing reason:", { reason, length: reason.length, hasTaskReference });
+        throw new Error("Generated explanation doesn't reference the specific task or is too short");
+      }
+      
       // Ensure it ends with a period
       if (!reason.endsWith(".") && !reason.endsWith("!") && !reason.endsWith("?")) {
         reason += ".";
@@ -401,26 +430,35 @@ Your one-sentence explanation:`;
         reason = reason.charAt(0).toUpperCase() + reason.slice(1);
       }
 
-      console.log("Generated routing reason:", reason);
+      console.log("✅ Generated routing reason passed validation:", reason);
 
       return reason;
     } catch (err) {
-      console.error("Failed to generate routing reason:", err);
+      console.warn("⚠️ Failed to generate AI routing reason, using fallback:", {
+        error: err instanceof Error ? err.message : err,
+        category,
+        modelDisplayName,
+      });
       
-      // Fallback to a generic but reasonable explanation
+      // Fallback to a category-specific explanation
+      // Note: These are less specific than AI-generated ones but still helpful
       const fallbackReasons: Record<string, string> = {
-        coding_quick: "Well-suited for quick programming questions and implementations.",
-        coding_review: "Excellent at code review and refactoring tasks.",
-        coding_debug: "Strong at debugging and analyzing errors.",
-        coding_complex_impl: "Specialized in complex algorithms and system design.",
-        writing_light: "Fast and efficient for summaries and casual writing.",
-        writing_standard: "Balanced for professional, high-quality writing.",
-        writing_high_stakes: "Optimized for nuanced, high-stakes communication.",
-        analysis_standard: "Ideal for research and answering questions.",
-        analysis_complex: "Strong at deep analysis and complex reasoning.",
+        coding_quick: `This code-related request is well-suited to ${modelDisplayName}'s fast and accurate programming capabilities.`,
+        coding_review: `This code review task benefits from ${modelDisplayName}'s strong analysis and refactoring abilities.`,
+        coding_debug: `This debugging request is well-suited to ${modelDisplayName}'s systematic error analysis approach.`,
+        coding_complex_impl: `This complex implementation task benefits from ${modelDisplayName}'s strong algorithm and system design capabilities.`,
+        writing_light: `This content request is well-suited to ${modelDisplayName}'s efficient text generation.`,
+        writing_standard: `This writing task benefits from ${modelDisplayName}'s balanced, professional content quality.`,
+        writing_high_stakes: `This communication request is well-suited to ${modelDisplayName}'s careful, nuanced writing style.`,
+        analysis_standard: `This analytical question benefits from ${modelDisplayName}'s clear reasoning and research capabilities.`,
+        analysis_complex: `This complex analysis task is well-suited to ${modelDisplayName}'s deep reasoning abilities.`,
       };
 
-      return fallbackReasons[category] || "Selected as the best match for this request.";
+      const fallbackReason = fallbackReasons[category] || `This request is well-suited to ${modelDisplayName}'s balanced capabilities.`;
+      console.log("📝 Using fallback reason:", fallbackReason);
+      
+      // Return fallback instead of throwing - ensures the reason is always sent via SSE
+      return fallbackReason;
     }
   }
 }
