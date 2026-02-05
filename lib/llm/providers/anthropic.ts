@@ -84,3 +84,80 @@ export async function runAnthropic(
     };
   }
 }
+
+/**
+ * Stream Anthropic response with SSE
+ */
+export async function* streamAnthropic(
+  request: LLMRequest,
+  modelId: ModelId
+): AsyncGenerator<{ type: "chunk" | "done" | "error"; data: any }> {
+  const startTime = Date.now();
+
+  try {
+    const anthropicClient = getClient();
+    const stream = await anthropicClient.messages.stream({
+      model: modelId,
+      max_tokens: request.maxTokens ?? 16000,
+      temperature: request.temperature ?? 1,
+      messages: [
+        {
+          role: "user",
+          content: request.prompt,
+        },
+      ],
+    });
+
+    let fullText = "";
+    let finishReason: string | undefined;
+    let usage: any;
+
+    for await (const event of stream) {
+      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+        const delta = event.delta.text;
+        fullText += delta;
+        yield {
+          type: "chunk",
+          data: { model: modelId, delta },
+        };
+      }
+
+      if (event.type === "message_stop") {
+        const message = await stream.finalMessage();
+        finishReason = message.stop_reason || undefined;
+        usage = message.usage;
+      }
+    }
+
+    const latencyMs = Date.now() - startTime;
+
+    yield {
+      type: "done",
+      data: {
+        model: modelId,
+        latencyMs,
+        finishReason,
+        tokenUsage: usage
+          ? {
+              promptTokens: usage.input_tokens,
+              completionTokens: usage.output_tokens,
+              totalTokens: usage.input_tokens + usage.output_tokens,
+            }
+          : undefined,
+      },
+    };
+  } catch (err) {
+    const latencyMs = Date.now() - startTime;
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+
+    yield {
+      type: "error",
+      data: {
+        model: modelId,
+        message: errorMessage,
+        code: "provider_error",
+        latencyMs,
+      },
+    };
+  }
+}

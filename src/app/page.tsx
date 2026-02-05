@@ -252,6 +252,60 @@ export default function Home() {
     localStorage.removeItem("promptHistory");
   };
 
+  /**
+   * Parse SSE stream from fetch response
+   */
+  async function* parseSSE(response: Response): AsyncGenerator<{
+    event: string;
+    data: any;
+  }> {
+    if (!response.body) {
+      throw new Error("No response body");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+
+        // Keep the last incomplete line in the buffer
+        buffer = lines.pop() || "";
+
+        let currentEvent = "";
+        let currentData = "";
+
+        for (const line of lines) {
+          if (line.startsWith("event:")) {
+            currentEvent = line.substring(6).trim();
+          } else if (line.startsWith("data:")) {
+            currentData = line.substring(5).trim();
+          } else if (line === "" && currentEvent && currentData) {
+            // End of event
+            try {
+              yield {
+                event: currentEvent,
+                data: JSON.parse(currentData),
+              };
+            } catch (e) {
+              console.error("Failed to parse SSE data:", currentData);
+            }
+            currentEvent = "";
+            currentData = "";
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -298,6 +352,7 @@ export default function Home() {
         },
         body: JSON.stringify({ 
           prompt,
+          stream: true, // Enable SSE streaming
           // No models array = auto-routing mode
         }),
         signal: abortControllerRef.current.signal,
@@ -308,34 +363,51 @@ export default function Home() {
         throw new Error(errorData.error || "Request failed");
       }
 
-      // Parse JSON response
-      const data = await res.json();
+      // Parse SSE stream
+      let currentModel: string | null = null;
+      let textBuffer = "";
 
-      // Store routing metadata
-      if (data.routing) {
-        setRouting(data.routing);
+      for await (const { event, data } of parseSSE(res)) {
+        if (event === "meta") {
+          // Store routing metadata
+          if (data.routing) {
+            setRouting(data.routing);
+          }
+          if (data.models) {
+            currentModel = data.models[0]; // Single answer mode has one model
+          }
+        } else if (event === "model_start") {
+          // Model is starting - could show loading indicator
+          // (already handled by loading state)
+        } else if (event === "ping") {
+          // Keep-alive ping, ignore
+        } else if (event === "chunk") {
+          // Append delta to response incrementally
+          textBuffer += data.delta;
+          setResponse(textBuffer);
+        } else if (event === "done") {
+          // Update metadata when done
+          setMetadata({
+            model: data.model,
+            provider: "provider",
+            latency: data.latencyMs || 0,
+            tokenUsage: data.tokenUsage
+              ? { total: data.tokenUsage.totalTokens }
+              : undefined,
+            finishReason: data.finishReason,
+          });
+        } else if (event === "error") {
+          // Handle error
+          throw new Error(data.message || "Stream error");
+        } else if (event === "complete") {
+          // Stream complete
+          break;
+        }
       }
 
-      // Handle results - single-answer mode always has one result
-      if (data.results && data.results.length > 0) {
-        const result = data.results[0];
-
-        if (result.error) {
-          throw new Error(result.error);
-        }
-
-        setResponse(result.text || "");
-        setMetadata({
-          model: result.model,
-          provider: "openai",
-          latency: result.latencyMs || 0,
-          tokenUsage: result.tokenUsage
-            ? { total: result.tokenUsage.totalTokens }
-            : undefined,
-          finishReason: result.finishReason,
-        });
-      } else {
-        throw new Error("No results returned");
+      // If no text was received, show error
+      if (!textBuffer) {
+        throw new Error("No response received");
       }
     } catch (err) {
       if (err instanceof Error) {
@@ -375,6 +447,12 @@ export default function Home() {
     // Create abort controller
     abortControllerRef.current = new AbortController();
 
+    // Track text buffers for each model
+    const textBuffers: Record<string, string> = {};
+    models.forEach((modelId) => {
+      textBuffers[modelId] = "";
+    });
+
     try {
       const res = await fetch("/api/stream", {
         method: "POST",
@@ -383,7 +461,8 @@ export default function Home() {
         },
         body: JSON.stringify({ 
           prompt, 
-          models
+          models,
+          stream: true, // Enable SSE streaming
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -393,36 +472,59 @@ export default function Home() {
         throw new Error(errorData.error || "Request failed");
       }
 
-      // Parse JSON response
-      const data = await res.json();
-
-      // Handle results and update panels
-      if (data.results && data.results.length > 0) {
-        data.results.forEach((result: any, index: number) => {
-          const panelId = selectedModels[index];
-
+      // Parse SSE stream
+      for await (const { event, data } of parseSSE(res)) {
+        if (event === "meta") {
+          // Initial metadata event - could store routing if needed
+        } else if (event === "model_start") {
+          // Model is starting - could show loading indicator per panel
+          // (already handled by loading state)
+        } else if (event === "ping") {
+          // Keep-alive ping, ignore
+        } else if (event === "chunk") {
+          // Append delta to the specific model's response
+          const modelId = data.model;
+          textBuffers[modelId] += data.delta;
+          
           setModelPanels((prev) => ({
             ...prev,
-            [panelId]: {
-              ...prev[panelId],
-              response: result.text || "",
-              metadata: result.error
-                ? null
-                : {
-                    model: result.model,
-                    provider: "openai",
-                    latency: result.latencyMs || 0,
-                    tokenUsage: result.tokenUsage
-                      ? { total: result.tokenUsage.totalTokens }
-                      : undefined,
-                    finishReason: result.finishReason,
-                  },
-              error: result.error || null,
+            [modelId]: {
+              ...prev[modelId],
+              response: textBuffers[modelId],
             },
           }));
-        });
-      } else {
-        throw new Error("No results returned");
+        } else if (event === "done") {
+          // Update metadata when model completes
+          const modelId = data.model;
+          setModelPanels((prev) => ({
+            ...prev,
+            [modelId]: {
+              ...prev[modelId],
+              metadata: {
+                model: data.model,
+                provider: "provider",
+                latency: data.latencyMs || 0,
+                tokenUsage: data.tokenUsage
+                  ? { total: data.tokenUsage.totalTokens }
+                  : undefined,
+                finishReason: data.finishReason,
+              },
+            },
+          }));
+        } else if (event === "error") {
+          // Handle error for specific model
+          const modelId = data.model;
+          setModelPanels((prev) => ({
+            ...prev,
+            [modelId]: {
+              ...prev[modelId],
+              error: data.message || "Stream error",
+            },
+          }));
+        } else if (event === "complete") {
+          // Stream complete
+          break;
+        }
       }
 
       // Diff summary will be generated by useEffect after state updates complete
@@ -628,7 +730,7 @@ export default function Home() {
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Select Models to Compare
                 </label>
-              <div className="flex flex-wrap gap-3">
+              <div className="grid grid-cols-4 gap-3">
                 {availableModels.map((model) => (
                   <label
                     key={model.id}

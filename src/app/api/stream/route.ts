@@ -27,6 +27,7 @@ interface InferenceRequest {
   models?: string[]; // Optional - if empty/missing, triggers auto-routing
   temperature?: number;
   maxTokens?: number;
+  stream?: boolean; // Optional - if true, use SSE streaming
 }
 
 /**
@@ -95,6 +96,65 @@ async function runWithTimeout(
       )
     ),
   ]);
+}
+
+/**
+ * Format SSE event
+ */
+function formatSSE(event: string, data: any): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+/**
+ * Stream provider responses via SSE
+ */
+async function* streamProvider(
+  modelId: ModelId,
+  llmRequest: LLMRequest
+): AsyncGenerator<string> {
+  // Import streaming functions dynamically
+  const { streamOpenAI } = await import("@/lib/llm/providers/openai");
+  const { streamAnthropic } = await import("@/lib/llm/providers/anthropic");
+  const { streamGemini } = await import("@/lib/llm/providers/gemini");
+
+  let streamFn;
+  if (modelId === "gpt-5-mini" || modelId === "gpt-5.2") {
+    streamFn = streamOpenAI(llmRequest, modelId);
+  } else if (
+    modelId === "claude-opus-4-5-20251101" ||
+    modelId === "claude-sonnet-4-5-20250929" ||
+    modelId === "claude-haiku-4-5-20251001"
+  ) {
+    streamFn = streamAnthropic(llmRequest, modelId);
+  } else if (modelId === "gemini-2.5-flash" || modelId === "gemini-2.5-pro") {
+    streamFn = streamGemini(llmRequest, modelId);
+  } else {
+    yield formatSSE("error", {
+      model: modelId,
+      message: `Unsupported model: ${modelId}`,
+      code: "unknown",
+    });
+    return;
+  }
+
+  try {
+    for await (const event of streamFn) {
+      if (event.type === "chunk") {
+        yield formatSSE("chunk", event.data);
+      } else if (event.type === "done") {
+        yield formatSSE("done", event.data);
+      } else if (event.type === "error") {
+        yield formatSSE("error", event.data);
+      }
+    }
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    yield formatSSE("error", {
+      model: modelId,
+      message: errorMessage,
+      code: "provider_error",
+    });
+  }
 }
 
 export async function POST(request: Request) {
@@ -236,6 +296,147 @@ export async function POST(request: Request) {
       console.log("Manual mode, running models:", modelsToRun);
     }
 
+    // Check if streaming is requested
+    if (body.stream === true) {
+      // SSE streaming mode - start response immediately
+      const requestId = Math.random().toString(36).substring(7);
+      
+      const stream = new ReadableStream({
+        async start(controller) {
+          const encoder = new TextEncoder();
+          
+          try {
+            // Send initial ping to establish connection immediately
+            controller.enqueue(
+              encoder.encode(formatSSE("meta", { requestId, status: "connected" }))
+            );
+
+            // Determine routing mode inside the stream (async)
+            let modelsToRunStream: string[];
+            let routingMetadataStream: typeof routingMetadata;
+
+            if (isAutoMode) {
+              // Auto-routing mode: use intent router to select best model
+              try {
+                const decision = await intentRouter.route(prompt);
+                modelsToRunStream = [decision.chosenModel];
+                routingMetadataStream = {
+                  mode: "auto",
+                  intent: decision.intent,
+                  category: decision.category,
+                  chosenModel: decision.chosenModel,
+                  confidence: decision.confidence,
+                  reason: decision.reason,
+                };
+              } catch (err) {
+                console.error("Intent router failed:", err);
+                // Fallback to gpt-5-mini
+                modelsToRunStream = ["gpt-5-mini"];
+                routingMetadataStream = {
+                  mode: "auto",
+                  intent: "unknown",
+                  category: "router_fallback",
+                  chosenModel: "gpt-5-mini",
+                  confidence: 0,
+                  reason: "Router fallback due to error",
+                };
+              }
+            } else {
+              modelsToRunStream = models!;
+              routingMetadataStream = { mode: "manual" };
+            }
+
+            // Send routing metadata
+            controller.enqueue(
+              encoder.encode(
+                formatSSE("meta", {
+                  requestId,
+                  models: modelsToRunStream,
+                  routing: routingMetadataStream,
+                })
+              )
+            );
+
+            // Send model_start event for each model
+            for (const modelId of modelsToRunStream) {
+              controller.enqueue(
+                encoder.encode(formatSSE("model_start", { model: modelId }))
+              );
+            }
+
+            // Track first chunk per model for ping logic
+            const firstChunkReceived = new Set<string>();
+
+            // Stream all models in parallel
+            await Promise.allSettled(
+              modelsToRunStream.map(async (modelId) => {
+                const llmRequest: LLMRequest = {
+                  prompt,
+                  temperature,
+                  maxTokens,
+                };
+
+                // Start ping interval for this model (500ms until first chunk)
+                const pingInterval = setInterval(() => {
+                  if (!firstChunkReceived.has(modelId)) {
+                    controller.enqueue(
+                      encoder.encode(formatSSE("ping", { model: modelId }))
+                    );
+                  }
+                }, 500);
+
+                try {
+                  for await (const sseEvent of streamProvider(
+                    modelId as ModelId,
+                    llmRequest
+                  )) {
+                    // Mark first chunk received to stop pings
+                    if (sseEvent.includes('"chunk"')) {
+                      firstChunkReceived.add(modelId);
+                      clearInterval(pingInterval);
+                    }
+                    controller.enqueue(encoder.encode(sseEvent));
+                  }
+                } catch (err) {
+                  const errorMessage =
+                    err instanceof Error ? err.message : "Unknown error";
+                  controller.enqueue(
+                    encoder.encode(
+                      formatSSE("error", {
+                        model: modelId,
+                        message: errorMessage,
+                        code: "provider_error",
+                      })
+                    )
+                  );
+                } finally {
+                  clearInterval(pingInterval);
+                }
+              })
+            );
+
+            // Send completion event
+            controller.enqueue(
+              encoder.encode(formatSSE("complete", { requestId }))
+            );
+          } catch (err) {
+            console.error("SSE stream error:", err);
+          } finally {
+            controller.close();
+          }
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
+      });
+    }
+
+    // Non-streaming mode (existing JSON response)
     // Call LLM router in parallel for each model with timeout
     const llmRequest: LLMRequest = {
       prompt,

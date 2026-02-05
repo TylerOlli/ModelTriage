@@ -86,3 +86,83 @@ export async function runOpenAI(
     };
   }
 }
+
+/**
+ * Stream OpenAI response with SSE
+ */
+export async function* streamOpenAI(
+  request: LLMRequest,
+  modelId: ModelId
+): AsyncGenerator<{ type: "chunk" | "done" | "error"; data: any }> {
+  const startTime = Date.now();
+
+  try {
+    const openaiClient = getClient();
+    const stream = await openaiClient.chat.completions.create({
+      model: modelId,
+      messages: [
+        {
+          role: "user",
+          content: request.prompt,
+        },
+      ],
+      max_completion_tokens: request.maxTokens ?? 16000,
+      stream: true,
+    });
+
+    let fullText = "";
+    let finishReason: string | undefined;
+    let usage: any;
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content || "";
+      if (delta) {
+        fullText += delta;
+        yield {
+          type: "chunk",
+          data: { model: modelId, delta },
+        };
+      }
+
+      if (chunk.choices[0]?.finish_reason) {
+        finishReason = chunk.choices[0].finish_reason;
+      }
+
+      // Capture usage if available
+      if (chunk.usage) {
+        usage = chunk.usage;
+      }
+    }
+
+    const latencyMs = Date.now() - startTime;
+
+    yield {
+      type: "done",
+      data: {
+        model: modelId,
+        latencyMs,
+        finishReason,
+        tokenUsage: usage
+          ? {
+              promptTokens: usage.prompt_tokens,
+              completionTokens: usage.completion_tokens,
+              totalTokens: usage.total_tokens,
+            }
+          : undefined,
+      },
+    };
+  } catch (err) {
+    const latencyMs = Date.now() - startTime;
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+
+    yield {
+      type: "error",
+      data: {
+        model: modelId,
+        message: errorMessage,
+        code: "provider_error",
+        latencyMs,
+      },
+    };
+  }
+}
