@@ -108,6 +108,7 @@ export async function* streamOpenAI(
       ],
       max_completion_tokens: request.maxTokens ?? 16000,
       stream: true,
+      stream_options: { include_usage: true },
     });
 
     let fullText = "";

@@ -240,8 +240,9 @@ export async function POST(request: Request) {
 
     if (isAutoMode) {
       // Auto-routing mode: use intent router to select best model
+      // Use fast routing (skip custom reason generation) to avoid blocking streams
       try {
-        const decision = await intentRouter.route(prompt);
+        const decision = await intentRouter.route(prompt, false);
         modelsToRun = [decision.chosenModel];
         routingMetadata = {
           mode: "auto",
@@ -262,7 +263,7 @@ export async function POST(request: Request) {
           category: "router_fallback",
           chosenModel: "gpt-5-mini",
           confidence: 0,
-          reason: "Router fallback due to error",
+          reason: "Selected as a reliable default for this request.",
         };
       }
     } else {
@@ -317,8 +318,9 @@ export async function POST(request: Request) {
 
             if (isAutoMode) {
               // Auto-routing mode: use intent router to select best model
+              // In streaming mode, skip custom reason generation to avoid blocking (use fast fallback reasons)
               try {
-                const decision = await intentRouter.route(prompt);
+                const decision = await intentRouter.route(prompt, false);
                 modelsToRunStream = [decision.chosenModel];
                 routingMetadataStream = {
                   mode: "auto",
@@ -338,7 +340,7 @@ export async function POST(request: Request) {
                   category: "router_fallback",
                   chosenModel: "gpt-5-mini",
                   confidence: 0,
-                  reason: "Router fallback due to error",
+                  reason: "Selected as a reliable default for this request.",
                 };
               }
             } else {
@@ -362,6 +364,31 @@ export async function POST(request: Request) {
               controller.enqueue(
                 encoder.encode(formatSSE("model_start", { model: modelId }))
               );
+            }
+
+            // Generate custom routing reason asynchronously (don't block streaming)
+            if (isAutoMode && routingMetadataStream.mode === "auto") {
+              intentRouter
+                .generateRoutingReason({
+                  prompt,
+                  chosenModel: routingMetadataStream.chosenModel as any,
+                  intent: routingMetadataStream.intent || "unknown",
+                  category: routingMetadataStream.category || "",
+                })
+                .then((customReason) => {
+                  // Send updated routing reason via SSE
+                  controller.enqueue(
+                    encoder.encode(
+                      formatSSE("routing_reason", {
+                        reason: customReason,
+                      })
+                    )
+                  );
+                })
+                .catch((err) => {
+                  console.error("Failed to generate custom routing reason:", err);
+                  // Don't send error event, just skip - fallback reason already displayed
+                });
             }
 
             // Track first chunk per model for ping logic

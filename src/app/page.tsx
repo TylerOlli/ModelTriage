@@ -30,66 +30,6 @@ function getFriendlyModelName(modelId: string): string {
   return modelMap[modelId] || modelId;
 }
 
-/**
- * Transform internal routing details into user-friendly explanation
- */
-function getFriendlyRoutingExplanation(routing: {
-  intent?: string;
-  category?: string;
-  reason?: string;
-  chosenModel?: string;
-}): string {
-  const category = routing.category || "";
-  const reason = routing.reason || "";
-
-  // Map internal categories to friendly explanations
-  const categoryExplanations: Record<string, string> = {
-    // Coding categories
-    coding_quick: "well-suited for quick programming questions and straightforward implementations",
-    coding_review: "excellent at code review, refactoring, and explaining existing code",
-    coding_debug: "specialized in debugging, analyzing errors, and troubleshooting issues",
-    coding_complex_impl: "strong at complex implementations, algorithms, and system-level code",
-    
-    // Writing categories
-    writing_light: "fast and efficient for casual writing, summaries, and quick content",
-    writing_standard: "balanced for clear, high-quality writing and standard content",
-    writing_high_stakes: "optimized for nuanced, high-stakes communication and executive messaging",
-    
-    // Analysis categories
-    analysis_standard: "ideal for research, analysis, and answering questions",
-    analysis_complex: "strong at deep analysis and complex reasoning tasks",
-    
-    // Fallback
-    router_fallback: "a reliable default choice for general-purpose tasks",
-  };
-
-  // If we have a category mapping, use it
-  if (categoryExplanations[category]) {
-    return `Chosen because it's ${categoryExplanations[category]}.`;
-  }
-
-  // Otherwise, use the reason provided by the backend (but clean it up if needed)
-  if (reason) {
-    // Remove technical jargon and internal references
-    let cleanReason = reason
-      .replace(/\b(coding_|writing_|analysis_)\w+/gi, "this task")
-      .replace(/\brouter fallback\b/gi, "a reliable default")
-      .replace(/\bconfidence\s*[<>=]+\s*[\d.]+/gi, "");
-    
-    // Ensure it starts with a capital letter
-    cleanReason = cleanReason.trim();
-    if (cleanReason && !cleanReason.startsWith("Chosen")) {
-      cleanReason = "Chosen because " + cleanReason.charAt(0).toLowerCase() + cleanReason.slice(1);
-    }
-    if (!cleanReason.endsWith(".")) {
-      cleanReason += ".";
-    }
-    
-    return cleanReason;
-  }
-
-  return "Chosen as the best match for your request.";
-}
 
 /**
  * Map error codes and types to user-friendly messages
@@ -485,6 +425,13 @@ export default function Home() {
         } else if (event === "model_start") {
           // Model is starting
           setStreamingStage("contacting");
+        } else if (event === "routing_reason") {
+          // Update routing reason with AI-generated explanation
+          if (data.reason) {
+            setRouting((prev) =>
+              prev ? { ...prev, reason: data.reason } : prev
+            );
+          }
         } else if (event === "ping") {
           // Keep-alive ping, ignore
         } else if (event === "chunk") {
@@ -968,7 +915,7 @@ export default function Home() {
                       )}
                     </p>
                     <p className="text-sm text-indigo-700">
-                      {getFriendlyRoutingExplanation(routing)}
+                      {routing.reason || "Selected as the best match for your request."}
                     </p>
                   </div>
                 </div>
