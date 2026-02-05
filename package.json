@@ -10,6 +10,7 @@
     "test:mock": "tsx __tests__/providers/mock-provider.test.ts",
     "test:routing": "tsx __tests__/routing/router.test.ts",
     "test:diff": "tsx __tests__/diff/analyzer.test.ts",
+    "test:intent-router": "tsx __tests__/llm/intent-router.test.ts",
     "demo:mock": "tsx scripts/demo-mock-provider.ts",
     "test:stream": "tsx scripts/test-stream-api.ts"
   },

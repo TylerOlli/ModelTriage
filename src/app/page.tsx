@@ -93,9 +93,12 @@ export default function Home() {
   const [response, setResponse] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [routing, setRouting] = useState<{
-    model: string;
-    reason: string;
-    confidence: string;
+    mode: "auto" | "manual";
+    intent?: string;
+    category?: string;
+    chosenModel?: string;
+    confidence?: number;
+    reason?: string;
   } | null>(null);
   const [metadata, setMetadata] = useState<{
     model: string;
@@ -285,7 +288,7 @@ export default function Home() {
         },
         body: JSON.stringify({ 
           prompt,
-          models: ["gpt-5-mini"]  // Single-answer mode uses default model
+          // No models array = auto-routing mode
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -297,6 +300,11 @@ export default function Home() {
 
       // Parse JSON response
       const data = await res.json();
+
+      // Store routing metadata
+      if (data.routing) {
+        setRouting(data.routing);
+      }
 
       // Handle results - single-answer mode always has one result
       if (data.results && data.results.length > 0) {
@@ -699,17 +707,27 @@ export default function Home() {
         {!verifyMode && Object.keys(modelPanels).length === 0 && (
           <>
             {/* Routing Information */}
-            {routing && (
+            {routing && routing.mode === "auto" && (
               <div className="bg-indigo-50 rounded-lg border border-indigo-200 p-4 mb-4">
                 <div className="flex items-start gap-3">
                   <span className="text-indigo-600 text-lg">🎯</span>
                   <div className="flex-1">
                     <h3 className="text-sm font-semibold text-indigo-900 mb-1">
-                      Model Selection
+                      Auto-selected Model
                     </h3>
-                    <p className="text-sm text-indigo-800 mb-2">
-                      <span className="font-medium">{routing.model}</span>
+                    <p className="text-sm text-indigo-800 mb-1">
+                      <span className="font-medium">{routing.chosenModel}</span>
+                      {routing.confidence !== undefined && (
+                        <span className="ml-2 text-indigo-600">
+                          (confidence: {routing.confidence.toFixed(2)})
+                        </span>
+                      )}
                     </p>
+                    {routing.intent && routing.category && (
+                      <p className="text-xs text-indigo-600 mb-1">
+                        {routing.intent} / {routing.category}
+                      </p>
+                    )}
                     <p className="text-sm text-indigo-700">{routing.reason}</p>
                   </div>
                 </div>

@@ -1,9 +1,11 @@
 /**
  * LLM inference endpoint
  * Processes prompts through one or more models in parallel
+ * Supports automatic model selection via intent router
  */
 
 import { routeToProvider } from "@/lib/llm/router";
+import { intentRouter } from "@/lib/llm/intent-router";
 import type { ModelId, LLMRequest } from "@/lib/llm/types";
 
 // Force Node.js runtime (not Edge)
@@ -22,7 +24,7 @@ const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
 interface InferenceRequest {
   prompt: string;
-  models: string[];
+  models?: string[]; // Optional - if empty/missing, triggers auto-routing
   temperature?: number;
   maxTokens?: number;
 }
@@ -164,28 +166,74 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate models array
-    if (!models || !Array.isArray(models) || models.length === 0) {
-      return new Response(
-        JSON.stringify({
-          error: "Models is required and must be a non-empty array",
-        }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }
+    // Determine routing mode: auto (no models) or manual (models provided)
+    const isAutoMode = !models || models.length === 0;
+    let modelsToRun: string[];
+    let routingMetadata: {
+      mode: "auto" | "manual";
+      intent?: string;
+      category?: string;
+      chosenModel?: string;
+      confidence?: number;
+      reason?: string;
+    };
 
-    // Validate each model is a string
-    if (!models.every((m) => typeof m === "string")) {
-      return new Response(
-        JSON.stringify({ error: "All models must be strings" }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+    if (isAutoMode) {
+      // Auto-routing mode: use intent router to select best model
+      try {
+        const decision = await intentRouter.route(prompt);
+        modelsToRun = [decision.chosenModel];
+        routingMetadata = {
+          mode: "auto",
+          intent: decision.intent,
+          category: decision.category,
+          chosenModel: decision.chosenModel,
+          confidence: decision.confidence,
+          reason: decision.reason,
+        };
+        console.log("Auto-routing decision:", routingMetadata);
+      } catch (err) {
+        console.error("Intent router failed:", err);
+        // Fallback to gpt-5-mini
+        modelsToRun = ["gpt-5-mini"];
+        routingMetadata = {
+          mode: "auto",
+          intent: "unknown",
+          category: "router_fallback",
+          chosenModel: "gpt-5-mini",
+          confidence: 0,
+          reason: "Router fallback due to error",
+        };
+      }
+    } else {
+      // Manual mode: use user-selected models
+      // Validate models array
+      if (!Array.isArray(models)) {
+        return new Response(
+          JSON.stringify({ error: "Models must be an array" }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Validate each model is a string
+      if (!models.every((m) => typeof m === "string")) {
+        return new Response(
+          JSON.stringify({ error: "All models must be strings" }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      modelsToRun = models;
+      routingMetadata = {
+        mode: "manual",
+      };
+      console.log("Manual mode, running models:", modelsToRun);
     }
 
     // Call LLM router in parallel for each model with timeout
@@ -196,14 +244,14 @@ export async function POST(request: Request) {
     };
 
     const results = await Promise.allSettled(
-      models.map((modelId) =>
+      modelsToRun.map((modelId) =>
         runWithTimeout(modelId as ModelId, llmRequest)
       )
     );
 
     // Format results
     const formattedResults = results.map((result, index) => {
-      const modelId = models[index];
+      const modelId = modelsToRun[index];
 
       if (result.status === "fulfilled") {
         return {
@@ -227,6 +275,7 @@ export async function POST(request: Request) {
     });
 
     console.log("API Response:", {
+      mode: routingMetadata.mode,
       resultsCount: formattedResults.length,
       firstResult: formattedResults[0]
         ? {
@@ -237,10 +286,16 @@ export async function POST(request: Request) {
         : null,
     });
 
-    return new Response(JSON.stringify({ results: formattedResults }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        routing: routingMetadata,
+        results: formattedResults,
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
   } catch (error) {
     console.error("Error in inference route:", error);
     return new Response(
