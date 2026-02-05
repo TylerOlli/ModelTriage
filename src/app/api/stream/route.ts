@@ -28,6 +28,8 @@ interface InferenceRequest {
   temperature?: number;
   maxTokens?: number;
   stream?: boolean; // Optional - if true, use SSE streaming
+  previousPrompt?: string; // Optional - for follow-up prompts
+  previousResponse?: string; // Optional - for follow-up prompts
 }
 
 /**
@@ -179,8 +181,20 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as InferenceRequest;
-    const { prompt, models, temperature } = body;
+    const { prompt, models, temperature, previousPrompt, previousResponse } = body;
     let { maxTokens } = body;
+    
+    // Construct contextual prompt if this is a follow-up
+    let contextualPrompt = prompt;
+    if (previousPrompt && previousResponse) {
+      contextualPrompt = `Previous conversation:
+User: ${previousPrompt}
+Assistant: ${previousResponse}
+
+Follow-up question:
+${prompt}`;
+      console.log("Follow-up prompt detected, adding context");
+    }
 
     // Validate prompt
     if (!prompt || typeof prompt !== "string") {
@@ -413,7 +427,7 @@ export async function POST(request: Request) {
             await Promise.allSettled(
               modelsToRunStream.map(async (modelId) => {
                 const llmRequest: LLMRequest = {
-                  prompt,
+                  prompt: contextualPrompt,
                   temperature,
                   maxTokens,
                 };
@@ -481,7 +495,7 @@ export async function POST(request: Request) {
     // Non-streaming mode (existing JSON response)
     // Call LLM router in parallel for each model with timeout
     const llmRequest: LLMRequest = {
-      prompt,
+      prompt: contextualPrompt,
       temperature,
       maxTokens,
     };
