@@ -5,9 +5,18 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { LLMRequest, LLMResponse, ModelId } from "../types";
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+let client: Anthropic | null = null;
+
+function getClient(): Anthropic {
+  if (!client) {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      throw new Error("ANTHROPIC_API_KEY environment variable is not set");
+    }
+    client = new Anthropic({ apiKey });
+  }
+  return client;
+}
 
 export async function runAnthropic(
   request: LLMRequest,
@@ -16,7 +25,8 @@ export async function runAnthropic(
   const startTime = Date.now();
 
   try {
-    const message = await client.messages.create({
+    const anthropicClient = getClient();
+    const message = await anthropicClient.messages.create({
       model: modelId,
       max_tokens: request.maxTokens ?? 16000,
       temperature: request.temperature ?? 1,

@@ -67,12 +67,22 @@ The following are **explicitly out of scope** for MVP v1:
    npm install
    ```
 
-2. **Run the development server:**
+2. **Set up environment variables:**
+   Create a `.env.local` file in the root directory:
+   ```bash
+   OPENAI_API_KEY=your_openai_api_key_here
+   ANTHROPIC_API_KEY=your_anthropic_api_key_here
+   GEMINI_API_KEY=your_gemini_api_key_here
+   ```
+   
+   **Note:** All three API keys are required for the app to function properly.
+
+3. **Run the development server:**
    ```bash
    npm run dev
    ```
 
-3. **Open the app:**
+4. **Open the app:**
    - Navigate to [http://localhost:3000](http://localhost:3000) in your browser
 
 ### Testing
@@ -99,11 +109,16 @@ ModelTriage is ready for zero-config deployment on Vercel.
    - Click "New Project"
    - Import your Git repository
 
-2. **Configure (no environment variables needed):**
+2. **Configure environment variables:**
    - Framework Preset: **Next.js** (auto-detected)
    - Build Command: `npm run build` (default)
    - Output Directory: `.next` (default)
-   - **Environment Variables:** None required for MVP
+   - **Environment Variables (Required):**
+     - `OPENAI_API_KEY` - Your OpenAI API key (for GPT models)
+     - `ANTHROPIC_API_KEY` - Your Anthropic API key (for Claude models)
+     - `GEMINI_API_KEY` - Your Google Gemini API key (for Gemini models)
+   
+   **Note:** All three API keys are required for the app to build and run successfully.
 
 3. **Deploy:**
    - Click "Deploy"

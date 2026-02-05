@@ -88,10 +88,33 @@ Expected response structure:
 ## Key Features
 - ✅ Gemini models integrated into existing provider abstraction
 - ✅ No changes to API contract or frontend request shape
-- ✅ Auto-routing can select Gemini models for appropriate tasks
+- ✅ **Auto-routing actively selects Gemini models for appropriate tasks**
+  - gemini-2.5-flash: cost-aware alternative for light tasks (confidence < 0.6)
+  - gemini-2.5-pro: alternative for complex tasks (confidence < 0.6)
 - ✅ Manual selection allows side-by-side comparison with other providers
 - ✅ Token usage and latency tracked per request
 - ✅ Graceful error handling per model
+
+## Auto-Routing with Gemini
+
+Gemini models are now part of the intelligent routing system:
+
+### When Gemini is Selected
+- **gemini-2.5-flash** (cost-efficient):
+  - Light coding tasks (confidence < 0.6)
+  - Quick summaries and rewrites (confidence < 0.6)
+  - Standard analysis (confidence < 0.6)
+
+- **gemini-2.5-pro** (advanced):
+  - Complex implementations (confidence < 0.6)
+  - Code review and debugging (confidence < 0.6)
+  - High-stakes writing fallback (confidence < 0.6)
+  - Complex analysis (confidence < 0.6)
+
+### Cost Controls
+- Prefers gemini-2.5-flash over gemini-2.5-pro when both viable
+- Will not select gemini-2.5-pro for trivial prompts
+- Very low confidence (< 0.5) defaults to gpt-5-mini instead
 
 ## Notes
 - Gemini Flash is optimized for speed and cost-efficiency

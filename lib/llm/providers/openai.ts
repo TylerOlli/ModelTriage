@@ -5,9 +5,18 @@
 import OpenAI from "openai";
 import type { LLMRequest, LLMResponse, ModelId } from "../types";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let client: OpenAI | null = null;
+
+function getClient(): OpenAI {
+  if (!client) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error("OPENAI_API_KEY environment variable is not set");
+    }
+    client = new OpenAI({ apiKey });
+  }
+  return client;
+}
 
 export async function runOpenAI(
   request: LLMRequest,
@@ -16,7 +25,8 @@ export async function runOpenAI(
   const startTime = Date.now();
 
   try {
-    const completion = await client.chat.completions.create({
+    const openaiClient = getClient();
+    const completion = await openaiClient.chat.completions.create({
       model: modelId,
       messages: [
         {

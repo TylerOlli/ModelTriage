@@ -1,7 +1,18 @@
 import { GoogleGenAI } from "@google/genai";
 import type { LLMRequest, LLMResponse, ModelId } from "../types";
 
-const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+let client: GoogleGenAI | null = null;
+
+function getClient(): GoogleGenAI {
+  if (!client) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY environment variable is not set");
+    }
+    client = new GoogleGenAI({ apiKey });
+  }
+  return client;
+}
 
 export async function runGemini(
   request: LLMRequest,
@@ -10,6 +21,7 @@ export async function runGemini(
   const startTime = Date.now();
 
   try {
+    const geminiClient = getClient();
     const generationConfig: {
       temperature?: number;
       maxOutputTokens?: number;
@@ -22,7 +34,7 @@ export async function runGemini(
       generationConfig.maxOutputTokens = request.maxTokens;
     }
 
-    const result = await client.models.generateContent({
+    const result = await geminiClient.models.generateContent({
       model: modelId,
       contents: [{ role: "user", parts: [{ text: request.prompt }] }],
       config: generationConfig,

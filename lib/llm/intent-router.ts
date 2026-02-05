@@ -58,22 +58,57 @@ export class IntentRouter {
 
 Prompt: "${prompt}"
 
-Categories & Models:
-coding_quick → claude-sonnet-4-5-20250929 OR gemini-2.5-flash
-coding_review → claude-opus-4-5-20251101
-coding_debug → gpt-5.2
-coding_complex_impl → gpt-5.2 OR gemini-2.5-pro
-writing_light → claude-haiku-4-5-20251001 OR gemini-2.5-flash
-writing_standard → claude-sonnet-4-5-20250929 OR gemini-2.5-pro
-writing_high_stakes → claude-opus-4-5-20251101
-analysis_standard → gpt-5-mini OR gemini-2.5-flash
-analysis_complex → gpt-5.2 OR gemini-2.5-pro
+Routing Rules (Primary → Alternative):
+
+CODING:
+- coding_quick (small functions, snippets, type fixes)
+  Primary: claude-sonnet-4-5-20250929 (confidence ≥ 0.6)
+  Alternative: gemini-2.5-flash (confidence < 0.6)
+
+- coding_review (refactor, PR review, explain code)
+  Primary: claude-opus-4-5-20251101 (confidence ≥ 0.6)
+  Alternative: gemini-2.5-pro (confidence < 0.6)
+
+- coding_debug (stack traces, errors, logs)
+  Primary: gpt-5.2 (confidence ≥ 0.6)
+  Alternative: gemini-2.5-pro (confidence < 0.6)
+
+- coding_complex_impl (algorithms, performance, system design)
+  Primary: gpt-5.2 (confidence ≥ 0.6)
+  Alternative: gemini-2.5-pro (confidence < 0.6)
+
+WRITING:
+- writing_light (summarize, shorten, casual rewrite)
+  Primary: claude-haiku-4-5-20251001 (confidence ≥ 0.6)
+  Alternative: gemini-2.5-flash (confidence < 0.6)
+
+- writing_standard (marketing, blog, landing pages)
+  Primary: claude-sonnet-4-5-20250929 (confidence ≥ 0.6)
+  Alternative: gemini-2.5-pro (confidence < 0.6)
+
+- writing_high_stakes (executive, public statements, sensitive)
+  Primary: claude-opus-4-5-20251101 (confidence ≥ 0.6)
+  Alternative: gemini-2.5-pro (confidence < 0.6, fallback only)
+
+ANALYSIS:
+- analysis_standard (compare options, basic reasoning)
+  Primary: gpt-5-mini (confidence ≥ 0.6)
+  Alternative: gemini-2.5-flash (confidence < 0.6)
+
+- analysis_complex (deep tradeoffs, multi-step reasoning)
+  Primary: gpt-5.2 (confidence ≥ 0.6)
+  Alternative: gemini-2.5-pro (confidence < 0.6)
+
+Cost-awareness:
+- Prefer gemini-2.5-flash over gemini-2.5-pro when both viable
+- Do not select gemini-2.5-pro for trivial/low-confidence prompts
+- If confidence < 0.5, default to gpt-5-mini
 
 Required JSON format:
 {
   "intent": "coding|writing|analysis|unknown",
   "category": "<category_from_above>",
-  "chosenModel": "<exact_model_id_from_above>",
+  "chosenModel": "<exact_model_id>",
   "confidence": 0.0-1.0,
   "reason": "<1 sentence why>"
 }
@@ -159,7 +194,14 @@ Output ONLY the JSON object, no other text.`;
       "gemini-2.5-pro",
     ];
 
-    // If classifier returned a valid model and confidence is good, use it
+    // Safety: if confidence < 0.5, always default to gpt-5-mini
+    if (confidence < 0.5) {
+      chosenModel = "gpt-5-mini";
+      reason = `Very low confidence (${confidence.toFixed(2)}), using safe default model`;
+      return { intent, category, chosenModel, confidence, reason };
+    }
+
+    // If classifier returned a valid model and confidence is acceptable, use it
     if (
       confidence >= 0.6 &&
       classifierModel &&
@@ -167,18 +209,62 @@ Output ONLY the JSON object, no other text.`;
     ) {
       chosenModel = classifierModel as ModelId;
       reason = classification.reason || `Selected ${chosenModel} for ${category}`;
+      return { intent, category, chosenModel, confidence, reason };
     }
-    // Fallback logic for low confidence or invalid model
-    else if (intent === "coding") {
-      chosenModel = "gpt-5-mini";
-      reason = "Low-confidence fallback for coding task";
-    } else if (intent === "writing") {
-      chosenModel = "claude-sonnet-4-5-20250929";
-      reason = "Low-confidence fallback for writing task";
-    } else if (intent === "analysis") {
-      chosenModel = "gpt-5-mini";
-      reason = "Low-confidence fallback for analysis task";
-    } else {
+
+    // Fallback logic for low confidence (0.5 <= confidence < 0.6) or invalid model
+    // Use cost-aware alternatives with Gemini included
+
+    // Coding intent routing
+    if (intent === "coding") {
+      if (category === "coding_quick") {
+        chosenModel = "gemini-2.5-flash";
+        reason = "Low-confidence fallback for quick coding task (cost-aware)";
+      } else if (category === "coding_review") {
+        chosenModel = "gemini-2.5-pro";
+        reason = "Low-confidence fallback for code review";
+      } else if (category === "coding_debug") {
+        chosenModel = "gemini-2.5-pro";
+        reason = "Low-confidence fallback for debugging";
+      } else if (category === "coding_complex_impl") {
+        chosenModel = "gemini-2.5-pro";
+        reason = "Low-confidence fallback for complex implementation";
+      } else {
+        // Unknown coding category
+        chosenModel = "gemini-2.5-flash";
+        reason = "General fallback for unclear coding category";
+      }
+    }
+    // Writing intent routing
+    else if (intent === "writing") {
+      if (category === "writing_light") {
+        chosenModel = "gemini-2.5-flash";
+        reason = "Low-confidence fallback for light writing (cost-aware)";
+      } else if (category === "writing_standard") {
+        chosenModel = "gemini-2.5-pro";
+        reason = "Low-confidence fallback for standard writing";
+      } else if (category === "writing_high_stakes") {
+        chosenModel = "gemini-2.5-pro";
+        reason = "Low-confidence fallback for high-stakes writing";
+      } else {
+        // Unknown writing category
+        chosenModel = "gemini-2.5-flash";
+        reason = "General fallback for unclear writing category";
+      }
+    }
+    // Analysis intent routing
+    else if (intent === "analysis") {
+      if (category === "analysis_complex") {
+        chosenModel = "gemini-2.5-pro";
+        reason = "Low-confidence fallback for complex analysis";
+      } else {
+        // analysis_standard or unknown
+        chosenModel = "gemini-2.5-flash";
+        reason = "Low-confidence fallback for standard analysis (cost-aware)";
+      }
+    }
+    // Unknown intent
+    else {
       chosenModel = "gpt-5-mini";
       reason = "Unknown intent, using general-purpose model";
     }
