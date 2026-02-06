@@ -361,6 +361,12 @@ ${prompt}`;
             promptChars: number;
             imageCount: number;
             textFileCount: number;
+            attachments?: Array<{
+              type: string;
+              filename?: string;
+              content?: string;
+              extension?: string;
+            }>;
           }
         | undefined;
 
@@ -379,6 +385,12 @@ ${prompt}`;
           promptChars: prompt.length,
           imageCount: attachmentResult.imageCount,
           textFileCount: attachmentResult.textFileCount,
+          attachments: attachmentResult.attachments.map((a) => ({
+            type: a.type,
+            filename: (a as any).filename,
+            content: a.type === "text" ? (a as any).content : undefined,
+            extension: (a as any).extension,
+          })),
         };
 
         console.log("Attachment context for routing:", attachmentContext);
@@ -525,6 +537,12 @@ ${prompt}`;
                     promptChars: number;
                     imageCount: number;
                     textFileCount: number;
+                    attachments?: Array<{
+                      type: string;
+                      filename?: string;
+                      content?: string;
+                      extension?: string;
+                    }>;
                   }
                 | undefined;
 
@@ -543,6 +561,12 @@ ${prompt}`;
                   promptChars: prompt.length,
                   imageCount: attachmentResult.imageCount,
                   textFileCount: attachmentResult.textFileCount,
+                  attachments: attachmentResult.attachments.map((a) => ({
+                    type: a.type,
+                    filename: (a as any).filename,
+                    content: a.type === "text" ? (a as any).content : undefined,
+                    extension: (a as any).extension,
+                  })),
                 };
               }
 

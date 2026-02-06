@@ -14,6 +14,10 @@ import {
   isLightweightRequest,
   isCodeRelated,
 } from "../attachments/complexity-detector";
+import {
+  getAttachmentsGist,
+  type AttachmentGist,
+} from "../attachments/gist-generator";
 
 export interface RoutingDecision {
   intent: "coding" | "writing" | "analysis" | "vision" | "unknown";
@@ -32,6 +36,12 @@ export interface AttachmentContext {
   promptChars: number;
   imageCount: number;
   textFileCount: number;
+  attachments?: Array<{
+    type: string;
+    filename?: string;
+    content?: string;
+    extension?: string;
+  }>;
 }
 
 interface ClassifierResponse {
@@ -107,84 +117,18 @@ export class IntentRouter {
   }
 
   /**
-   * Generate an image-aware explanation for vision-based requests
+   * Generate an image-aware explanation using attachment gist
    */
   private generateImageAwareReason(
     prompt: string,
-    attachmentNames: string[],
-    chosenModel: ModelId,
-    isLightweight: boolean
+    attachments: Array<{ type: string; filename?: string; content?: string; extension?: string }> | undefined,
+    chosenModel: ModelId
   ): string {
-    const promptLower = prompt.toLowerCase();
+    // Generate gist from attachments
+    const gist = getAttachmentsGist(attachments || [], prompt);
     
-    // Infer image type from prompt content
-    let imageDescription = "an image";
-    let visualTask = "interpreting visual information";
-    
-    // Code-related images
-    if (
-      promptLower.includes("code") ||
-      promptLower.includes("function") ||
-      promptLower.includes("typescript") ||
-      promptLower.includes("javascript") ||
-      promptLower.includes("python") ||
-      promptLower.includes("syntax")
-    ) {
-      imageDescription = "a screenshot of code";
-      visualTask = "accurately reading and extracting code from images";
-    }
-    // Terminal/error-related images
-    else if (
-      promptLower.includes("error") ||
-      promptLower.includes("terminal") ||
-      promptLower.includes("console") ||
-      promptLower.includes("output") ||
-      promptLower.includes("logs")
-    ) {
-      imageDescription = "a terminal or error output screenshot";
-      visualTask = "interpreting and explaining error messages from screenshots";
-    }
-    // UI/design-related images
-    else if (
-      promptLower.includes("ui") ||
-      promptLower.includes("interface") ||
-      promptLower.includes("design") ||
-      promptLower.includes("layout") ||
-      promptLower.includes("component") ||
-      promptLower.includes("button") ||
-      promptLower.includes("page")
-    ) {
-      imageDescription = "a UI or interface screenshot";
-      visualTask = "analyzing interface behavior and visual layout";
-    }
-    // Diagram/chart-related images
-    else if (
-      promptLower.includes("diagram") ||
-      promptLower.includes("chart") ||
-      promptLower.includes("graph") ||
-      promptLower.includes("architecture")
-    ) {
-      imageDescription = "a diagram or chart";
-      visualTask = "understanding visual diagrams and structured information";
-    }
-    // Screenshot (generic)
-    else if (
-      promptLower.includes("screenshot") ||
-      promptLower.includes("screen") ||
-      promptLower.includes("image")
-    ) {
-      imageDescription = "a screenshot";
-      visualTask = "analyzing visual content and providing detailed explanations";
-    }
-    // Check attachment names for hints
-    else if (attachmentNames.some(name => /\.(png|jpg|jpeg)$/i.test(name))) {
-      const hasScreenshotName = attachmentNames.some(name =>
-        /screenshot|screen|capture/i.test(name)
-      );
-      if (hasScreenshotName) {
-        imageDescription = "a screenshot";
-        visualTask = "analyzing visual content and providing detailed explanations";
-      }
+    if (!gist) {
+      return "This request includes an image that requires visual analysis, and the selected model is well-suited for interpreting visual information.";
     }
     
     // Model-specific capabilities
@@ -197,8 +141,69 @@ export class IntentRouter {
     
     const modelPrefix = modelCapabilities[chosenModel] || "The selected model is well-suited for";
     
-    // Construct the explanation
-    return `This request includes ${imageDescription}, and ${modelPrefix} ${visualTask}.`;
+    // Construct explanation based on gist
+    let visualTask = "interpreting visual information";
+    
+    if (gist.signals.includes("code")) {
+      visualTask = "accurately reading and extracting code from images";
+    } else if (gist.signals.includes("terminal")) {
+      visualTask = "interpreting and explaining error messages from screenshots";
+    } else if (gist.signals.includes("UI")) {
+      visualTask = "analyzing interface behavior and visual layout";
+    } else if (gist.signals.includes("diagram")) {
+      visualTask = "understanding visual diagrams and structured information";
+    }
+    
+    // Format: "This is a [kind] showing [topic], and [model] is [capability] [task]."
+    return `This is ${gist.kind} showing ${gist.topic}, and ${modelPrefix} ${visualTask}.`;
+  }
+
+  /**
+   * Generate a file-aware explanation using attachment gist
+   */
+  private generateFileAwareReason(
+    prompt: string,
+    attachments: Array<{ type: string; filename?: string; content?: string; extension?: string }> | undefined,
+    chosenModel: ModelId,
+    isComplex: boolean
+  ): string {
+    // Generate gist from attachments
+    const gist = getAttachmentsGist(attachments || [], prompt);
+    
+    if (!gist) {
+      return "This request includes an uploaded code/text file, so a stronger coding model was selected for accurate analysis and reliable results.";
+    }
+    
+    const modelDisplayName = chosenModel.includes("claude-sonnet")
+      ? "Claude Sonnet 4.5"
+      : chosenModel.includes("gpt-5.2")
+      ? "GPT-5.2"
+      : chosenModel.includes("claude-opus")
+      ? "Claude Opus 4.5"
+      : "the selected model";
+    
+    // Construct explanation based on gist
+    if (isComplex) {
+      // Complex/deep reasoning scenario
+      return `This upload is ${gist.kind.toLowerCase()} defining ${gist.topic}, and ${modelDisplayName} is well-suited for complex analysis and architectural decisions.`;
+    } else {
+      // Standard file upload
+      let capability = "accurate code analysis and edits";
+      
+      if (gist.signals.includes("error codes") || gist.signals.includes("build failure")) {
+        capability = "debugging and pinpointing root causes";
+      } else if (gist.signals.includes("React") || gist.signals.includes("Next.js")) {
+        capability = `analyzing and refactoring ${gist.language || "code"} with framework knowledge`;
+      } else if (gist.signals.includes("types")) {
+        capability = "type-safe code analysis and refactoring";
+      } else if (gist.signals.includes("tests")) {
+        capability = "test analysis and coverage improvements";
+      } else if (gist.language && gist.language !== "text") {
+        capability = `accurate ${gist.language} analysis and edits`;
+      }
+      
+      return `This upload is ${gist.kind.toLowerCase()} defining ${gist.topic}, and ${modelDisplayName} is a strong fit for ${capability}.`;
+    }
   }
 
   /**
@@ -219,12 +224,11 @@ export class IntentRouter {
 
       const chosenModel = getDefaultVisionModel(isLightweight);
       
-      // Generate image-aware explanation
+      // Generate image-aware explanation using gist
       const reason = this.generateImageAwareReason(
         prompt,
-        context.attachmentNames,
-        chosenModel,
-        isLightweight
+        context.attachments,
+        chosenModel
       );
 
       return {
@@ -249,26 +253,38 @@ export class IntentRouter {
 
       if (needsDeepReasoning) {
         // Escalate to deep reasoning model
+        const reason = this.generateFileAwareReason(
+          prompt,
+          context.attachments,
+          MODEL_DEFAULTS.deepReasoningA,
+          true
+        );
+        
         return {
           intent: "coding",
           category: "code_complex",
           chosenModel: MODEL_DEFAULTS.deepReasoningA,
           confidence: 0.9,
-          reason:
-            "This request includes uploaded files and requires complex analysis. Selected a deep reasoning model for multi-file refactoring and architectural decisions.",
+          reason,
         };
       }
 
       // IMPORTANT: For uploaded files, always use a strong workhorse model
       // NEVER downgrade to fast/cheap models like gpt-5-mini
       if (context.hasTextFiles) {
+        const reason = this.generateFileAwareReason(
+          prompt,
+          context.attachments,
+          MODEL_DEFAULTS.codePrimary,
+          false
+        );
+        
         return {
           intent: "coding",
           category: "code_uploaded_file",
           chosenModel: MODEL_DEFAULTS.codePrimary, // claude-sonnet-4-5-20250929
           confidence: 0.9,
-          reason:
-            "This request includes an uploaded code/text file, so a stronger coding model was selected for accurate analysis and reliable results.",
+          reason,
         };
       }
 

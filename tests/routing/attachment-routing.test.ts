@@ -9,7 +9,7 @@
  */
 
 import { IntentRouter } from "../../lib/llm/intent-router";
-import type { AttachmentContext } from "../../lib/attachments/types";
+import type { AttachmentContext } from "../../lib/llm/intent-router";
 
 async function runTests() {
   console.log("Running Attachment-Aware Routing tests...\n");
@@ -21,20 +21,30 @@ async function runTests() {
 
   // Test 1: Uploaded .ts file → Claude Sonnet (NOT gpt-5-mini)
   try {
-    console.log("Test 1: Uploaded .ts file → Claude Sonnet (NOT gpt-5-mini)");
+    console.log("Test 1: Uploaded .ts file with React component → Descriptive reason");
     const prompt = "Review this code for bugs";
+    const sampleContent = `import React from 'react';
+
+export const TodoList = () => {
+  const [items, setItems] = useState([]);
+  return <div>Todo List</div>;
+};`;
+    
     const context: AttachmentContext = {
       hasImages: false,
       hasTextFiles: true,
       imageCount: 0,
       textFileCount: 1,
-      attachmentNames: ["app.ts"],
-      attachmentTypes: ["text/plain"],
-      textFileTypes: [".ts"],
-      totalTextChars: 500,
+      attachmentNames: ["TodoList.tsx"],
+      textFileTypes: [".tsx"],
+      totalTextChars: sampleContent.length,
       promptChars: prompt.length,
-      summarized: false,
-      attachments: [],
+      attachments: [{
+        type: "text",
+        filename: "TodoList.tsx",
+        content: sampleContent,
+        extension: ".tsx",
+      }],
     };
 
     const decision = await router.route(prompt, false, context);
@@ -44,18 +54,19 @@ async function runTests() {
       category: decision.category,
       chosenModel: decision.chosenModel,
       confidence: decision.confidence.toFixed(2),
+      reason: decision.reason,
     });
 
     if (
       decision.chosenModel === "claude-sonnet-4-5-20250929" &&
       decision.intent === "coding" &&
-      decision.reason?.includes("uploaded")
+      (decision.reason?.includes("React") || decision.reason?.includes("TypeScript"))
     ) {
-      console.log("  ✓ Correctly routed to Claude Sonnet for uploaded file\n");
+      console.log("  ✓ Correctly routed to Claude Sonnet with descriptive reason\n");
       testsPassed++;
     } else {
       throw new Error(
-        `Expected claude-sonnet-4-5-20250929 with "uploaded" reason, got ${decision.chosenModel}`
+        `Expected claude-sonnet-4-5-20250929 with React/TypeScript-aware reason, got ${decision.chosenModel}: ${decision.reason}`
       );
     }
   } catch (err) {
@@ -225,12 +236,13 @@ async function runTests() {
       imageCount: 1,
       textFileCount: 0,
       attachmentNames: ["screenshot.png"],
-      attachmentTypes: ["image/png"],
       textFileTypes: [],
       totalTextChars: 0,
       promptChars: prompt.length,
-      summarized: false,
-      attachments: [],
+      attachments: [{
+        type: "image",
+        filename: "screenshot.png",
+      }],
     };
 
     const decision = await router.route(prompt, false, context);
@@ -480,12 +492,13 @@ async function runTests() {
       imageCount: 1,
       textFileCount: 0,
       attachmentNames: ["photo.jpg"],
-      attachmentTypes: ["image/jpeg"],
       textFileTypes: [],
       totalTextChars: 0,
       promptChars: prompt.length,
-      summarized: false,
-      attachments: [],
+      attachments: [{
+        type: "image",
+        filename: "photo.jpg",
+      }],
     };
 
     const decision = await router.route(prompt, false, context);
@@ -504,6 +517,54 @@ async function runTests() {
       testsPassed++;
     } else {
       throw new Error(`Expected image-aware reason, got: ${decision.reason}`);
+    }
+  } catch (err) {
+    console.error(`  ✗ FAILED: ${err}\n`);
+    testsFailed++;
+  }
+
+  // Test 13: Log file with error → Descriptive gist-based reason
+  try {
+    console.log("Test 13: Log file with error → Descriptive gist-based reason");
+    const prompt = "What went wrong?";
+    const logContent = `[2024-01-15 10:30:45] ERROR: Build failed
+at Object.<anonymous> (/app/build.js:45:12)
+TypeError: Cannot read property 'map' of undefined
+    at processFiles (/app/utils.js:23:15)`;
+    
+    const context: AttachmentContext = {
+      hasImages: false,
+      hasTextFiles: true,
+      imageCount: 0,
+      textFileCount: 1,
+      attachmentNames: ["build.log"],
+      textFileTypes: [".log"],
+      totalTextChars: logContent.length,
+      promptChars: prompt.length,
+      attachments: [{
+        type: "text",
+        filename: "build.log",
+        content: logContent,
+        extension: ".log",
+      }],
+    };
+
+    const decision = await router.route(prompt, false, context);
+
+    console.log("  Decision:", {
+      chosenModel: decision.chosenModel,
+      reason: decision.reason,
+    });
+
+    if (
+      decision.chosenModel === "claude-sonnet-4-5-20250929" &&
+      decision.reason?.toLowerCase().includes("log") &&
+      decision.reason?.toLowerCase().includes("error")
+    ) {
+      console.log("  ✓ Generated log file gist-based reason\n");
+      testsPassed++;
+    } else {
+      throw new Error(`Expected log-aware reason, got: ${decision.reason}`);
     }
   } catch (err) {
     console.error(`  ✗ FAILED: ${err}\n`);
