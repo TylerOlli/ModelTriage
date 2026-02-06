@@ -2,6 +2,14 @@
 
 Smart model defaults based on attachment type to avoid over-using expensive models.
 
+## Latest Change (2026-02-06)
+
+**Uploaded files now ALWAYS default to strong coding models (Claude Sonnet 4.5), never downgrading to fast/cheap models like gpt-5-mini.**
+
+**Problem:** When users uploaded `.ts`, `.js`, `.py`, or other code/text files, the router sometimes selected gpt-5-mini based on lightweight detection (short prompt + small file). This reduced accuracy and reliability for file-based analysis.
+
+**Solution:** Any request with `hasTextFiles === true` now routes directly to `claude-sonnet-4-5-20250929`, bypassing lightweight detection. Fast models like gpt-5-mini are reserved for text-only prompts without file uploads.
+
 ## Problem
 
 Before this fix:
@@ -75,12 +83,12 @@ export const MODEL_DEFAULTS = {
 
 **Deep reasoning triggers:**
 - Total text > 12,000 chars
-- Prompt includes: "design", "architecture", "multi-file", "refactor across", "performance", "security", "migrate", "implement end-to-end"
+- Prompt includes: "design", "architecture", "multi-file", "refactor across", "performance optimization", "security audit", "migrate", "implement end-to-end"
 - Multi-file scenarios with > 6,000 chars
 
 **Lightweight detection:**
-- Prompt < 200 chars + single image + no text files
-- Prompt < 200 chars + text < 4,000 chars + no images
+- **Images:** Prompt < 100 chars + single image + no text files
+- **Text (no files):** Prompt < 200 chars + text < 4,000 chars + no images
 
 ---
 
@@ -92,7 +100,7 @@ export const MODEL_DEFAULTS = {
 
 ```typescript
 if (context.hasImages) {
-  const isLightweight = promptChars < 200 && imageCount === 1 && textFileCount === 0;
+  const isLightweight = promptChars < 100 && imageCount === 1 && textFileCount === 0;
   
   // Choose model
   if (isLightweight) {
@@ -109,24 +117,39 @@ if (context.hasImages) {
 
 **Rule:** `hasTextFiles === true` OR prompt looks like code
 
+**CRITICAL CHANGE: Uploaded files NEVER use fast/cheap models**
+
 ```typescript
 if (context.hasTextFiles || isCodeRelated(prompt, textFileTypes)) {
+  // Check for complexity FIRST
   if (requiresDeepReasoning(prompt, totalTextChars, hasTextFiles)) {
     return "gpt-5.2"; // Deep reasoning
   }
   
+  // IMPORTANT: If user uploaded files, always use strong model
+  if (context.hasTextFiles) {
+    return "claude-sonnet-4-5-20250929"; // NEVER gpt-5-mini for uploads
+  }
+  
+  // For code-related prompts WITHOUT file uploads, lightweight is OK
   const isLightweight = promptChars < 200 && totalTextChars < 4000;
   
   if (isLightweight) {
-    return "gpt-5-mini";      // Fast code
+    return "gpt-5-mini";      // Fast code (only for no-file prompts)
   } else {
     return "claude-sonnet-4-5-20250929"; // Standard code
   }
 }
 ```
 
+**Key Change:** When `hasTextFiles === true`, we ALWAYS route to `claude-sonnet-4-5-20250929`, never downgrading to gpt-5-mini. This ensures uploaded files get the accuracy users expect.
+
 **Examples:**
-- "Fix this bug" + error.log → `claude-sonnet-4-5-20250929`
+- "Fix this bug" + `error.log` → `claude-sonnet-4-5-20250929` (uploaded file, never gpt-5-mini)
+- "Review this code" + `app.ts` → `claude-sonnet-4-5-20250929` (uploaded file, never gpt-5-mini)
+- "Optimize this function" + `utils.js` → `claude-sonnet-4-5-20250929` (uploaded file)
+- "What is a closure?" (no files) → `gpt-5-mini` (lightweight, no upload)
+- "Refactor architecture" + 5 files (15k chars) → `gpt-5.2` (complexity)
 - "Refactor across 3 files" + code files → `gpt-5.2` (escalated)
 - "What does this do?" + small snippet → `gpt-5-mini` (lightweight)
 

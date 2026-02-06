@@ -134,7 +134,7 @@ export class IntentRouter {
       };
     }
 
-    // CODE/TEXT files → Code-optimized models
+    // CODE/TEXT files → Code-optimized models (NEVER downgrade to cheap models)
     if (
       context.hasTextFiles ||
       isCodeRelated({ prompt, textFileTypes: context.textFileTypes })
@@ -153,10 +153,24 @@ export class IntentRouter {
           chosenModel: MODEL_DEFAULTS.deepReasoningA,
           confidence: 0.9,
           reason:
-            "Best fit for complex code analysis, multi-file refactoring, and architectural decisions.",
+            "This request includes uploaded files and requires complex analysis. Selected a deep reasoning model for multi-file refactoring and architectural decisions.",
         };
       }
 
+      // IMPORTANT: For uploaded files, always use a strong workhorse model
+      // NEVER downgrade to fast/cheap models like gpt-5-mini
+      if (context.hasTextFiles) {
+        return {
+          intent: "coding",
+          category: "code_uploaded_file",
+          chosenModel: MODEL_DEFAULTS.codePrimary, // claude-sonnet-4-5-20250929
+          confidence: 0.9,
+          reason:
+            "This request includes an uploaded code/text file, so a stronger coding model was selected for accurate analysis and reliable results.",
+        };
+      }
+
+      // Code-related prompt WITHOUT uploaded files (can use lightweight)
       const isLightweight = isLightweightRequest({
         promptChars: context.promptChars,
         totalTextChars: context.totalTextChars,

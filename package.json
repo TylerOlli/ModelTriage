@@ -14,6 +14,7 @@
     "test:parser": "tsx __tests__/response-parser.test.ts",
     "test:code-lang": "tsx __tests__/code-lang-utils.test.ts",
     "test:attachments": "tsx __tests__/attachments/processor.test.ts",
+    "test:attachment-routing": "tsx tests/routing/attachment-routing.test.ts",
     "demo:mock": "tsx scripts/demo-mock-provider.ts",
     "test:stream": "tsx scripts/test-stream-api.ts"
   },

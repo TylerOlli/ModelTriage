@@ -10,13 +10,12 @@ const COMPLEXITY_KEYWORDS = [
   "architecture",
   "multi-file",
   "refactor across",
-  "performance",
-  "security",
+  "performance optimization",
+  "security audit",
   "migrate",
   "implement end-to-end",
   "system design",
   "scale",
-  "optimize",
   "best practices",
   "trade-offs",
   "compare approaches",
@@ -71,7 +70,8 @@ export function isLightweightRequest(params: {
   const { promptChars, totalTextChars, imageCount, textFileCount } = params;
 
   // Short prompt, single image, no other attachments
-  if (promptChars < 200 && imageCount === 1 && textFileCount === 0) {
+  // BUT not if it's clearly asking for detailed code extraction/analysis
+  if (promptChars < 100 && imageCount === 1 && textFileCount === 0) {
     return true;
   }
 
@@ -114,7 +114,6 @@ export function isCodeRelated(params: {
     "javascript",
     "python",
     "refactor",
-    "optimize",
   ];
 
   return codeKeywords.some((keyword) => promptLower.includes(keyword));
