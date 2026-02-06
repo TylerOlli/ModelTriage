@@ -238,14 +238,19 @@ async function runTests() {
     console.log("  Decision:", {
       chosenModel: decision.chosenModel,
       intent: decision.intent,
+      reason: decision.reason,
     });
 
-    if (decision.chosenModel === "gemini-2.5-pro" && decision.intent === "vision") {
-      console.log("  ✓ Correctly routed to Gemini for image\n");
+    if (
+      decision.chosenModel === "gemini-2.5-pro" &&
+      decision.intent === "vision" &&
+      decision.reason?.includes("screenshot of code")
+    ) {
+      console.log("  ✓ Correctly routed to Gemini with image-aware reason\n");
       testsPassed++;
     } else {
       throw new Error(
-        `Expected gemini-2.5-pro with vision intent, got ${decision.chosenModel}`
+        `Expected gemini-2.5-pro with code-aware reason, got ${decision.chosenModel}: ${decision.reason}`
       );
     }
   } catch (err) {
@@ -379,6 +384,126 @@ async function runTests() {
     if (allPassed) {
       console.log("  ✓ All file uploads correctly avoid gpt-5-mini\n");
       testsPassed++;
+    }
+  } catch (err) {
+    console.error(`  ✗ FAILED: ${err}\n`);
+    testsFailed++;
+  }
+
+  // Test 10: Terminal error image → Image-aware reason
+  try {
+    console.log("Test 10: Terminal error image → Image-aware reason");
+    const prompt = "What does this error mean and how do I fix it?";
+    const context: AttachmentContext = {
+      hasImages: true,
+      hasTextFiles: false,
+      imageCount: 1,
+      textFileCount: 0,
+      attachmentNames: ["terminal-error.png"],
+      attachmentTypes: ["image/png"],
+      textFileTypes: [],
+      totalTextChars: 0,
+      promptChars: prompt.length,
+      summarized: false,
+      attachments: [],
+    };
+
+    const decision = await router.route(prompt, false, context);
+
+    console.log("  Decision:", {
+      chosenModel: decision.chosenModel,
+      reason: decision.reason,
+    });
+
+    if (
+      decision.intent === "vision" &&
+      decision.reason?.includes("error")
+    ) {
+      console.log("  ✓ Generated error-aware reason\n");
+      testsPassed++;
+    } else {
+      throw new Error(
+        `Expected error-aware reason, got: ${decision.reason}`
+      );
+    }
+  } catch (err) {
+    console.error(`  ✗ FAILED: ${err}\n`);
+    testsFailed++;
+  }
+
+  // Test 11: UI screenshot → Image-aware reason
+  try {
+    console.log("Test 11: UI screenshot → Image-aware reason");
+    const prompt = "Review this UI design and suggest improvements";
+    const context: AttachmentContext = {
+      hasImages: true,
+      hasTextFiles: false,
+      imageCount: 1,
+      textFileCount: 0,
+      attachmentNames: ["ui-mockup.png"],
+      attachmentTypes: ["image/png"],
+      textFileTypes: [],
+      totalTextChars: 0,
+      promptChars: prompt.length,
+      summarized: false,
+      attachments: [],
+    };
+
+    const decision = await router.route(prompt, false, context);
+
+    console.log("  Decision:", {
+      chosenModel: decision.chosenModel,
+      reason: decision.reason,
+    });
+
+    if (
+      decision.intent === "vision" &&
+      (decision.reason?.includes("UI") || decision.reason?.includes("interface"))
+    ) {
+      console.log("  ✓ Generated UI-aware reason\n");
+      testsPassed++;
+    } else {
+      throw new Error(`Expected UI-aware reason, got: ${decision.reason}`);
+    }
+  } catch (err) {
+    console.error(`  ✗ FAILED: ${err}\n`);
+    testsFailed++;
+  }
+
+  // Test 12: Generic image → Fallback reason
+  try {
+    console.log("Test 12: Generic image → Fallback reason");
+    const prompt = "Tell me about this";
+    const context: AttachmentContext = {
+      hasImages: true,
+      hasTextFiles: false,
+      imageCount: 1,
+      textFileCount: 0,
+      attachmentNames: ["photo.jpg"],
+      attachmentTypes: ["image/jpeg"],
+      textFileTypes: [],
+      totalTextChars: 0,
+      promptChars: prompt.length,
+      summarized: false,
+      attachments: [],
+    };
+
+    const decision = await router.route(prompt, false, context);
+
+    console.log("  Decision:", {
+      chosenModel: decision.chosenModel,
+      reason: decision.reason,
+    });
+
+    if (
+      decision.intent === "vision" &&
+      decision.reason?.includes("image") &&
+      decision.reason?.length > 0
+    ) {
+      console.log("  ✓ Generated generic image-aware reason\n");
+      testsPassed++;
+    } else {
+      throw new Error(`Expected image-aware reason, got: ${decision.reason}`);
     }
   } catch (err) {
     console.error(`  ✗ FAILED: ${err}\n`);

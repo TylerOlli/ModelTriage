@@ -356,6 +356,7 @@ ${prompt}`;
             hasImages: boolean;
             hasTextFiles: boolean;
             textFileTypes: string[];
+            attachmentNames: string[];
             totalTextChars: number;
             promptChars: number;
             imageCount: number;
@@ -373,6 +374,7 @@ ${prompt}`;
           hasImages: attachmentResult.hasImages,
           hasTextFiles: attachmentResult.hasTextFiles,
           textFileTypes,
+          attachmentNames: attachmentResult.attachmentNames,
           totalTextChars: attachmentResult.totalTextChars,
           promptChars: prompt.length,
           imageCount: attachmentResult.imageCount,
@@ -518,6 +520,7 @@ ${prompt}`;
                     hasImages: boolean;
                     hasTextFiles: boolean;
                     textFileTypes: string[];
+                    attachmentNames: string[];
                     totalTextChars: number;
                     promptChars: number;
                     imageCount: number;
@@ -535,6 +538,7 @@ ${prompt}`;
                   hasImages: attachmentResult.hasImages,
                   hasTextFiles: attachmentResult.hasTextFiles,
                   textFileTypes,
+                  attachmentNames: attachmentResult.attachmentNames,
                   totalTextChars: attachmentResult.totalTextChars,
                   promptChars: prompt.length,
                   imageCount: attachmentResult.imageCount,
@@ -594,10 +598,24 @@ ${prompt}`;
             }
 
             // Generate custom routing reason asynchronously (don't block streaming)
-            if (isAutoMode && routingMetadataStream.mode === "auto") {
+            // Skip if we already have a descriptive attachment-aware reason
+            const isDescriptiveReason = 
+              routingMetadataStream.reason &&
+              (routingMetadataStream.reason.includes("screenshot") ||
+               routingMetadataStream.reason.includes("image") ||
+               routingMetadataStream.reason.includes("uploaded") ||
+               routingMetadataStream.reason.includes("terminal") ||
+               routingMetadataStream.reason.includes("error output") ||
+               routingMetadataStream.reason.includes("UI") ||
+               routingMetadataStream.reason.includes("interface") ||
+               routingMetadataStream.reason.includes("diagram") ||
+               routingMetadataStream.reason.length > 80); // Longer reasons are typically more descriptive
+
+            if (isAutoMode && routingMetadataStream.mode === "auto" && !isDescriptiveReason) {
               console.log("Starting async routing reason generation for:", {
                 model: routingMetadataStream.chosenModel,
                 promptPreview: prompt.substring(0, 100),
+                currentReason: routingMetadataStream.reason,
               });
               
               intentRouter
@@ -609,18 +627,30 @@ ${prompt}`;
                 })
                 .then((customReason) => {
                   console.log("Generated custom routing reason:", customReason);
-                  // Send updated routing reason via SSE
-                  try {
-                    controller.enqueue(
-                      encoder.encode(
-                        formatSSE("routing_reason", {
-                          reason: customReason,
-                        })
-                      )
-                    );
-                    console.log("Sent routing_reason SSE event");
-                  } catch (enqueueErr) {
-                    console.error("Failed to enqueue routing_reason event:", enqueueErr);
+                  
+                  // Only send if the custom reason is better than current one
+                  // (longer, more specific, not generic)
+                  const isGenericReason = 
+                    customReason.includes("balanced capabilities") ||
+                    customReason.includes("best match for") ||
+                    (customReason.includes("well-suited to") && customReason.length < 80);
+                  
+                  if (!isGenericReason && customReason.length > (routingMetadataStream.reason?.length || 0)) {
+                    // Send updated routing reason via SSE
+                    try {
+                      controller.enqueue(
+                        encoder.encode(
+                          formatSSE("routing_reason", {
+                            reason: customReason,
+                          })
+                        )
+                      );
+                      console.log("Sent improved routing_reason SSE event");
+                    } catch (enqueueErr) {
+                      console.error("Failed to enqueue routing_reason event:", enqueueErr);
+                    }
+                  } else {
+                    console.log("Skipping generic custom reason, keeping original:", routingMetadataStream.reason);
                   }
                 })
                 .catch((err) => {
@@ -629,8 +659,10 @@ ${prompt}`;
                     prompt: prompt.substring(0, 100),
                     model: routingMetadataStream.chosenModel,
                   });
-                  // Don't send error event, just skip - fallback reason already displayed
+                  // Don't send error event, keep the original reason
                 });
+            } else if (isDescriptiveReason) {
+              console.log("Skipping async reason generation - already have descriptive reason:", routingMetadataStream.reason);
             }
 
             // Track first chunk per model for ping logic

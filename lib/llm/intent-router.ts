@@ -27,6 +27,7 @@ export interface AttachmentContext {
   hasImages: boolean;
   hasTextFiles: boolean;
   textFileTypes: string[];
+  attachmentNames: string[];
   totalTextChars: number;
   promptChars: number;
   imageCount: number;
@@ -106,6 +107,101 @@ export class IntentRouter {
   }
 
   /**
+   * Generate an image-aware explanation for vision-based requests
+   */
+  private generateImageAwareReason(
+    prompt: string,
+    attachmentNames: string[],
+    chosenModel: ModelId,
+    isLightweight: boolean
+  ): string {
+    const promptLower = prompt.toLowerCase();
+    
+    // Infer image type from prompt content
+    let imageDescription = "an image";
+    let visualTask = "interpreting visual information";
+    
+    // Code-related images
+    if (
+      promptLower.includes("code") ||
+      promptLower.includes("function") ||
+      promptLower.includes("typescript") ||
+      promptLower.includes("javascript") ||
+      promptLower.includes("python") ||
+      promptLower.includes("syntax")
+    ) {
+      imageDescription = "a screenshot of code";
+      visualTask = "accurately reading and extracting code from images";
+    }
+    // Terminal/error-related images
+    else if (
+      promptLower.includes("error") ||
+      promptLower.includes("terminal") ||
+      promptLower.includes("console") ||
+      promptLower.includes("output") ||
+      promptLower.includes("logs")
+    ) {
+      imageDescription = "a terminal or error output screenshot";
+      visualTask = "interpreting and explaining error messages from screenshots";
+    }
+    // UI/design-related images
+    else if (
+      promptLower.includes("ui") ||
+      promptLower.includes("interface") ||
+      promptLower.includes("design") ||
+      promptLower.includes("layout") ||
+      promptLower.includes("component") ||
+      promptLower.includes("button") ||
+      promptLower.includes("page")
+    ) {
+      imageDescription = "a UI or interface screenshot";
+      visualTask = "analyzing interface behavior and visual layout";
+    }
+    // Diagram/chart-related images
+    else if (
+      promptLower.includes("diagram") ||
+      promptLower.includes("chart") ||
+      promptLower.includes("graph") ||
+      promptLower.includes("architecture")
+    ) {
+      imageDescription = "a diagram or chart";
+      visualTask = "understanding visual diagrams and structured information";
+    }
+    // Screenshot (generic)
+    else if (
+      promptLower.includes("screenshot") ||
+      promptLower.includes("screen") ||
+      promptLower.includes("image")
+    ) {
+      imageDescription = "a screenshot";
+      visualTask = "analyzing visual content and providing detailed explanations";
+    }
+    // Check attachment names for hints
+    else if (attachmentNames.some(name => /\.(png|jpg|jpeg)$/i.test(name))) {
+      const hasScreenshotName = attachmentNames.some(name =>
+        /screenshot|screen|capture/i.test(name)
+      );
+      if (hasScreenshotName) {
+        imageDescription = "a screenshot";
+        visualTask = "analyzing visual content and providing detailed explanations";
+      }
+    }
+    
+    // Model-specific capabilities
+    const modelCapabilities: Record<string, string> = {
+      "gemini-2.5-pro": "Gemini 2.5 Pro is highly effective at",
+      "gemini-2.5-flash": "Gemini 2.5 Flash is well-suited for quickly",
+      "gpt-5.2": "GPT-5.2 excels at",
+      "claude-sonnet-4-5-20250929": "Claude Sonnet 4.5 is well-suited for",
+    };
+    
+    const modelPrefix = modelCapabilities[chosenModel] || "The selected model is well-suited for";
+    
+    // Construct the explanation
+    return `This request includes ${imageDescription}, and ${modelPrefix} ${visualTask}.`;
+  }
+
+  /**
    * Attachment-aware routing (PRIORITY over intent classification)
    */
   private routeByAttachment(
@@ -122,15 +218,21 @@ export class IntentRouter {
       });
 
       const chosenModel = getDefaultVisionModel(isLightweight);
+      
+      // Generate image-aware explanation
+      const reason = this.generateImageAwareReason(
+        prompt,
+        context.attachmentNames,
+        chosenModel,
+        isLightweight
+      );
 
       return {
         intent: "vision",
         category: isLightweight ? "vision_lightweight" : "vision_standard",
         chosenModel,
         confidence: 0.95,
-        reason: isLightweight
-          ? "Best fit for quick screenshot analysis and code extraction."
-          : "Best fit for analyzing screenshots and extracting code accurately with detailed explanations.",
+        reason,
       };
     }
 

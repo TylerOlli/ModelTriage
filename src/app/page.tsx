@@ -99,6 +99,52 @@ interface ModelPanel {
   error: string | null;
 }
 
+/**
+ * Helper to detect if a routing reason is generic/fallback text
+ */
+function isGenericReason(reason: string | undefined): boolean {
+  if (!reason) return true;
+  
+  const genericPhrases = [
+    "balanced capabilities",
+    "best match for this request",
+    "best match for your request",
+    "selected as the best",
+    "chosen because it is",
+  ];
+  
+  return genericPhrases.some(phrase => reason.toLowerCase().includes(phrase));
+}
+
+/**
+ * Helper to determine if one reason is more descriptive than another
+ */
+function isMoreDescriptive(newReason: string | undefined, existingReason: string | undefined): boolean {
+  if (!existingReason) return !!newReason;
+  if (!newReason) return false;
+  
+  // Descriptive reasons mention attachments or are longer and specific
+  const hasAttachmentContext = 
+    newReason.includes("screenshot") ||
+    newReason.includes("image") ||
+    newReason.includes("uploaded") ||
+    newReason.includes("terminal") ||
+    newReason.includes("error output") ||
+    newReason.includes("UI") ||
+    newReason.includes("interface") ||
+    newReason.includes("diagram");
+  
+  if (hasAttachmentContext) return true;
+  
+  // If new reason is generic but existing is not, keep existing
+  if (isGenericReason(newReason) && !isGenericReason(existingReason)) {
+    return false;
+  }
+  
+  // Prefer longer, more specific reasons
+  return newReason.length > existingReason.length && !isGenericReason(newReason);
+}
+
 export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -481,13 +527,23 @@ export default function Home() {
           setStreamingStage("contacting");
         } else if (event === "routing_reason") {
           // Update routing reason with AI-generated explanation
+          // Only update if the new reason is more descriptive than the existing one
           console.log("Received routing_reason event:", data);
           if (data.reason) {
-            console.log("Updating routing reason to:", data.reason);
+            console.log("Evaluating routing reason update:", data.reason);
             setRouting((prev) => {
               if (prev) {
-                console.log("Previous routing:", prev);
-                return { ...prev, reason: data.reason };
+                const existingReason = prev.reason;
+                console.log("Previous routing reason:", existingReason);
+                
+                // Check if new reason is more descriptive
+                if (isMoreDescriptive(data.reason, existingReason)) {
+                  console.log("✓ Updating to more descriptive reason:", data.reason);
+                  return { ...prev, reason: data.reason };
+                } else {
+                  console.log("✗ Keeping existing reason (new one is generic or less descriptive)");
+                  return prev;
+                }
               }
               return prev;
             });
@@ -1159,7 +1215,7 @@ export default function Home() {
                       </span>
                     </p>
                     <p className="text-sm text-indigo-700">
-                      {routing.reason || "Selected as the best match for your request."}
+                      {routing.reason || "Analyzing your request to select the best model..."}
                     </p>
                   </div>
                 </div>
