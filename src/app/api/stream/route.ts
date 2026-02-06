@@ -13,6 +13,26 @@ import { processAttachments, buildAttachmentsSection } from "@/lib/attachments/p
 import { resizeAndCompressImage } from "@/lib/attachments/image-resizer";
 import { supportsVision, anyModelSupportsVision, getDefaultVisionModel } from "@/lib/attachments/vision-support";
 import type { ProcessedImageAttachment } from "@/lib/attachments/processor";
+import { getAttachmentsGist } from "@/lib/attachments/gist-generator";
+import { parseImageGist, generateRoutingReasonFromGist, type ImageGist } from "@/lib/attachments/image-gist-schema";
+
+/**
+ * Check if a routing reason is a placeholder (not final)
+ * Placeholders should always be replaced by IMAGE_GIST-derived reasons
+ */
+function isPlaceholderImageReason(reason: string): boolean {
+  const lower = reason.toLowerCase();
+  
+  // Check for common placeholder patterns
+  const hasScreenshot = lower.includes("screenshot") || lower.includes("image");
+  const hasGenericPhrase = 
+    lower.includes("snippet or file") ||
+    lower.includes("code snippet") ||
+    lower.includes("visual content") ||
+    (lower.includes("showing") && lower.includes("or file"));
+  
+  return hasScreenshot && hasGenericPhrase;
+}
 
 // Force Node.js runtime (not Edge)
 export const runtime = "nodejs";
@@ -623,8 +643,14 @@ ${prompt}`;
 
             // Generate custom routing reason asynchronously (don't block streaming)
             // Skip if we already have a descriptive attachment-aware reason
+            // BUT: Never skip for images - they MUST get IMAGE_GIST-derived reasons
+            const hasImages = imageAttachmentsForProvider.length > 0;
+            const isPlaceholder = routingMetadataStream.reason ? isPlaceholderImageReason(routingMetadataStream.reason) : false;
+            
             const isDescriptiveReason = 
               routingMetadataStream.reason &&
+              !isPlaceholder && // Placeholders are not descriptive
+              !hasImages && // Images must always get IMAGE_GIST-derived reasons
               (routingMetadataStream.reason.includes("screenshot") ||
                routingMetadataStream.reason.includes("image") ||
                routingMetadataStream.reason.includes("uploaded") ||
@@ -635,12 +661,33 @@ ${prompt}`;
                routingMetadataStream.reason.includes("diagram") ||
                routingMetadataStream.reason.length > 80); // Longer reasons are typically more descriptive
 
-            if (isAutoMode && routingMetadataStream.mode === "auto" && !isDescriptiveReason) {
+            const isDev = process.env.NODE_ENV !== "production";
+            
+            if (isDev && hasImages) {
+              console.log('[ROUTING] Image request detected - will require IMAGE_GIST-derived reason');
+              console.log('[ROUTING] Initial reason (placeholder):', routingMetadataStream.reason);
+              console.log('[ROUTING] isPlaceholder:', isPlaceholder);
+              console.log('[ROUTING] Skipping OpenAI async reason generation - will use IMAGE_GIST from Gemini vision model');
+            }
+
+            // For image requests, do NOT use async OpenAI reason generation
+            // Images must get IMAGE_GIST-derived reasons from the vision model that actually sees them
+            if (isAutoMode && routingMetadataStream.mode === "auto" && !isDescriptiveReason && !hasImages) {
               console.log("Starting async routing reason generation for:", {
                 model: routingMetadataStream.chosenModel,
                 promptPreview: prompt.substring(0, 100),
                 currentReason: routingMetadataStream.reason,
               });
+              
+              // Generate attachment gist for better routing reasons
+              const attachmentGist = attachmentResult && attachmentResult.attachments 
+                ? getAttachmentsGist(attachmentResult.attachments.map((a) => ({
+                    type: a.type,
+                    filename: (a as any).filename,
+                    content: a.type === "text" ? (a as any).content : undefined,
+                    extension: (a as any).extension,
+                  })), prompt)
+                : null;
               
               intentRouter
                 .generateRoutingReason({
@@ -648,6 +695,7 @@ ${prompt}`;
                   chosenModel: routingMetadataStream.chosenModel as any,
                   intent: routingMetadataStream.intent || "unknown",
                   category: routingMetadataStream.category || "",
+                  attachmentGist,
                 })
                 .then((customReason) => {
                   console.log("Generated custom routing reason:", customReason);
@@ -691,6 +739,10 @@ ${prompt}`;
 
             // Track first chunk per model for ping logic
             const firstChunkReceived = new Set<string>();
+            
+            // Track accumulated response for vision models (for image gist extraction)
+            const visionModelResponses = new Map<string, string>();
+            let imageGistExtracted = false;
 
             // Stream all models in parallel
             await Promise.allSettled(
@@ -703,6 +755,9 @@ ${prompt}`;
                     images: imageAttachmentsForProvider,
                   }),
                 };
+
+                // Check if this is a vision model processing images
+                const isVisionModel = imageAttachmentsForProvider.length > 0 && supportsVision(modelId as ModelId);
 
                 // Start ping interval for this model (500ms until first chunk)
                 const pingInterval = setInterval(() => {
@@ -722,8 +777,170 @@ ${prompt}`;
                     if (sseEvent.includes('"chunk"')) {
                       firstChunkReceived.add(modelId);
                       clearInterval(pingInterval);
+                      
+                      // Extract text from chunk for vision models
+                      if (isVisionModel && !imageGistExtracted) {
+                        const isDev = process.env.NODE_ENV !== "production";
+                        
+                        try {
+                          // Gemini chunks have "delta" field, not "text"
+                          const chunkMatch = sseEvent.match(/"delta":"([^"]*)"/);
+                          if (chunkMatch && chunkMatch[1]) {
+                            // Unescape the delta text (\\n -> \n, etc.)
+                            const rawDelta = chunkMatch[1];
+                            const unescapedDelta = rawDelta.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
+                            
+                            const currentResponse = visionModelResponses.get(modelId) || "";
+                            const newResponse = currentResponse + unescapedDelta;
+                            visionModelResponses.set(modelId, newResponse);
+                            
+                            if (isDev && currentResponse.length === 0) {
+                              console.log('[IMAGE_GIST_DEBUG] ========================================');
+                              console.log('[IMAGE_GIST_DEBUG] First chunk received for vision model:', modelId);
+                              console.log('[IMAGE_GIST_DEBUG] Raw delta:', rawDelta);
+                              console.log('[IMAGE_GIST_DEBUG] Unescaped delta:', unescapedDelta);
+                              console.log('[IMAGE_GIST_DEBUG] ========================================');
+                            }
+                            
+                            if (isDev && currentResponse.length === 0) {
+                              console.log('[IMAGE_GIST_DEBUG] ========================================');
+                              console.log('[IMAGE_GIST_DEBUG] First chunk received for vision model:', modelId);
+                              console.log('[IMAGE_GIST_DEBUG] Raw delta:', rawDelta);
+                              console.log('[IMAGE_GIST_DEBUG] Unescaped delta:', unescapedDelta);
+                              console.log('[IMAGE_GIST_DEBUG] ========================================');
+                            }
+                            
+                            // Look for IMAGE_GIST in the accumulated response
+                            if (newResponse.length >= 100 && !imageGistExtracted && newResponse.includes("IMAGE_GIST:")) {
+                              imageGistExtracted = true;
+                              
+                              if (isDev) {
+                                console.log('[IMAGE_GIST_DEBUG] ========================================');
+                                console.log('[IMAGE_GIST_DEBUG] IMAGE_GIST Detection Triggered');
+                                console.log('[IMAGE_GIST_DEBUG] hasImages:', true);
+                                console.log('[IMAGE_GIST_DEBUG] chosenModel:', modelId);
+                                console.log('[IMAGE_GIST_DEBUG] Accumulated response length:', newResponse.length);
+                                console.log('[IMAGE_GIST_DEBUG] First 500 chars of accumulated response:');
+                                console.log(newResponse.substring(0, 500));
+                                console.log('[IMAGE_GIST_DEBUG] ========================================');
+                              }
+                              
+                              const { gist, cleanedResponse, parseError } = parseImageGist(newResponse);
+                              
+                              if (gist) {
+                                const modelDisplayName = modelId.includes("gemini-2.5-flash") 
+                                  ? "Gemini 2.5 Flash"
+                                  : modelId.includes("gemini-2.5-pro")
+                                  ? "Gemini 2.5 Pro"
+                                  : modelId;
+                                
+                                const improvedReason = generateRoutingReasonFromGist(gist, modelDisplayName);
+                                
+                                if (isDev) {
+                                  console.log('[IMAGE_GIST_DEBUG] Parsed IMAGE_GIST:', JSON.stringify(gist, null, 2));
+                                  console.log('[IMAGE_GIST_DEBUG] OLD routing.reason (placeholder):', routingMetadataStream.reason);
+                                  console.log('[IMAGE_GIST_DEBUG] NEW routing.reason (IMAGE_GIST-derived):', improvedReason);
+                                  console.log('[IMAGE_GIST_DEBUG] Replacing placeholder with IMAGE_GIST-derived reason');
+                                }
+                                
+                                console.log("[ROUTING] parsed IMAGE_GIST:", JSON.stringify(gist));
+                                console.log("[ROUTING] Generated routing reason:", improvedReason);
+                                
+                                // Update backend routing metadata state (persists in final response)
+                                if (routingMetadataStream.mode === 'auto') {
+                                  routingMetadataStream.reason = improvedReason;
+                                  console.log("[ROUTING] Updated routing.reason in backend state");
+                                  
+                                  // Send routing_update SSE event with full routing object
+                                  controller.enqueue(
+                                    encoder.encode(
+                                      formatSSE("routing_update", {
+                                        routing: routingMetadataStream,
+                                        imageGist: gist
+                                      })
+                                    )
+                                  );
+                                  
+                                  console.log("[ROUTING] emitted routing_update SSE event");
+                                  
+                                  if (isDev) {
+                                    console.log('[IMAGE_GIST_DEBUG] ✓ routing_update SSE emitted with full routing object');
+                                    console.log('[IMAGE_GIST_DEBUG] Frontend should now display IMAGE_GIST-derived reason');
+                                  }
+                                } else {
+                                  if (isDev) {
+                                    console.warn('[IMAGE_GIST_DEBUG] Skipping routing update - not in auto mode');
+                                  }
+                                }
+                                
+                                // Store gist for potential future use
+                                visionModelResponses.set(`${modelId}_gist`, JSON.stringify(gist));
+                              } else {
+                                if (isDev) {
+                                  console.warn('[IMAGE_GIST_DEBUG] Failed to parse IMAGE_GIST');
+                                  console.warn('[IMAGE_GIST_DEBUG] Parse error:', parseError);
+                                  console.warn('[IMAGE_GIST_DEBUG] Response being parsed:', newResponse.substring(0, 500));
+                                }
+                                console.warn("Failed to parse IMAGE_GIST from vision model response");
+                              }
+                            } else if (isDev && newResponse.length >= 800 && !imageGistExtracted && !newResponse.includes("IMAGE_GIST:")) {
+                              // Log when we've accumulated 800 chars but still no IMAGE_GIST
+                              console.warn('[IMAGE_GIST_DEBUG] ========================================');
+                              console.warn('[IMAGE_GIST_DEBUG] WARNING: 800+ chars received but no IMAGE_GIST found');
+                              console.warn('[IMAGE_GIST_DEBUG] Accumulated response length:', newResponse.length);
+                              console.warn('[IMAGE_GIST_DEBUG] First 800 chars:');
+                              console.warn(newResponse.substring(0, 800));
+                              console.warn('[IMAGE_GIST_DEBUG] ========================================');
+                              console.warn('[IMAGE_GIST_DEBUG] IMAGE_GIST missing from Gemini output, keeping safe generic reason');
+                              imageGistExtracted = true; // Mark as extracted to avoid repeated warnings
+                            }
+                          }
+                        } catch (parseErr) {
+                          console.error("Failed to parse chunk for IMAGE_GIST:", parseErr);
+                        }
+                      }
                     }
-                    controller.enqueue(encoder.encode(sseEvent));
+                    
+                    // Strip IMAGE_GIST line from chunks before forwarding to frontend
+                    let forwardEvent = sseEvent;
+                    if (isVisionModel && sseEvent.includes('"chunk"')) {
+                      try {
+                        const chunkMatch = sseEvent.match(/"delta":"([^"]*)"/);
+                        if (chunkMatch && chunkMatch[1]) {
+                          const rawDelta = chunkMatch[1];
+                          // Check if this chunk contains IMAGE_GIST (before unescaping, check raw)
+                          if (rawDelta.includes("IMAGE_GIST:")) {
+                            const isDev = process.env.NODE_ENV !== "production";
+                            if (isDev) {
+                              console.log("[ROUTING] Stripping IMAGE_GIST from chunk before forwarding to frontend");
+                            }
+                            
+                            // Unescape to process
+                            const unescapedDelta = rawDelta.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
+                            const lines = unescapedDelta.split('\n');
+                            const filteredLines = lines.filter(line => !line.includes("IMAGE_GIST:"));
+                            const cleanedText = filteredLines.join('\n').trim();
+                            
+                            // Re-escape for JSON
+                            const reescapedText = cleanedText.replace(/\n/g, '\\n').replace(/\t/g, '\\t').replace(/"/g, '\\"');
+                            
+                            // Reconstruct the SSE event with cleaned text
+                            forwardEvent = sseEvent.replace(
+                              /"delta":"([^"]*)"/,
+                              `"delta":"${reescapedText}"`
+                            );
+                            
+                            if (isDev) {
+                              console.log("[ROUTING] IMAGE_GIST line stripped successfully");
+                            }
+                          }
+                        }
+                      } catch (stripErr) {
+                        console.error("Failed to strip IMAGE_GIST from chunk:", stripErr);
+                      }
+                    }
+                    
+                    controller.enqueue(encoder.encode(forwardEvent));
                   }
                 } catch (err) {
                   const errorMessage =

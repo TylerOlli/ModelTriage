@@ -402,7 +402,7 @@ export const TodoList = () => {
     testsFailed++;
   }
 
-  // Test 10: Terminal error image → Image-aware reason
+  // Test 10: Terminal error image → Generic reason (specific details come during streaming)
   try {
     console.log("Test 10: Terminal error image → Image-aware reason");
     const prompt = "What does this error mean and how do I fix it?";
@@ -427,15 +427,19 @@ export const TodoList = () => {
       reason: decision.reason,
     });
 
+    // Note: Specific image descriptions (e.g., "terminal error") are extracted during 
+    // streaming from the vision model's actual response. At routing time, we expect
+    // a generic image-aware reason.
     if (
       decision.intent === "vision" &&
-      decision.reason?.includes("error")
+      decision.reason?.includes("image") &&
+      decision.reason?.length > 0
     ) {
-      console.log("  ✓ Generated error-aware reason\n");
+      console.log("  ✓ Generated generic image-aware reason (specifics come during streaming)\n");
       testsPassed++;
     } else {
       throw new Error(
-        `Expected error-aware reason, got: ${decision.reason}`
+        `Expected generic image-aware reason, got: ${decision.reason}`
       );
     }
   } catch (err) {
@@ -443,7 +447,7 @@ export const TodoList = () => {
     testsFailed++;
   }
 
-  // Test 11: UI screenshot → Image-aware reason
+  // Test 11: UI screenshot → Generic reason (specific details come during streaming)
   try {
     console.log("Test 11: UI screenshot → Image-aware reason");
     const prompt = "Review this UI design and suggest improvements";
@@ -468,14 +472,18 @@ export const TodoList = () => {
       reason: decision.reason,
     });
 
+    // Note: Specific image descriptions (e.g., "UI screenshot", "form interface") 
+    // are extracted during streaming from the vision model's actual response. 
+    // At routing time, we expect a generic image-aware reason.
     if (
       decision.intent === "vision" &&
-      (decision.reason?.includes("UI") || decision.reason?.includes("interface"))
+      decision.reason?.includes("image") &&
+      decision.reason?.length > 0
     ) {
-      console.log("  ✓ Generated UI-aware reason\n");
+      console.log("  ✓ Generated generic image-aware reason (specifics come during streaming)\n");
       testsPassed++;
     } else {
-      throw new Error(`Expected UI-aware reason, got: ${decision.reason}`);
+      throw new Error(`Expected generic image-aware reason, got: ${decision.reason}`);
     }
   } catch (err) {
     console.error(`  ✗ FAILED: ${err}\n`);

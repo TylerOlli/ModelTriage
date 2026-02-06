@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import type { LLMRequest, LLMResponse, ModelId } from "../types";
+import { buildImageGistInstruction } from "@/lib/attachments/image-gist-schema";
 
 let client: GoogleGenAI | null = null;
 
@@ -38,10 +39,18 @@ export async function runGemini(
     const parts: Array<
       | { text: string }
       | { inlineData: { mimeType: string; data: string } }
-    > = [{ text: request.prompt }];
+    > = [];
     
-    if (request.images && request.images.length > 0) {
-      for (const image of request.images) {
+    // If images are present, prepend IMAGE_GIST instruction
+    const hasImages = request.images && request.images.length > 0;
+    const promptText = hasImages 
+      ? buildImageGistInstruction(request.prompt)
+      : request.prompt;
+    
+    parts.push({ text: promptText });
+    
+    if (hasImages) {
+      for (const image of request.images!) {
         const base64Data = image.data.toString("base64");
         parts.push({
           inlineData: {
@@ -137,10 +146,25 @@ export async function* streamGemini(
     const parts: Array<
       | { text: string }
       | { inlineData: { mimeType: string; data: string } }
-    > = [{ text: request.prompt }];
+    > = [];
     
-    if (request.images && request.images.length > 0) {
-      for (const image of request.images) {
+    // If images are present, prepend IMAGE_GIST instruction
+    const hasImages = request.images && request.images.length > 0;
+    const promptText = hasImages 
+      ? buildImageGistInstruction(request.prompt)
+      : request.prompt;
+    
+    const isDev = process.env.NODE_ENV !== "production";
+    
+    if (isDev && hasImages) {
+      console.log('[GEMINI_STREAM] Image present - using IMAGE_GIST instruction');
+      console.log('[GEMINI_STREAM] Prompt first 300 chars:', promptText.substring(0, 300));
+    }
+    
+    parts.push({ text: promptText });
+    
+    if (hasImages) {
+      for (const image of request.images!) {
         const base64Data = image.data.toString("base64");
         parts.push({
           inlineData: {
@@ -148,6 +172,10 @@ export async function* streamGemini(
             data: base64Data,
           },
         });
+      }
+      
+      if (isDev) {
+        console.log('[GEMINI_STREAM] Added', request.images!.length, 'image(s) to request');
       }
     }
 
@@ -161,6 +189,21 @@ export async function* streamGemini(
     const text = firstCandidate?.content?.parts?.[0]?.text || "";
     const usage = result.usageMetadata;
     const finishReason = firstCandidate?.finishReason;
+
+    if (isDev && hasImages) {
+      console.log('[GEMINI_STREAM] ========================================');
+      console.log('[GEMINI_STREAM] Gemini Response Received');
+      console.log('[GEMINI_STREAM] Response length:', text.length, 'characters');
+      console.log('[GEMINI_STREAM] First 800 chars of response:');
+      console.log(text.substring(0, 800));
+      console.log('[GEMINI_STREAM] ========================================');
+      
+      if (text.includes('IMAGE_GIST:')) {
+        console.log('[GEMINI_STREAM] ✓ IMAGE_GIST detected in response');
+      } else {
+        console.log('[GEMINI_STREAM] ✗ IMAGE_GIST NOT FOUND in response');
+      }
+    }
 
     // Simulate streaming by chunking the response
     // Split text into reasonable chunks (approximately by words)

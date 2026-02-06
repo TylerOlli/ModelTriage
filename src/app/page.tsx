@@ -153,6 +153,9 @@ export default function Home() {
   // File attachment state
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Track if IMAGE_GIST has upgraded routing.reason (prevent overwrites)
+  const imageGistUpgradedRef = useRef(false);
 
   // Streaming stage tracking
   const [streamingStage, setStreamingStage] = useState<
@@ -217,6 +220,9 @@ export default function Home() {
     tokenUsage?: { total: number };
     finishReason?: string;
   } | null>(null);
+  
+  // UI-only override for routing reason (from IMAGE_GIST)
+  const [routingReasonOverride, setRoutingReasonOverride] = useState<string | null>(null);
 
   // Conversation continuation state (for follow-up prompts)
   const [previousPrompt, setPreviousPrompt] = useState<string>("");
@@ -469,9 +475,13 @@ export default function Home() {
     setResponse("");
     setError(null);
     setRouting(null);
+    setRoutingReasonOverride(null);
     setMetadata(null);
     setIsStreaming(true);
     setStreamingStage("connecting"); // Initial stage
+    
+    // Reset IMAGE_GIST upgrade tracking
+    imageGistUpgradedRef.current = false;
 
     // Create abort controller for cancellation
     abortControllerRef.current = new AbortController();
@@ -500,6 +510,11 @@ export default function Home() {
       let currentModel: string | null = null;
       let textBuffer = "";
       let hasReceivedChunk = false;
+      
+      // IMAGE_GIST parsing state (frontend-only)
+      let gistBuffer = "";
+      let gistParsed = false;
+      let gistLineFullyConsumed = false;
 
       for await (const { event, data } of parseSSE(res)) {
         if (event === "meta") {
@@ -511,7 +526,16 @@ export default function Home() {
           
           // Store routing metadata
           if (data.routing) {
-            setRouting(data.routing);
+            console.log("[STREAM] meta routing reason:", data.routing.reason);
+            
+            // Only set routing from meta if IMAGE_GIST hasn't upgraded it yet
+            if (!imageGistUpgradedRef.current) {
+              setRouting(data.routing);
+              console.log("[STREAM] Set routing from meta (IMAGE_GIST not yet parsed)");
+            } else {
+              console.log("[STREAM] Skipping meta routing update - IMAGE_GIST has already upgraded reason");
+            }
+            
             // After routing completes, switch to contacting
             if (data.routing.mode === "auto") {
               setStreamingStage("contacting");
@@ -525,9 +549,18 @@ export default function Home() {
         } else if (event === "model_start") {
           // Model is starting
           setStreamingStage("contacting");
+        } else if (event === "routing_update") {
+          // Update routing with IMAGE_GIST-derived information
+          console.log("Received routing_update event:", data);
+          if (data.routing) {
+            console.log("Updating routing with IMAGE_GIST-derived reason:", data.routing.reason);
+            if (data.imageGist) {
+              console.log("IMAGE_GIST metadata:", data.imageGist);
+            }
+            setRouting(data.routing);
+          }
         } else if (event === "routing_reason") {
-          // Update routing reason with AI-generated explanation
-          // Only update if the new reason is more descriptive than the existing one
+          // Legacy handler for routing_reason events (non-IMAGE_GIST updates)
           console.log("Received routing_reason event:", data);
           if (data.reason) {
             console.log("Evaluating routing reason update:", data.reason);
@@ -556,9 +589,92 @@ export default function Home() {
             setStreamingStage("streaming");
             hasReceivedChunk = true;
           }
-          // Append delta to response incrementally
-          textBuffer += data.delta;
-          setResponse(textBuffer);
+          
+          // Log chunk delta (first 80 chars)
+          console.log("[STREAM] chunk delta head:", data.delta.slice(0, 80));
+          
+          // IMAGE_GIST parsing (frontend-only)
+          if (!gistParsed && gistBuffer.length < 800) {
+            gistBuffer += data.delta;
+            
+            // Check if IMAGE_GIST line is complete (has newline after it)
+            if (gistBuffer.includes("IMAGE_GIST:") && gistBuffer.includes("\n")) {
+              const gistLineStart = gistBuffer.indexOf("IMAGE_GIST:");
+              const gistLineEnd = gistBuffer.indexOf("\n", gistLineStart);
+              
+              if (gistLineEnd !== -1) {
+                // Extract and parse IMAGE_GIST
+                const gistLine = gistBuffer.substring(gistLineStart, gistLineEnd);
+                const jsonPart = gistLine.substring("IMAGE_GIST:".length).trim();
+                
+                try {
+                  const gist = JSON.parse(jsonPart);
+                  console.log("[STREAM] parsed IMAGE_GIST:", gist);
+                  
+                  // Infer user intent from prompt
+                  const promptLower = prompt.toLowerCase();
+                  let userIntent = "analyze the code";
+                  if (promptLower.match(/improve|optimize|refactor|enhance|better/)) {
+                    userIntent = "suggest improvements";
+                  } else if (promptLower.match(/explain|describe|what does|how does|understand/)) {
+                    userIntent = "explain what it does";
+                  } else if (promptLower.match(/fix|debug|error|issue|problem|bug|wrong/)) {
+                    userIntent = "identify issues and fixes";
+                  }
+                  
+                  // Build prompt-aware routing reason from gist
+                  const modelDisplayName = "Gemini 2.5 Flash";
+                  let newReason = "";
+                  
+                  if (gist.certainty === "high" && gist.language && gist.language !== "unknown" && gist.purpose && gist.purpose !== "unknown") {
+                    newReason = `This screenshot shows ${gist.language} code that ${gist.purpose}, so ${modelDisplayName} is a strong fit to accurately read code from images and ${userIntent}.`;
+                  } else if (gist.language && gist.language !== "unknown") {
+                    newReason = `This screenshot shows ${gist.language} code, so ${modelDisplayName} is a strong fit to accurately read code from images and ${userIntent}.`;
+                  } else {
+                    newReason = `This screenshot contains code, so ${modelDisplayName} is a strong fit to accurately read code from images and ${userIntent}.`;
+                  }
+                  
+                  console.log("[STREAM] updated routing.reason:", newReason);
+                  
+                  // Set UI-only override (persists through stream completion)
+                  setRoutingReasonOverride(newReason);
+                  
+                  // Mark that IMAGE_GIST has upgraded the routing reason
+                  imageGistUpgradedRef.current = true;
+                  console.log("[STREAM] IMAGE_GIST upgrade flag set - preventing future meta overwrites");
+                  
+                  setRouting((prev) => {
+                    if (prev) {
+                      return { ...prev, reason: newReason };
+                    }
+                    return prev;
+                  });
+                  
+                  gistParsed = true;
+                  
+                  // Strip IMAGE_GIST line from buffer
+                  const textAfterGist = gistBuffer.substring(gistLineEnd + 1);
+                  gistBuffer = "";
+                  gistLineFullyConsumed = true;
+                  
+                  // Start displaying text after the gist line
+                  textBuffer = textAfterGist;
+                  setResponse(textBuffer);
+                } catch (e) {
+                  console.warn("[UI] Failed to parse IMAGE_GIST:", e);
+                  gistParsed = true;
+                  gistLineFullyConsumed = true;
+                  // Show all text if parsing fails
+                  textBuffer += data.delta;
+                  setResponse(textBuffer);
+                }
+              }
+            }
+          } else {
+            // Normal chunk processing (after gist is parsed or no gist)
+            textBuffer += data.delta;
+            setResponse(textBuffer);
+          }
         } else if (event === "done") {
           // Update metadata when done
           setMetadata({
@@ -1215,7 +1331,11 @@ export default function Home() {
                       </span>
                     </p>
                     <p className="text-sm text-indigo-700">
-                      {routing.reason || "Analyzing your request to select the best model..."}
+                      {(() => {
+                        const displayReason = routing.reason || "Analyzing your request to select the best model...";
+                        console.log("[UI] AutoSelectedModel rendering routing.reason:", displayReason);
+                        return displayReason;
+                      })()}
                     </p>
                   </div>
                 </div>

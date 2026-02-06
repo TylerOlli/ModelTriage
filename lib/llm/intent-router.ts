@@ -118,17 +118,25 @@ export class IntentRouter {
 
   /**
    * Generate an image-aware explanation using attachment gist
+   * NOTE: This is a temporary reason used only for initial routing.
+   * It will be replaced by IMAGE_GIST-based reason during streaming.
    */
   private generateImageAwareReason(
     prompt: string,
     attachments: Array<{ type: string; filename?: string; content?: string; extension?: string }> | undefined,
     chosenModel: ModelId
   ): string {
+    const isDev = process.env.NODE_ENV !== "production";
+    
     // Generate gist from attachments
     const gist = getAttachmentsGist(attachments || [], prompt);
     
     if (!gist) {
-      return "This request includes an image that requires visual analysis, and the selected model is well-suited for interpreting visual information.";
+      const fallback = "This request includes an image that requires visual analysis, and the selected model is well-suited for interpreting visual information.";
+      if (isDev) {
+        console.log('[ROUTING] Using generic image fallback (will be replaced by IMAGE_GIST during streaming)');
+      }
+      return fallback;
     }
     
     // Model-specific capabilities
@@ -155,7 +163,13 @@ export class IntentRouter {
     }
     
     // Format: "This is a [kind] showing [topic], and [model] is [capability] [task]."
-    return `This is ${gist.kind} showing ${gist.topic}, and ${modelPrefix} ${visualTask}.`;
+    const reason = `This is ${gist.kind} showing ${gist.topic}, and ${modelPrefix} ${visualTask}.`;
+    
+    if (isDev) {
+      console.log('[ROUTING] Generated initial image reason (will be replaced by IMAGE_GIST):', reason);
+    }
+    
+    return reason;
   }
 
   /**
@@ -562,8 +576,9 @@ Output ONLY the JSON object, no other text.`;
     chosenModel: ModelId;
     intent: string;
     category: string;
+    attachmentGist?: AttachmentGist | null;
   }): Promise<string> {
-    const { prompt, chosenModel, intent, category } = params;
+    const { prompt, chosenModel, intent, category, attachmentGist } = params;
 
     // Map model IDs to display names
     const modelDisplayNames: Record<ModelId, string> = {
@@ -578,24 +593,58 @@ Output ONLY the JSON object, no other text.`;
 
     const modelDisplayName = modelDisplayNames[chosenModel] || chosenModel;
 
+    // Build attachment context for the prompt
+    let attachmentContext = "";
+    if (attachmentGist) {
+      attachmentContext = `
+ATTACHMENT INFORMATION:
+- Type: ${attachmentGist.kind}
+- Language: ${attachmentGist.language || "unknown"}
+- Topic: ${attachmentGist.topic}
+- Signals: ${attachmentGist.signals.join(", ")}
+
+CRITICAL: Only describe specifics if you can confidently infer them from the attachment info above. If uncertain, use safe generic descriptions.`;
+    }
+
     const explanationPrompt = `You are explaining why ${modelDisplayName} was selected to answer a user's request.
 
+${attachmentContext}
+
 Write exactly ONE sentence that:
-1. Starts by describing what the user is asking about in natural language (e.g., "This request for help converting CSS to LESS...")
-2. Connects that task to a specific strength of ${modelDisplayName}
+1. Mentions the attachment if present (image/screenshot OR uploaded file type)
+2. Describes what the attachment contains at a high level IF clearly identifiable from the attachment info
+3. Explains why ${modelDisplayName} is well-suited for this specific task
 
-Format: "This [description of user's request] [benefits from / is well-suited to] ${modelDisplayName}'s [specific capability]."
+STRICT RULES:
+- Output must be EXACTLY one sentence
+- Always mention the attachment type if present
+- If you can confidently infer language and purpose from attachment info, include it:
+  • "a JavaScript function handling X"
+  • "a TypeScript React component"
+  • "a build log showing a dependency error"
+  • "a config file for tsconfig"
+- If you CANNOT confidently infer specifics, use SAFE fallbacks:
+  • "a screenshot of code"
+  • "an uploaded code file"
+  • "a log file with errors"
+- Always explain why the model fits:
+  • Images: reading/extracting/interpreting code from screenshots
+  • Files: accurate code understanding, refactoring, debugging
+- Do NOT mention routing, categories, confidence, or internal mechanics
+- Do NOT use generic filler like "balanced capabilities" or "best match"
+- Do NOT invent details if unclear
 
-Examples:
-- "This request for help converting CSS to LESS benefits from ${modelDisplayName}'s strong code understanding and clear examples."
-- "This question about learning Python basics is well-suited to ${modelDisplayName}'s ability to provide clear explanations with practical examples."
-- "This debugging request benefits from ${modelDisplayName}'s systematic approach to analyzing errors."
+GOOD EXAMPLES:
+- "This screenshot shows a JavaScript function, and ${modelDisplayName} is well-suited for quickly extracting and interpreting code from images."
+- "The uploaded TypeScript file defines a React component, and ${modelDisplayName} is a strong fit for accurate TypeScript analysis and improvements."
+- "The attached log shows an npm dependency error, and ${modelDisplayName} is well-suited for debugging and identifying root causes."
 
-Rules:
-- Reference the ACTUAL task in the prompt, not generic categories
-- Keep under 25 words
-- Do NOT use phrases like "best match", "chosen because", or "selected as"
-- Do NOT mention routing, categories, or confidence
+SAFE FALLBACK EXAMPLE (when details unclear):
+- "This request includes a screenshot of code, and ${modelDisplayName} is well-suited for extracting and interpreting code from images."
+
+BAD EXAMPLES (NEVER USE):
+- "This request is well-suited to ${modelDisplayName}'s balanced capabilities."
+- "Selected as the best match for this request."
 
 User request: "${prompt.substring(0, 300)}"
 
@@ -605,6 +654,8 @@ Your one-sentence explanation:`;
       model: modelDisplayName,
       promptPreview: prompt.substring(0, 100),
       category,
+      hasAttachment: !!attachmentGist,
+      attachmentKind: attachmentGist?.kind,
     });
 
     try {
@@ -613,7 +664,7 @@ Your one-sentence explanation:`;
           {
             prompt: explanationPrompt,
             maxTokens: 100,
-            // Don't set temperature - GPT-5 models use default temp=1
+            temperature: 0.3, // Lower temperature for more consistent output
           },
           this.CLASSIFIER_MODEL
         ),
@@ -635,19 +686,31 @@ Your one-sentence explanation:`;
       // Remove any leading phrase like "Your one-sentence explanation:" if present
       reason = reason.replace(/^(Your one-sentence explanation:|Explanation:)/i, "").trim();
       
-      // Reject truly generic phrases that don't reference the task
+      // Reject truly generic phrases that don't reference the task or attachment
       const forbiddenPhrases = [
         "best match for this request",
+        "best match for your request",
         "selected as the best",
         "chosen because it is",
         "general-purpose",
+        "balanced capabilities",
       ];
       
       const isGeneric = forbiddenPhrases.some(phrase => 
         reason.toLowerCase().includes(phrase)
       );
       
-      // Check if it references the user's task (more lenient check)
+      // Check if it references the attachment when one is present
+      const hasAttachmentReference = !attachmentGist || 
+        reason.toLowerCase().includes("screenshot") ||
+        reason.toLowerCase().includes("image") ||
+        reason.toLowerCase().includes("upload") ||
+        reason.toLowerCase().includes("file") ||
+        reason.toLowerCase().includes("log") ||
+        reason.toLowerCase().includes("code") ||
+        reason.toLowerCase().includes("config");
+      
+      // Check if it references the user's task (for non-attachment requests)
       const hasTaskReference = 
         /this (question|request|task|prompt|code|debugging|writing|learning|conversion|help)/i.test(reason) ||
         /the (request|question|task|prompt|code)/i.test(reason) ||
@@ -658,9 +721,19 @@ Your one-sentence explanation:`;
         throw new Error("Generated explanation uses forbidden generic phrases");
       }
       
-      if (!hasTaskReference || reason.length < 25) {
-        console.log("❌ Rejecting non-specific routing reason:", { reason, length: reason.length, hasTaskReference });
-        throw new Error("Generated explanation doesn't reference the specific task or is too short");
+      if (attachmentGist && !hasAttachmentReference) {
+        console.log("❌ Rejecting reason that doesn't mention attachment:", reason);
+        throw new Error("Generated explanation doesn't reference the attachment");
+      }
+      
+      if (!attachmentGist && !hasTaskReference) {
+        console.log("❌ Rejecting non-specific reason:", { reason, hasTaskReference });
+        throw new Error("Generated explanation doesn't reference the specific task");
+      }
+      
+      if (reason.length < 25) {
+        console.log("❌ Rejecting too-short reason:", { reason, length: reason.length });
+        throw new Error("Generated explanation is too short");
       }
       
       // Ensure it ends with a period
