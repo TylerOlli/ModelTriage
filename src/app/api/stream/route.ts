@@ -350,9 +350,44 @@ ${prompt}`;
 
     if (isAutoMode) {
       // Auto-routing mode: use intent router to select best model
-      // Use fast routing (skip custom reason generation) to avoid blocking streams
+      // Build attachment context if attachments are present
+      let attachmentContext:
+        | {
+            hasImages: boolean;
+            hasTextFiles: boolean;
+            textFileTypes: string[];
+            totalTextChars: number;
+            promptChars: number;
+            imageCount: number;
+            textFileCount: number;
+          }
+        | undefined;
+
+      if (attachmentResult) {
+        // Extract text file extensions
+        const textFileTypes = attachmentResult.attachments
+          .filter((a) => a.type === "text")
+          .map((a) => (a as any).extension || "");
+
+        attachmentContext = {
+          hasImages: attachmentResult.hasImages,
+          hasTextFiles: attachmentResult.hasTextFiles,
+          textFileTypes,
+          totalTextChars: attachmentResult.totalTextChars,
+          promptChars: prompt.length,
+          imageCount: attachmentResult.imageCount,
+          textFileCount: attachmentResult.textFileCount,
+        };
+
+        console.log("Attachment context for routing:", attachmentContext);
+      }
+
       try {
-        const decision = await intentRouter.route(prompt, false);
+        const decision = await intentRouter.route(
+          prompt,
+          false,
+          attachmentContext
+        );
         modelsToRun = [decision.chosenModel];
         routingMetadata = {
           mode: "auto",
@@ -477,9 +512,42 @@ ${prompt}`;
 
             if (isAutoMode) {
               // Auto-routing mode: use intent router to select best model
-              // In streaming mode, skip custom reason generation to avoid blocking (use fast fallback reasons)
+              // Build attachment context if attachments are present
+              let attachmentContextStream:
+                | {
+                    hasImages: boolean;
+                    hasTextFiles: boolean;
+                    textFileTypes: string[];
+                    totalTextChars: number;
+                    promptChars: number;
+                    imageCount: number;
+                    textFileCount: number;
+                  }
+                | undefined;
+
+              if (attachmentResult) {
+                // Extract text file extensions
+                const textFileTypes = attachmentResult.attachments
+                  .filter((a) => a.type === "text")
+                  .map((a) => (a as any).extension || "");
+
+                attachmentContextStream = {
+                  hasImages: attachmentResult.hasImages,
+                  hasTextFiles: attachmentResult.hasTextFiles,
+                  textFileTypes,
+                  totalTextChars: attachmentResult.totalTextChars,
+                  promptChars: prompt.length,
+                  imageCount: attachmentResult.imageCount,
+                  textFileCount: attachmentResult.textFileCount,
+                };
+              }
+
               try {
-                const decision = await intentRouter.route(prompt, false);
+                const decision = await intentRouter.route(
+                  prompt,
+                  false,
+                  attachmentContextStream
+                );
                 modelsToRunStream = [decision.chosenModel];
                 routingMetadataStream = {
                   mode: "auto",

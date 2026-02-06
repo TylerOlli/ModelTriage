@@ -41,7 +41,7 @@ This is the **MVP (Minimum Viable Product)** implementation. The following featu
   - Omissions (what some models include that others don't)
   - Conflicting assumptions (different foundational approaches)
 
-### ✅ File Attachments
+### ✅ File Attachments with Smart Routing
 - Attach up to **3 files** per request (text or images)
 - **Supported text files**: `.txt`, `.log`, `.json`, `.md`, `.ts`, `.js`, `.env`, `.yml`
 - **Supported images**: `.png`, `.jpg`, `.webp` (auto-resized for vision models)
@@ -49,8 +49,12 @@ This is the **MVP (Minimum Viable Product)** implementation. The following featu
   - Text files: 2MB max per file, 20k chars per file, 35k chars total
   - Images: 5MB max per file, 2 images max per request
   - Automatic truncation and summarization to prevent cost overruns
-- **Vision model support**: Images automatically routed to vision-capable models
-- See [docs/file-attachments.md](docs/file-attachments.md) for details
+- **Smart routing**:
+  - Screenshots → **Gemini 2.5 Pro** (vision-optimized, 92% cost reduction vs Opus)
+  - Code/text files → **Claude Sonnet 4.5** (coding workhorse, 80% cost reduction vs Opus)
+  - Deep reasoning (Opus, GPT-5.2) only on complexity signals
+  - Fast models (Gemini Flash, GPT-5-mini) for lightweight requests
+- See [docs/file-attachments.md](docs/file-attachments.md) and [docs/attachment-aware-routing.md](docs/attachment-aware-routing.md) for details
 
 ## What is NOT Implemented (Intentional)
 

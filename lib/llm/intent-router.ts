@@ -1,16 +1,36 @@
 /**
- * Two-stage intent-aware LLM router for automatic model selection
+ * Two-stage intent-aware LLM router with attachment-aware defaults
  */
 
 import type { ModelId } from "./types";
 import { runOpenAI } from "./providers/openai";
+import {
+  MODEL_DEFAULTS,
+  getDefaultVisionModel,
+  getDefaultCodeModel,
+} from "../attachments/vision-support";
+import {
+  requiresDeepReasoning,
+  isLightweightRequest,
+  isCodeRelated,
+} from "../attachments/complexity-detector";
 
 export interface RoutingDecision {
-  intent: "coding" | "writing" | "analysis" | "unknown";
+  intent: "coding" | "writing" | "analysis" | "vision" | "unknown";
   category: string;
   chosenModel: ModelId;
   confidence: number; // 0..1
   reason: string;
+}
+
+export interface AttachmentContext {
+  hasImages: boolean;
+  hasTextFiles: boolean;
+  textFileTypes: string[];
+  totalTextChars: number;
+  promptChars: number;
+  imageCount: number;
+  textFileCount: number;
 }
 
 interface ClassifierResponse {
@@ -26,15 +46,30 @@ export class IntentRouter {
   private readonly CLASSIFIER_TIMEOUT_MS = 10000;
 
   /**
-   * Route a prompt to the best model using two-stage classification
+   * Route a prompt to the best model using attachment-aware selection
    * @param prompt - The user's prompt
    * @param generateCustomReason - If true, generates a prompt-aware explanation (adds ~1-2s latency)
+   * @param attachmentContext - Optional attachment metadata for smart routing
    */
   async route(
     prompt: string,
-    generateCustomReason = false
+    generateCustomReason = false,
+    attachmentContext?: AttachmentContext
   ): Promise<RoutingDecision> {
     try {
+      // PRIORITY: Attachment-aware routing (when attachments present)
+      if (attachmentContext) {
+        const attachmentDecision = this.routeByAttachment(
+          prompt,
+          attachmentContext
+        );
+        if (attachmentDecision) {
+          console.log("Attachment-aware routing decision:", attachmentDecision);
+          return attachmentDecision;
+        }
+      }
+
+      // FALLBACK: Traditional intent-based routing (no attachments)
       // Stage 1: Intent detection using classifier
       const classification = await this.classifyIntent(prompt);
 
@@ -68,6 +103,82 @@ export class IntentRouter {
         reason: "Selected as a reliable default for this request.",
       };
     }
+  }
+
+  /**
+   * Attachment-aware routing (PRIORITY over intent classification)
+   */
+  private routeByAttachment(
+    prompt: string,
+    context: AttachmentContext
+  ): RoutingDecision | null {
+    // HARD RULE: Images → Vision models
+    if (context.hasImages) {
+      const isLightweight = isLightweightRequest({
+        promptChars: context.promptChars,
+        totalTextChars: context.totalTextChars,
+        imageCount: context.imageCount,
+        textFileCount: context.textFileCount,
+      });
+
+      const chosenModel = getDefaultVisionModel(isLightweight);
+
+      return {
+        intent: "vision",
+        category: isLightweight ? "vision_lightweight" : "vision_standard",
+        chosenModel,
+        confidence: 0.95,
+        reason: isLightweight
+          ? "Best fit for quick screenshot analysis and code extraction."
+          : "Best fit for analyzing screenshots and extracting code accurately with detailed explanations.",
+      };
+    }
+
+    // CODE/TEXT files → Code-optimized models
+    if (
+      context.hasTextFiles ||
+      isCodeRelated({ prompt, textFileTypes: context.textFileTypes })
+    ) {
+      const needsDeepReasoning = requiresDeepReasoning({
+        prompt,
+        totalTextChars: context.totalTextChars,
+        hasTextFiles: context.hasTextFiles,
+      });
+
+      if (needsDeepReasoning) {
+        // Escalate to deep reasoning model
+        return {
+          intent: "coding",
+          category: "code_complex",
+          chosenModel: MODEL_DEFAULTS.deepReasoningA,
+          confidence: 0.9,
+          reason:
+            "Best fit for complex code analysis, multi-file refactoring, and architectural decisions.",
+        };
+      }
+
+      const isLightweight = isLightweightRequest({
+        promptChars: context.promptChars,
+        totalTextChars: context.totalTextChars,
+        imageCount: context.imageCount,
+        textFileCount: context.textFileCount,
+      });
+
+      const chosenModel = getDefaultCodeModel(isLightweight);
+
+      return {
+        intent: "coding",
+        category: isLightweight ? "code_quick" : "code_standard",
+        chosenModel,
+        confidence: 0.9,
+        reason: isLightweight
+          ? "Best fit for quick code questions and small changes."
+          : "Best fit for TypeScript/JavaScript code changes, debugging, and thorough explanations.",
+      };
+    }
+
+    // No attachments or not matching patterns → use traditional routing
+    return null;
   }
 
   /**
