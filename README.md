@@ -345,7 +345,5 @@ See `docs/` for detailed technical documentation:
 - `verify-mode.md` - Verify Mode implementation details
 - `routing.md` - Routing logic and priority rules
 - `persistence.md` - localStorage usage
-- `ui-states.md` - Empty, loading, and error states
-- `streaming-controls.md` - Control locking and cancel behavior
+- `ui-states.md` - UI states, button behavior, and user actions
 - `execution-correctness.md` - Concurrent run prevention and error isolation
-- `hardening-summary.md` - Robustness improvements overview
