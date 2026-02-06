@@ -192,10 +192,49 @@ function greet(user: User): string {
 **Rendered with:**
 - Header row: "TypeScript" label + Copy button
 - Syntax highlighted code below (no overlap)
-- Keywords: blue
-- Types: cyan
-- Strings: green
-- Dark background
+- Refined dark theme with softer colors
+- Slate background (not harsh black)
+- Comfortable 13px font size
+
+## Styling Details
+
+**Refined Dark Blocks for Light UI:**
+
+Code blocks use a **softened dark theme** that feels intentional and integrated with the light UI:
+
+**Background & Border:**
+- `bg-slate-800` - Dark but not harsh black
+- `border-slate-300` - Subtle containment border (1px)
+- `shadow-sm` - Light shadow for depth
+- `rounded-lg` - Consistent rounded corners
+
+**Header Row:**
+- `bg-slate-700/80` - Slightly lighter than code area for subtle separation
+- `border-slate-600/50` - Muted border between header and code
+- Language label: `text-slate-400` (muted, informational)
+- Copy button: Subtle styling with soft hover states
+
+**Code Content:**
+- Font size: **13px** (0.8125rem) - Slightly smaller than body text for better hierarchy
+- Line height: `1.6` - Comfortable reading
+- Padding: `1rem` - Spacious but not excessive
+- Horizontal scroll for long lines without breaking layout
+
+**Syntax Highlighting:**
+- Custom refined theme based on oneDark
+- **Reduced saturation/brightness** by ~15% to feel lighter
+- **Muted comments** - `#6b7280` (gray-500)
+- Softer colors for all syntax elements
+- Maintains excellent readability
+
+**Color Palette:**
+- Comments: `#6b7280` (muted gray)
+- Strings: `#86efac` (soft green)
+- Keywords: `#fb923c` (soft orange)  
+- Functions: `#fbbf24` (soft yellow)
+- Constants: `#7dd3fc` (soft cyan)
+- Numbers: `#a78bfa` (soft purple)
+- Punctuation: `#94a3b8` (soft slate)
 
 ## Performance
 
