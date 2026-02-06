@@ -1,33 +1,21 @@
 /**
- * Meaning-based diff analyzer for comparing model responses
- * Produces user-friendly summaries with complete ideas, not word lists
+ * Natural language comparison summary generator for model responses
+ * Uses LLM to produce human-readable summaries focused on ideas, not text diffs
  */
 
 import type { ModelResponse, DiffSummary, ModelDifferences } from "./types";
-
-interface Claim {
-  text: string;
-  model: string;
-  normalized: string;
-}
-
-interface ClaimCluster {
-  claims: Claim[];
-  models: Set<string>;
-  representativeText: string;
-}
+import { routeToProvider } from "../llm/router";
+import type { LLMRequest } from "../llm/types";
 
 export class DiffAnalyzer {
-  private readonly MAX_COMMON_GROUND = 5;
-  private readonly MAX_KEY_DIFFERENCES_PER_MODEL = 3;
-  private readonly MAX_NOTABLE_GAPS = 4;
-  private readonly MIN_CLAIM_LENGTH = 20;
-  private readonly SIMILARITY_THRESHOLD = 0.3;
+  private readonly MAX_RESPONSE_LENGTH_PER_MODEL = 3000; // Truncate long responses to fit in LLM context
+  private readonly SUMMARY_MAX_TOKENS = 400; // Output tokens for summary
+  private readonly SUMMARY_TIMEOUT_MS = 12000;
 
   /**
-   * Generate a meaning-based diff summary from multiple model responses
+   * Generate a natural-language comparison summary using an LLM
    */
-  analyze(responses: ModelResponse[]): DiffSummary {
+  async analyze(responses: ModelResponse[]): Promise<DiffSummary> {
     if (responses.length < 2) {
       return {
         commonGround: [],
@@ -36,302 +24,288 @@ export class DiffAnalyzer {
       };
     }
 
-    // Extract claims (sentences/ideas) from each model
-    const allClaims = responses.flatMap((r) =>
-      this.extractClaims(r.content, r.model)
-    );
+    try {
+      // Truncate responses if needed to avoid context overflow
+      const truncatedResponses = responses.map((r) => ({
+        model: r.model,
+        content:
+          r.content.length > this.MAX_RESPONSE_LENGTH_PER_MODEL
+            ? r.content.substring(0, this.MAX_RESPONSE_LENGTH_PER_MODEL) + "..."
+            : r.content,
+      }));
 
-    if (allClaims.length === 0) {
-      return {
-        commonGround: [],
-        keyDifferences: [],
-        notableGaps: [],
+      // Build prompt for summary generation
+      const summaryPrompt = this.buildSummaryPrompt(truncatedResponses);
+
+      // Call LLM to generate summary
+      const llmRequest: LLMRequest = {
+        prompt: summaryPrompt,
+        temperature: 0.0,
+        maxTokens: this.SUMMARY_MAX_TOKENS,
+        stream: false,
       };
+
+      // Use Claude Haiku for fast, cheap, reliable summary generation
+      // (GPT-5-mini has issues with reasoning tokens consuming output budget)
+      const response = await Promise.race([
+        routeToProvider("claude-haiku-4-5-20251001", llmRequest),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Summary generation timeout")),
+            this.SUMMARY_TIMEOUT_MS
+          )
+        ),
+      ]);
+
+      console.log("Summary LLM response:", {
+        hasText: !!response.text,
+        textLength: response.text?.length || 0,
+        hasError: !!response.error,
+        error: response.error,
+        model: response.model,
+        latencyMs: response.latencyMs,
+      });
+
+      // Check for errors first
+      if (response.error) {
+        throw new Error(`LLM error: ${response.error}`);
+      }
+
+      if (!response.text || response.text.trim().length === 0) {
+        throw new Error("No summary text received from LLM");
+      }
+
+      // Parse the LLM response into structured sections
+      return this.parseSummaryResponse(response.text, responses);
+    } catch (err) {
+      console.error("Failed to generate comparison summary:", err);
+      console.error("Error details:", {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      // Return fallback summary
+      return this.generateFallbackSummary(responses);
+    }
+  }
+
+  /**
+   * Build the prompt for the LLM to generate a comparison summary
+   */
+  private buildSummaryPrompt(responses: ModelResponse[]): string {
+    const modelNames = responses.map((r) => this.formatModelName(r.model));
+    const responsesText = responses
+      .map(
+        (r, i) =>
+          `[Response ${i + 1} - ${this.formatModelName(r.model)}]\n${r.content}`
+      )
+      .join("\n\n---\n\n");
+
+    return `You are comparing ${responses.length} AI model responses to the same user prompt. Your task is to create a concise, natural-language comparison summary.
+
+Models being compared: ${modelNames.join(", ")}
+
+${responsesText}
+
+---
+
+Create a comparison summary with exactly 3 sections:
+
+1) Common Ground (2-5 bullet points)
+Write natural language statements of what most or all models agree on. Focus on shared ideas, recommendations, or approaches. Do NOT quote verbatim; paraphrase the shared concepts.
+
+2) Key Differences (grouped by model, 1-3 points per model)
+For each model that has unique emphasis or a different approach, explain what it uniquely contributed. Use plain language. If a model includes code examples or specific configurations, describe them briefly (e.g. "includes a sample tsconfig") rather than copying the code. Focus on themes like: setup/tooling, strategy, migration order, depth of examples, framework-specific details.
+
+3) Notable Gaps (1-4 bullet points)
+Identify important topics that one or more models failed to cover or covered weakly. Be specific about what concept is missing, not just "model X omits details."
+
+Rules:
+- Write in plain, human language
+- Avoid quoting more than 10 words from any response
+- NO code blocks or JSON fragments in the summary
+- Be concise but informative
+- Do not mention routing, confidence, or that this is AI-generated
+- Each bullet must be a complete thought
+
+Format your response exactly as:
+
+Common Ground:
+- [statement]
+- [statement]
+...
+
+Key Differences:
+${modelNames.map((name) => `${name}:\n- [statement]\n- [statement]`).join("\n\n")}
+
+Notable Gaps:
+- [statement]
+- [statement]
+...`;
+  }
+
+  /**
+   * Parse the LLM summary response into structured format
+   */
+  private parseSummaryResponse(
+    summaryText: string,
+    responses: ModelResponse[]
+  ): DiffSummary {
+    const lines = summaryText.split("\n").map((l) => l.trim());
+
+    const commonGround: string[] = [];
+    const keyDifferences: ModelDifferences[] = [];
+    const notableGaps: string[] = [];
+
+    let currentSection: "common" | "differences" | "gaps" | null = null;
+    let currentModel: string | null = null;
+    let currentModelPoints: string[] = [];
+
+    for (const line of lines) {
+      // Detect section headers
+      if (/^Common Ground:?$/i.test(line)) {
+        currentSection = "common";
+        continue;
+      } else if (/^Key Differences:?$/i.test(line)) {
+        currentSection = "differences";
+        // Flush previous model if any
+        if (currentModel && currentModelPoints.length > 0) {
+          keyDifferences.push({
+            model: currentModel,
+            points: [...currentModelPoints],
+          });
+          currentModelPoints = [];
+        }
+        continue;
+      } else if (/^Notable Gaps:?$/i.test(line)) {
+        currentSection = "gaps";
+        // Flush previous model if any
+        if (currentModel && currentModelPoints.length > 0) {
+          keyDifferences.push({
+            model: currentModel,
+            points: [...currentModelPoints],
+          });
+          currentModelPoints = [];
+          currentModel = null;
+        }
+        continue;
+      }
+
+      // Skip empty lines
+      if (line.length === 0) continue;
+
+      // In Key Differences section, detect model names
+      if (currentSection === "differences") {
+        // Check if line is a model name (e.g., "GPT-5 Mini:" or "Claude Sonnet:")
+        const modelMatch = line.match(/^([A-Z][\w\s.-]+):$/);
+        if (modelMatch) {
+          // Flush previous model
+          if (currentModel && currentModelPoints.length > 0) {
+            keyDifferences.push({
+              model: currentModel,
+              points: [...currentModelPoints],
+            });
+            currentModelPoints = [];
+          }
+          currentModel = modelMatch[1].trim();
+          continue;
+        }
+      }
+
+      // Parse bullet points
+      const bulletMatch = line.match(/^[-•*]\s*(.+)$/);
+      if (bulletMatch) {
+        const content = bulletMatch[1].trim();
+        if (content.length > 0) {
+          if (currentSection === "common") {
+            commonGround.push(content);
+          } else if (currentSection === "differences" && currentModel) {
+            currentModelPoints.push(content);
+          } else if (currentSection === "gaps") {
+            notableGaps.push(content);
+          }
+        }
+      }
     }
 
-    // Cluster similar claims
-    const clusters = this.clusterClaims(allClaims);
+    // Flush final model in Key Differences
+    if (currentModel && currentModelPoints.length > 0) {
+      keyDifferences.push({
+        model: currentModel,
+        points: [...currentModelPoints],
+      });
+    }
 
-    // Generate summary sections
-    const commonGround = this.generateCommonGround(clusters, responses.length);
-    const keyDifferences = this.generateKeyDifferences(clusters, responses);
-    const notableGaps = this.generateNotableGaps(responses, clusters);
-
+    // Validate and cap lengths
     return {
-      commonGround,
-      keyDifferences,
-      notableGaps,
+      commonGround: commonGround.slice(0, 5),
+      keyDifferences: keyDifferences.map((d) => ({
+        model: d.model,
+        points: d.points.slice(0, 3),
+      })),
+      notableGaps: notableGaps.slice(0, 4),
     };
   }
 
   /**
-   * Extract meaningful claims (sentences or clauses) from text
+   * Generate a simple fallback summary if LLM call fails
    */
-  private extractClaims(text: string, model: string): Claim[] {
-    // Split into sentences
-    const sentences = text
-      .split(/[.!?]+/)
-      .map((s) => s.trim())
-      .filter((s) => s.length >= this.MIN_CLAIM_LENGTH);
+  private generateFallbackSummary(responses: ModelResponse[]): DiffSummary {
+    const modelNames = responses.map((r) => this.formatModelName(r.model));
 
-    // Further split long sentences by common conjunctions/delimiters
-    const claims: Claim[] = [];
-    for (const sentence of sentences) {
-      // Split on semicolons, em dashes, or "however", "but", etc.
-      const parts = sentence.split(/[;—]|(?:\s+(?:however|but|though|although)\s+)/i);
-
-      for (const part of parts) {
-        const trimmed = part.trim();
-        if (trimmed.length >= this.MIN_CLAIM_LENGTH) {
-          claims.push({
-            text: trimmed,
-            model,
-            normalized: this.normalizeClaim(trimmed),
-          });
-        }
-      }
-    }
-
-    return claims;
-  }
-
-  /**
-   * Normalize a claim for comparison (lowercase, remove extra whitespace, etc.)
-   */
-  private normalizeClaim(text: string): string {
-    return text
-      .toLowerCase()
-      .replace(/[^\w\s]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
-  /**
-   * Calculate similarity between two normalized claims using Jaccard similarity
-   */
-  private calculateSimilarity(claim1: string, claim2: string): number {
-    const words1 = new Set(claim1.split(" "));
-    const words2 = new Set(claim2.split(" "));
-
-    const intersection = new Set([...words1].filter((w) => words2.has(w)));
-    const union = new Set([...words1, ...words2]);
-
-    return union.size === 0 ? 0 : intersection.size / union.size;
-  }
-
-  /**
-   * Cluster similar claims together
-   */
-  private clusterClaims(claims: Claim[]): ClaimCluster[] {
-    const clusters: ClaimCluster[] = [];
-    const processed = new Set<number>();
-
-    for (let i = 0; i < claims.length; i++) {
-      if (processed.has(i)) continue;
-
-      const cluster: ClaimCluster = {
-        claims: [claims[i]],
-        models: new Set([claims[i].model]),
-        representativeText: claims[i].text,
-      };
-
-      // Find similar claims
-      for (let j = i + 1; j < claims.length; j++) {
-        if (processed.has(j)) continue;
-
-        const similarity = this.calculateSimilarity(
-          claims[i].normalized,
-          claims[j].normalized
-        );
-
-        if (similarity >= this.SIMILARITY_THRESHOLD) {
-          cluster.claims.push(claims[j]);
-          cluster.models.add(claims[j].model);
-          processed.add(j);
-
-          // Use the shortest claim as representative (usually clearer)
-          if (claims[j].text.length < cluster.representativeText.length) {
-            cluster.representativeText = claims[j].text;
-          }
-        }
-      }
-
-      clusters.push(cluster);
-      processed.add(i);
-    }
-
-    return clusters;
-  }
-
-  /**
-   * Generate "Common Ground" section - ideas mentioned by most/all models
-   */
-  private generateCommonGround(
-    clusters: ClaimCluster[],
-    totalModels: number
-  ): string[] {
-    // Filter clusters that appear in at least half of the models
-    const threshold = Math.max(2, Math.ceil(totalModels / 2));
-    const commonClusters = clusters
-      .filter((c) => c.models.size >= threshold)
-      .sort((a, b) => b.models.size - a.models.size) // Sort by number of models
-      .slice(0, this.MAX_COMMON_GROUND);
-
-    return commonClusters.map((cluster) => {
-      const text = this.formatClaimAsBullet(cluster.representativeText);
-      const modelList =
-        cluster.models.size === totalModels
-          ? "all models"
-          : `${cluster.models.size}/${totalModels} models`;
-      return `${text} (${modelList})`;
-    });
-  }
-
-  /**
-   * Generate "Key Differences" section - unique contributions per model
-   */
-  private generateKeyDifferences(
-    clusters: ClaimCluster[],
-    responses: ModelResponse[]
-  ): ModelDifferences[] {
-    const differences: ModelDifferences[] = [];
-
-    for (const response of responses) {
-      // Find clusters unique to this model (or mentioned by very few models)
-      const uniqueClusters = clusters
-        .filter(
-          (c) =>
-            c.models.has(response.model) &&
-            (c.models.size === 1 || c.models.size <= 2)
-        )
-        .sort((a, b) => {
-          // Prioritize truly unique (size 1) over shared with one other
-          if (a.models.size !== b.models.size) {
-            return a.models.size - b.models.size;
-          }
-          // Then by claim length (prefer substantial claims)
-          return b.representativeText.length - a.representativeText.length;
-        })
-        .slice(0, this.MAX_KEY_DIFFERENCES_PER_MODEL);
-
-      if (uniqueClusters.length > 0) {
-        const points = uniqueClusters.map((cluster) =>
-          this.formatClaimAsBullet(cluster.representativeText)
-        );
-
-        differences.push({
-          model: this.formatModelName(response.model),
-          points,
-        });
-      }
-    }
-
-    return differences;
-  }
-
-  /**
-   * Generate "Notable Gaps" section - missing aspects or weak points
-   */
-  private generateNotableGaps(
-    responses: ModelResponse[],
-    clusters: ClaimCluster[]
-  ): string[] {
-    const gaps: string[] = [];
-
-    // Check for significant length variance
-    const lengths = responses.map((r) => r.content.length);
-    const avgLength = lengths.reduce((a, b) => a + b, 0) / lengths.length;
-    const maxDiff = Math.max(...lengths) - Math.min(...lengths);
-
-    if (maxDiff > avgLength * 0.5) {
-      const shortestModel = responses.reduce((min, r) =>
-        r.content.length < min.content.length ? r : min
-      );
-      gaps.push(
-        `${this.formatModelName(shortestModel.model)} provides notably less detail than other models`
-      );
-    }
-
-    // Check for models missing common topics - be specific about what's missing
-    const commonClusters = clusters.filter(
-      (c) => c.models.size >= Math.ceil(responses.length / 2)
-    );
-
-    for (const response of responses) {
-      const missingTopics = commonClusters.filter(
-        (c) => !c.models.has(response.model)
-      );
-
-      if (missingTopics.length >= 2) {
-        // Show specific example of what's missing
-        const exampleTopic = this.formatClaimAsBullet(
-          missingTopics[0].representativeText
-        );
-        const topicPreview = exampleTopic.substring(0, 50);
-        
-        gaps.push(
-          `${this.formatModelName(response.model)} skips topics like "${topicPreview}..." covered by other models`
-        );
-      }
-    }
-
-    // Check for conflicting approaches
-    const hasStepByStep = responses.some((r) =>
-      /step[s]?[\s:]/i.test(r.content)
-    );
-    const hasHighLevel = responses.some(
-      (r) => r.content.length < avgLength * 0.7
-    );
-
-    if (hasStepByStep && hasHighLevel && responses.length >= 2) {
-      gaps.push(
-        "Models vary in approach: some provide step-by-step details while others focus on high-level concepts"
-      );
-    }
-
-    return gaps.slice(0, this.MAX_NOTABLE_GAPS);
-  }
-
-  /**
-   * Format a claim as a bullet point (ensure it reads well)
-   */
-  private formatClaimAsBullet(text: string): string {
-    // Ensure first letter is capitalized
-    let formatted = text.charAt(0).toUpperCase() + text.slice(1);
-
-    // Remove trailing punctuation if present
-    formatted = formatted.replace(/[.!?]+$/, "");
-
-    // Trim to reasonable length if too long
-    if (formatted.length > 150) {
-      formatted = formatted.substring(0, 147) + "...";
-    }
-
-    return formatted;
+    return {
+      commonGround: [
+        `All ${responses.length} models provided responses to the prompt`,
+      ],
+      keyDifferences: responses.map((r) => ({
+        model: this.formatModelName(r.model),
+        points: [
+          r.content.length > 1000
+            ? "Provides detailed, comprehensive response"
+            : "Provides concise response",
+        ],
+      })),
+      notableGaps: [
+        "Comparison summary could not be generated automatically. Review individual responses above.",
+      ],
+    };
   }
 
   /**
    * Format model name for display
    */
   private formatModelName(model: string): string {
-    // Convert "gpt-5-mini" to "GPT-5 Mini", "claude-sonnet-4-5-20250929" to "Claude Sonnet"
+    // Convert "gpt-5-mini" to "GPT-5 Mini"
     if (model.startsWith("gpt-")) {
-      return model
-        .split("-")
-        .map((p, i) => (i === 0 ? p.toUpperCase() : p))
-        .join("-")
-        .replace(/-(\d)/, "-$1");
+      const parts = model.split("-");
+      return parts
+        .map((p, i) => {
+          if (i === 0) return p.toUpperCase();
+          if (/^\d/.test(p)) return p; // numbers stay as-is
+          return p.charAt(0).toUpperCase() + p.slice(1);
+        })
+        .join(" ");
     }
 
+    // Convert "claude-sonnet-4-5-20250929" to "Claude Sonnet"
     if (model.startsWith("claude-")) {
       const parts = model.split("-");
-      // Extract model type (opus, sonnet, haiku)
       const type = parts.find((p) =>
         ["opus", "sonnet", "haiku"].includes(p.toLowerCase())
       );
       return type
         ? `Claude ${type.charAt(0).toUpperCase()}${type.slice(1)}`
         : "Claude";
+    }
+
+    // Convert "gemini-2.5-flash" to "Gemini 2.5 Flash"
+    if (model.startsWith("gemini-")) {
+      const parts = model.split("-");
+      return parts
+        .map((p, i) => {
+          if (i === 0) return p.charAt(0).toUpperCase() + p.slice(1);
+          return p.charAt(0).toUpperCase() + p.slice(1);
+        })
+        .join(" ");
     }
 
     return model;

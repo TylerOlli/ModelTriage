@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { diffAnalyzer } from "@/lib/diff";
 import type { DiffSummary } from "@/lib/diff";
 
 /**
@@ -262,26 +261,52 @@ export default function Home() {
   useEffect(() => {
     // Only run when streaming completes and we have multiple model panels
     if (!isStreaming && Object.keys(modelPanels).length > 1) {
-      try {
-        // Only use successfully completed panels (no error, has response, has metadata)
-        const successfulPanels = Object.values(modelPanels).filter(
-          (p) => !p.error && p.response.length > 0 && p.metadata
-        );
+      const generateSummary = async () => {
+        try {
+          // Only use successfully completed panels (no error, has response, has metadata)
+          const successfulPanels = Object.values(modelPanels).filter(
+            (p) => !p.error && p.response.length > 0 && p.metadata
+          );
 
-        if (successfulPanels.length >= 2) {
-          const finalResponses = successfulPanels.map((p) => ({
-            model: p.routing?.model || p.modelId,
-            content: p.response,
-          }));
-          const summary = diffAnalyzer.analyze(finalResponses);
-          setDiffSummary(summary);
-        } else if (successfulPanels.length === 1) {
-          // Not enough panels for comparison, but don't show error
-          setDiffSummary(null);
+          if (successfulPanels.length >= 2) {
+            const finalResponses = successfulPanels.map((p) => ({
+              model: p.routing?.model || p.modelId,
+              content: p.response,
+            }));
+            
+            // Clear previous summary and show loading state
+            setDiffSummary(null);
+            setDiffError(null);
+            
+            // Call server-side API to generate summary (can't call LLM providers from client)
+            const res = await fetch("/api/compare", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                responses: finalResponses,
+              }),
+            });
+
+            if (!res.ok) {
+              const errorData = await res.json();
+              throw new Error(errorData.error || "Failed to generate summary");
+            }
+
+            const data = await res.json();
+            setDiffSummary(data.summary);
+          } else if (successfulPanels.length === 1) {
+            // Not enough panels for comparison, but don't show error
+            setDiffSummary(null);
+          }
+        } catch (err) {
+          console.error("Diff summary generation error:", err);
+          setDiffError("Could not generate comparison summary");
         }
-      } catch (err) {
-        setDiffError("Could not generate diff summary");
-      }
+      };
+
+      generateSummary();
     }
   }, [isStreaming, modelPanels]);
 
@@ -1395,6 +1420,27 @@ export default function Home() {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* Loading state for comparison summary */}
+            {!isStreaming && !diffSummary && !diffError && Object.keys(modelPanels).length >= 2 && (
+              (() => {
+                const successfulCount = Object.values(modelPanels).filter(
+                  (p) => !p.error && p.response.length > 0 && p.metadata
+                ).length;
+                
+                if (successfulCount >= 2) {
+                  return (
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                      <div className="flex items-center gap-3 text-gray-600">
+                        <div className="animate-spin w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full" />
+                        <span className="text-sm">Generating comparison summary...</span>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()
             )}
 
             {diffError && (

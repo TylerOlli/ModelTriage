@@ -1,342 +1,206 @@
 /**
- * Unit tests for meaning-based diff analyzer
+ * Unit tests for LLM-based comparison summary generator
  */
 
 import { diffAnalyzer } from "@/lib/diff";
 import type { ModelResponse } from "@/lib/diff/types";
 
 async function runTests() {
-  console.log("Running DiffAnalyzer tests...\n");
+  console.log("Running DiffAnalyzer tests (LLM-based natural language summaries)...\n");
 
   let testsPassed = 0;
   let testsFailed = 0;
 
-  // Test 1: No token lists - should produce complete ideas
+  // Test 1: Generates valid summary structure
   try {
-    console.log("Test 1: No token lists - should produce complete ideas");
+    console.log("Test 1: Generates valid summary structure");
     const responses: ModelResponse[] = [
       {
         model: "gpt-5-mini",
         content:
-          "TypeScript is a superset of JavaScript. It adds static typing to JavaScript. This helps catch errors early.",
+          "To migrate from JavaScript to TypeScript, start by renaming .js files to .ts. Install TypeScript with npm install -D typescript. Initialize a tsconfig.json with tsc --init. Enable strict mode for best results. Gradually add type annotations to your code.",
       },
       {
-        model: "claude-sonnet",
+        model: "claude-sonnet-4-5-20250929",
         content:
-          "TypeScript extends JavaScript with type annotations. Type safety is the main benefit. It compiles to plain JavaScript.",
+          "JavaScript to TypeScript migration should be incremental. First, install TypeScript as a dev dependency. Create a tsconfig.json with sensible defaults like strict: true and esModuleInterop: true. Rename files one module at a time. Use any types initially if needed, then tighten them. Run tsc --noEmit to check types without building.",
       },
     ];
 
-    const summary = diffAnalyzer.analyze(responses);
+    const summary = await diffAnalyzer.analyze(responses);
 
-    // Check that no section contains comma-separated word lists
+    // Check structure
+    if (!Array.isArray(summary.commonGround)) {
+      throw new Error("commonGround is not an array");
+    }
+    if (!Array.isArray(summary.keyDifferences)) {
+      throw new Error("keyDifferences is not an array");
+    }
+    if (!Array.isArray(summary.notableGaps)) {
+      throw new Error("notableGaps is not an array");
+    }
+
+    console.log("  ✓ Summary has correct structure");
+    console.log(`  Common Ground: ${summary.commonGround.length} items`);
+    console.log(`  Key Differences: ${summary.keyDifferences.length} models`);
+    console.log(`  Notable Gaps: ${summary.notableGaps.length} items\n`);
+    testsPassed++;
+  } catch (err) {
+    console.error(`  ✗ FAILED: ${err}\n`);
+    testsFailed++;
+  }
+
+  // Test 2: Respects max limits
+  try {
+    console.log("Test 2: Respects max limits (2-5 common, 1-3 per model, 1-4 gaps)");
+    const responses: ModelResponse[] = [
+      {
+        model: "gpt-5-mini",
+        content: "A".repeat(500) + " TypeScript provides type safety and better tooling.",
+      },
+      {
+        model: "claude-sonnet-4-5-20250929",
+        content: "B".repeat(500) + " TypeScript improves code quality and maintainability.",
+      },
+    ];
+
+    const summary = await diffAnalyzer.analyze(responses);
+
+    if (summary.commonGround.length > 5) {
+      throw new Error(`Common Ground exceeds max (${summary.commonGround.length} > 5)`);
+    }
+
+    for (const diff of summary.keyDifferences) {
+      if (diff.points.length > 3) {
+        throw new Error(`Key Differences for ${diff.model} exceeds max (${diff.points.length} > 3)`);
+      }
+    }
+
+    if (summary.notableGaps.length > 4) {
+      throw new Error(`Notable Gaps exceeds max (${summary.notableGaps.length} > 4)`);
+    }
+
+    console.log("  ✓ All sections respect max limits\n");
+    testsPassed++;
+  } catch (err) {
+    console.error(`  ✗ FAILED: ${err}\n`);
+    testsFailed++;
+  }
+
+  // Test 3: No large code blocks in summary
+  try {
+    console.log("Test 3: No large code blocks in summary");
+    const responses: ModelResponse[] = [
+      {
+        model: "gpt-5-mini",
+        content: `Here's how to set up TypeScript:
+\`\`\`json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "strict": true
+  }
+}
+\`\`\`
+This config enables strict mode.`,
+      },
+      {
+        model: "claude-sonnet-4-5-20250929",
+        content: "For TypeScript setup, create a tsconfig.json with strict mode enabled. Use ES2020 as the target.",
+      },
+    ];
+
+    const summary = await diffAnalyzer.analyze(responses);
+
     const allText = [
       ...summary.commonGround,
       ...summary.keyDifferences.flatMap((d) => d.points),
       ...summary.notableGaps,
     ].join(" ");
 
-    // Should not have patterns like "word1, word2, word3..."
-    const hasWordList = /\b\w+\s*,\s*\w+\s*,\s*\w+\s*,\s*\w+/.test(allText);
-    
-    if (!hasWordList) {
-      console.log("  ✓ No token lists found\n");
-      testsPassed++;
-    } else {
-      throw new Error("Found comma-separated word lists in output");
+    // Check for code blocks (triple backticks or excessive curly braces/brackets)
+    const hasCodeBlock = /```/.test(allText) || /\{[^}]{50,}\}/.test(allText);
+
+    if (hasCodeBlock) {
+      throw new Error("Summary contains code blocks or large JSON fragments");
     }
+
+    console.log("  ✓ No code blocks found in summary\n");
+    testsPassed++;
   } catch (err) {
     console.error(`  ✗ FAILED: ${err}\n`);
     testsFailed++;
   }
 
-  // Test 2: No duplicates in the same section
+  // Test 4: Handles insufficient responses gracefully
   try {
-    console.log("Test 2: No duplicates in the same section");
-    const responses: ModelResponse[] = [
-      {
-        model: "model-1",
-        content:
-          "Use TypeScript for type safety. TypeScript provides better tooling. Static typing helps catch errors early.",
-      },
-      {
-        model: "model-2",
-        content:
-          "TypeScript adds type safety to JavaScript. Better IDE support is a key benefit. Type checking prevents runtime errors.",
-      },
-    ];
-
-    const summary = diffAnalyzer.analyze(responses);
-
-    // Check common ground for duplicates
-    const commonGroundSet = new Set(summary.commonGround);
-    const noDuplicatesCommon = commonGroundSet.size === summary.commonGround.length;
-
-    // Check key differences for duplicates
-    let noDuplicatesInDiffs = true;
-    summary.keyDifferences.forEach((diff) => {
-      const pointsSet = new Set(diff.points);
-      if (pointsSet.size !== diff.points.length) {
-        noDuplicatesInDiffs = false;
-      }
-    });
-
-    // Check notable gaps for duplicates
-    const gapsSet = new Set(summary.notableGaps);
-    const noDuplicatesGaps = gapsSet.size === summary.notableGaps.length;
-
-    if (noDuplicatesCommon && noDuplicatesInDiffs && noDuplicatesGaps) {
-      console.log("  ✓ No duplicates found in any section\n");
-      testsPassed++;
-    } else {
-      throw new Error("Found duplicates in output");
-    }
-  } catch (err) {
-    console.error(`  ✗ FAILED: ${err}\n`);
-    testsFailed++;
-  }
-
-  // Test 3: Max bullets respected
-  try {
-    console.log("Test 3: Max bullets respected");
-    const responses: ModelResponse[] = [
-      {
-        model: "model-1",
-        content:
-          "Point one is important. Point two matters greatly. Point three is absolutely key. Point four helps significantly. Point five works well. Point six is quite good. Point seven really counts.",
-      },
-      {
-        model: "model-2",
-        content:
-          "Point one is critical. Point two is essential. Point three is vital. Point four is useful. Point five is helpful. Point six is beneficial. Point seven is valuable.",
-      },
-    ];
-
-    const summary = diffAnalyzer.analyze(responses);
-
-    const commonGroundOk = summary.commonGround.length <= 5;
-    
-    let keyDifferencesOk = true;
-    summary.keyDifferences.forEach((diff) => {
-      if (diff.points.length > 3) {
-        keyDifferencesOk = false;
-      }
-    });
-
-    const notableGapsOk = summary.notableGaps.length <= 4;
-
-    if (commonGroundOk && keyDifferencesOk && notableGapsOk) {
-      console.log("  ✓ All max limits respected");
-      console.log(`    Common Ground: ${summary.commonGround.length}/5`);
-      console.log(`    Notable Gaps: ${summary.notableGaps.length}/4\n`);
-      testsPassed++;
-    } else {
-      throw new Error(
-        `Max limits exceeded - CG: ${summary.commonGround.length}, Gaps: ${summary.notableGaps.length}`
-      );
-    }
-  } catch (err) {
-    console.error(`  ✗ FAILED: ${err}\n`);
-    testsFailed++;
-  }
-
-  // Test 4: Stable output format
-  try {
-    console.log("Test 4: Stable output format with three sections");
-    const responses: ModelResponse[] = [
-      {
-        model: "model-1",
-        content: "Some content here about TypeScript and JavaScript development.",
-      },
-      {
-        model: "model-2",
-        content: "Different content about programming languages and tools.",
-      },
-    ];
-
-    const summary = diffAnalyzer.analyze(responses);
-
-    const hasAllSections =
-      summary.hasOwnProperty("commonGround") &&
-      summary.hasOwnProperty("keyDifferences") &&
-      summary.hasOwnProperty("notableGaps");
-
-    const allArrays =
-      Array.isArray(summary.commonGround) &&
-      Array.isArray(summary.keyDifferences) &&
-      Array.isArray(summary.notableGaps);
-
-    if (hasAllSections && allArrays) {
-      console.log("  ✓ Output has all three sections as arrays\n");
-      testsPassed++;
-    } else {
-      throw new Error("Missing sections or incorrect types");
-    }
-  } catch (err) {
-    console.error(`  ✗ FAILED: ${err}\n`);
-    testsFailed++;
-  }
-
-  // Test 5: Bullets have proper formatting
-  try {
-    console.log("Test 5: Bullets have proper formatting");
-    const responses: ModelResponse[] = [
-      {
-        model: "model-1",
-        content: "the first approach is to use automated tools for conversion.",
-      },
-      {
-        model: "model-2",
-        content: "automated tools are definitely the preferred method.",
-      },
-    ];
-
-    const summary = diffAnalyzer.analyze(responses);
-
-    const allBullets = [
-      ...summary.commonGround,
-      ...summary.keyDifferences.flatMap((d) => d.points),
-      ...summary.notableGaps,
-    ];
-
-    let allCapitalized = true;
-    let allSubstantial = true;
-
-    allBullets.forEach((bullet) => {
-      // Extract text before any citation
-      const text = bullet.split("(")[0].trim();
-      
-      if (text.length > 0 && !/^[A-Z]/.test(text[0])) {
-        allCapitalized = false;
-      }
-      
-      if (text.length < 15) {
-        allSubstantial = false;
-      }
-    });
-
-    if (allCapitalized && allSubstantial) {
-      console.log("  ✓ All bullets properly capitalized and substantial\n");
-      testsPassed++;
-    } else {
-      throw new Error(
-        `Formatting issues - Capitalized: ${allCapitalized}, Substantial: ${allSubstantial}`
-      );
-    }
-  } catch (err) {
-    console.error(`  ✗ FAILED: ${err}\n`);
-    testsFailed++;
-  }
-
-  // Test 6: Semantic clustering
-  try {
-    console.log("Test 6: Semantic clustering of similar ideas");
-    const responses: ModelResponse[] = [
-      {
-        model: "model-1",
-        content:
-          "TypeScript provides type safety for JavaScript applications through static typing.",
-      },
-      {
-        model: "model-2",
-        content: "TypeScript adds static typing capabilities to JavaScript code for better safety.",
-      },
-    ];
-
-    const summary = diffAnalyzer.analyze(responses);
-
-    // Should recognize these as similar and put in common ground
-    if (summary.commonGround.length > 0) {
-      console.log("  ✓ Similar ideas clustered in common ground");
-      console.log(`    Found: ${summary.commonGround[0]}\n`);
-      testsPassed++;
-    } else {
-      throw new Error("Failed to cluster similar ideas");
-    }
-  } catch (err) {
-    console.error(`  ✗ FAILED: ${err}\n`);
-    testsFailed++;
-  }
-
-  // Test 7: Handle length variance
-  try {
-    console.log("Test 7: Detect significant length differences");
-    const responses: ModelResponse[] = [
-      {
-        model: "model-1",
-        content: "Short answer: Use TypeScript for better type safety.",
-      },
-      {
-        model: "model-2",
-        content:
-          "This is a comprehensive answer covering multiple aspects. First, TypeScript provides compile-time type checking which catches errors before runtime. Second, it improves IDE support with better autocomplete and refactoring tools. Third, it helps catch errors during development rather than in production. Fourth, it makes refactoring much safer by ensuring type consistency. Fifth, it has excellent documentation and strong community support with many resources available.",
-      },
-    ];
-
-    const summary = diffAnalyzer.analyze(responses);
-
-    // Should identify length variance in notable gaps
-    const hasLengthGap = summary.notableGaps.some(
-      (gap) => gap.toLowerCase().includes("less detail") || gap.toLowerCase().includes("detail")
-    );
-
-    if (hasLengthGap) {
-      console.log("  ✓ Length variance detected in notable gaps\n");
-      testsPassed++;
-    } else {
-      console.log("  ⚠ Length variance not detected (acceptable for MVP)\n");
-      testsPassed++;
-    }
-  } catch (err) {
-    console.error(`  ✗ FAILED: ${err}\n`);
-    testsFailed++;
-  }
-
-  // Test 8: Model name formatting
-  try {
-    console.log("Test 8: Model names properly formatted");
+    console.log("Test 4: Handles insufficient responses (< 2) gracefully");
     const responses: ModelResponse[] = [
       {
         model: "gpt-5-mini",
-        content: "Unique content specific to GPT-5 mini model implementation.",
-      },
-      {
-        model: "claude-sonnet-4-5-20250929",
-        content: "Different content from Claude Sonnet with alternative approach.",
+        content: "TypeScript is great.",
       },
     ];
 
-    const summary = diffAnalyzer.analyze(responses);
+    const summary = await diffAnalyzer.analyze(responses);
 
-    let hasFormattedGPT = false;
-    let hasFormattedClaude = false;
-
-    summary.keyDifferences.forEach((diff) => {
-      if (diff.model.includes("GPT") || diff.model.includes("gpt")) {
-        hasFormattedGPT = true;
-      }
-      if (diff.model.includes("Claude") && diff.model.includes("Sonnet")) {
-        hasFormattedClaude = true;
-      }
-    });
-
-    if (hasFormattedGPT || hasFormattedClaude) {
-      console.log("  ✓ Model names formatted correctly\n");
-      testsPassed++;
-    } else {
-      console.log("  ⚠ Model name formatting varies (acceptable)\n");
-      testsPassed++;
+    if (
+      summary.commonGround.length !== 0 ||
+      summary.keyDifferences.length !== 0 ||
+      summary.notableGaps.length !== 0
+    ) {
+      throw new Error("Summary should be empty for < 2 responses");
     }
+
+    console.log("  ✓ Returns empty summary for insufficient responses\n");
+    testsPassed++;
+  } catch (err) {
+    console.error(`  ✗ FAILED: ${err}\n`);
+    testsFailed++;
+  }
+
+  // Test 5: Produces natural language (no word lists)
+  try {
+    console.log("Test 5: Produces natural language, not word lists");
+    const responses: ModelResponse[] = [
+      {
+        model: "gpt-5-mini",
+        content: "Use TypeScript for type safety, better IDE support, and early error detection.",
+      },
+      {
+        model: "claude-sonnet-4-5-20250929",
+        content: "TypeScript provides static typing, improved refactoring, and enhanced code quality.",
+      },
+    ];
+
+    const summary = await diffAnalyzer.analyze(responses);
+
+    const allText = [
+      ...summary.commonGround,
+      ...summary.keyDifferences.flatMap((d) => d.points),
+      ...summary.notableGaps,
+    ].join(" ");
+
+    // Should not have patterns like "word1, word2, word3, word4" (comma-separated lists)
+    const hasWordList = /\b\w+\s*,\s*\w+\s*,\s*\w+\s*,\s*\w+/.test(allText);
+
+    if (hasWordList) {
+      throw new Error("Summary contains comma-separated word lists");
+    }
+
+    console.log("  ✓ Summary uses natural language\n");
+    testsPassed++;
   } catch (err) {
     console.error(`  ✗ FAILED: ${err}\n`);
     testsFailed++;
   }
 
   // Summary
-  console.log("═".repeat(50));
+  console.log("=".repeat(50));
   console.log(`Tests passed: ${testsPassed}`);
   console.log(`Tests failed: ${testsFailed}`);
-  console.log("═".repeat(50));
+  console.log("=".repeat(50));
 
   if (testsFailed > 0) {
     process.exit(1);
