@@ -17,6 +17,7 @@ This is the **MVP (Minimum Viable Product)** implementation. The following featu
 - Error handling with "Try again" action
 - Clear button to reset UI
 - Input validation (4,000 character max)
+- **File attachments** (text + images) with strict token/cost guardrails
 
 ### ✅ Verify Mode
 - Toggle to enable multi-model comparison (default: OFF)
@@ -39,6 +40,17 @@ This is the **MVP (Minimum Viable Product)** implementation. The following featu
   - Disagreement (where models differ)
   - Omissions (what some models include that others don't)
   - Conflicting assumptions (different foundational approaches)
+
+### ✅ File Attachments
+- Attach up to **3 files** per request (text or images)
+- **Supported text files**: `.txt`, `.log`, `.json`, `.md`, `.ts`, `.js`, `.env`, `.yml`
+- **Supported images**: `.png`, `.jpg`, `.webp` (auto-resized for vision models)
+- **Strict guardrails**:
+  - Text files: 2MB max per file, 20k chars per file, 35k chars total
+  - Images: 5MB max per file, 2 images max per request
+  - Automatic truncation and summarization to prevent cost overruns
+- **Vision model support**: Images automatically routed to vision-capable models
+- See [docs/file-attachments.md](docs/file-attachments.md) for details
 
 ## What is NOT Implemented (Intentional)
 

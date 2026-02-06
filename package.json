@@ -13,6 +13,7 @@
     "test:intent-router": "tsx __tests__/llm/intent-router.test.ts",
     "test:parser": "tsx __tests__/response-parser.test.ts",
     "test:code-lang": "tsx __tests__/code-lang-utils.test.ts",
+    "test:attachments": "tsx __tests__/attachments/processor.test.ts",
     "demo:mock": "tsx scripts/demo-mock-provider.ts",
     "test:stream": "tsx scripts/test-stream-api.ts"
   },
@@ -24,7 +25,8 @@
     "openai": "^6.17.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-syntax-highlighter": "^16.1.0"
+    "react-syntax-highlighter": "^16.1.0",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@types/node": "^20",

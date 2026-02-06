@@ -11,10 +11,17 @@ export type ModelId =
   | "gemini-2.5-flash"
   | "gemini-2.5-pro";
 
+export interface ImageAttachment {
+  data: Buffer;
+  mimeType: string;
+  filename: string;
+}
+
 export interface LLMRequest {
   prompt: string;
   temperature?: number;
   maxTokens?: number;
+  images?: ImageAttachment[]; // For vision-capable models
 }
 
 export interface LLMResponse {

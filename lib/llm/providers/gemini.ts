@@ -34,9 +34,27 @@ export async function runGemini(
       generationConfig.maxOutputTokens = request.maxTokens;
     }
 
+    // Build parts array (text + images if present)
+    const parts: Array<
+      | { text: string }
+      | { inlineData: { mimeType: string; data: string } }
+    > = [{ text: request.prompt }];
+    
+    if (request.images && request.images.length > 0) {
+      for (const image of request.images) {
+        const base64Data = image.data.toString("base64");
+        parts.push({
+          inlineData: {
+            mimeType: image.mimeType,
+            data: base64Data,
+          },
+        });
+      }
+    }
+
     const result = await geminiClient.models.generateContent({
       model: modelId,
-      contents: [{ role: "user", parts: [{ text: request.prompt }] }],
+      contents: [{ role: "user", parts }],
       config: generationConfig,
     });
 
@@ -115,9 +133,27 @@ export async function* streamGemini(
       generationConfig.maxOutputTokens = request.maxTokens;
     }
 
+    // Build parts array (text + images if present)
+    const parts: Array<
+      | { text: string }
+      | { inlineData: { mimeType: string; data: string } }
+    > = [{ text: request.prompt }];
+    
+    if (request.images && request.images.length > 0) {
+      for (const image of request.images) {
+        const base64Data = image.data.toString("base64");
+        parts.push({
+          inlineData: {
+            mimeType: image.mimeType,
+            data: base64Data,
+          },
+        });
+      }
+    }
+
     const result = await geminiClient.models.generateContent({
       model: modelId,
-      contents: [{ role: "user", parts: [{ text: request.prompt }] }],
+      contents: [{ role: "user", parts }],
       config: generationConfig,
     });
 

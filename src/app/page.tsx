@@ -104,6 +104,10 @@ export default function Home() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [verifyMode, setVerifyMode] = useState(false);
 
+  // File attachment state
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Streaming stage tracking
   const [streamingStage, setStreamingStage] = useState<
     "connecting" | "routing" | "contacting" | "streaming" | null
@@ -427,20 +431,17 @@ export default function Home() {
     abortControllerRef.current = new AbortController();
 
     try {
+      const { body, headers } = buildRequest({
+        prompt,
+        stream: true,
+        previousPrompt,
+        previousResponse,
+      });
+
       const res = await fetch("/api/stream", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ 
-          prompt,
-          stream: true, // Enable SSE streaming
-          // No models array = auto-routing mode
-          ...(previousPrompt && previousResponse && {
-            previousPrompt,
-            previousResponse,
-          }),
-        }),
+        headers,
+        body,
         signal: abortControllerRef.current.signal,
       });
 
@@ -579,20 +580,18 @@ export default function Home() {
     let hasReceivedAnyChunk = false;
 
     try {
+      const { body, headers } = buildRequest({
+        prompt,
+        stream: true,
+        models,
+        previousPrompt,
+        previousResponse,
+      });
+
       const res = await fetch("/api/stream", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ 
-          prompt, 
-          models,
-          stream: true, // Enable SSE streaming
-          ...(previousPrompt && previousResponse && {
-            previousPrompt,
-            previousResponse,
-          }),
-        }),
+        headers,
+        body,
         signal: abortControllerRef.current.signal,
       });
 
@@ -745,6 +744,9 @@ export default function Home() {
     setPreviousPrompt("");
     setPreviousResponse("");
 
+    // Clear attached files
+    setAttachedFiles([]);
+
     // Clear prompt text and remove from localStorage
     setPrompt("");
     localStorage.removeItem("lastPrompt");
@@ -755,6 +757,84 @@ export default function Home() {
     promptInputRef.current?.focus();
     // Scroll to prompt input
     promptInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  // File attachment handlers
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    
+    // Limit to 3 files max
+    if (attachedFiles.length + files.length > 3) {
+      alert("Maximum 3 files allowed");
+      return;
+    }
+
+    setAttachedFiles([...attachedFiles, ...files]);
+    // Reset input so same file can be selected again if removed
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setAttachedFiles(attachedFiles.filter((_, i) => i !== index));
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  // Build request for API (handles both JSON and multipart/form-data)
+  const buildRequest = (params: {
+    prompt: string;
+    stream: boolean;
+    models?: string[];
+    previousPrompt?: string;
+    previousResponse?: string;
+  }): { body: string | FormData; headers: Record<string, string> } => {
+    const hasFiles = attachedFiles.length > 0;
+
+    if (hasFiles) {
+      // Use multipart/form-data
+      const formData = new FormData();
+      formData.append("prompt", params.prompt);
+      formData.append("stream", String(params.stream));
+      if (params.models) {
+        formData.append("models", JSON.stringify(params.models));
+      }
+      if (params.previousPrompt) {
+        formData.append("previousPrompt", params.previousPrompt);
+      }
+      if (params.previousResponse) {
+        formData.append("previousResponse", params.previousResponse);
+      }
+      
+      // Attach files
+      attachedFiles.forEach((file, index) => {
+        formData.append(`file_${index}`, file);
+      });
+
+      return {
+        body: formData,
+        headers: {}, // No Content-Type header - browser sets it with boundary
+      };
+    } else {
+      // Use JSON
+      return {
+        body: JSON.stringify({
+          prompt: params.prompt,
+          stream: params.stream,
+          ...(params.models && { models: params.models }),
+          ...(params.previousPrompt && { previousPrompt: params.previousPrompt }),
+          ...(params.previousResponse && { previousResponse: params.previousResponse }),
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      };
+    }
   };
 
   const characterCount = prompt.length;
@@ -893,6 +973,70 @@ export default function Home() {
                 </div>
               </div>
             )}
+
+            {/* File Attachments */}
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={handleFileSelect}
+                  multiple
+                  accept=".txt,.log,.json,.md,.ts,.tsx,.js,.jsx,.env,.yml,.yaml,image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  disabled={isStreaming}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isStreaming || attachedFiles.length >= 3}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                >
+                  📎 Attach Files
+                </button>
+                {attachedFiles.length > 0 && (
+                  <span className="text-xs text-gray-500">
+                    {attachedFiles.length}/3 files
+                  </span>
+                )}
+              </div>
+
+              {/* Attached Files Display */}
+              {attachedFiles.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {attachedFiles.map((file, index) => (
+                      <div
+                        key={`${file.name}-${index}`}
+                        className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm"
+                      >
+                        <span className="text-blue-700">
+                          {file.type.startsWith("image/") ? "🖼️" : "📄"}
+                        </span>
+                        <span className="text-blue-900 font-medium">
+                          {file.name}
+                        </span>
+                        <span className="text-blue-600 text-xs">
+                          ({formatFileSize(file.size)})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFile(index)}
+                          disabled={isStreaming}
+                          className="ml-1 text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                          aria-label={`Remove ${file.name}`}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-2 py-1.5">
+                    ⚠️ Avoid including secrets or sensitive data. Attachments are sent to the model.
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Model Picker - Only show in Advanced/Verify Mode */}
             {verifyMode && (

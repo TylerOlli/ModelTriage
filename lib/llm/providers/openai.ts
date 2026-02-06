@@ -26,12 +26,30 @@ export async function runOpenAI(
 
   try {
     const openaiClient = getClient();
+    
+    // Build content array (text + images if present)
+    const content: Array<
+      | { type: "text"; text: string }
+      | { type: "image_url"; image_url: { url: string } }
+    > = [{ type: "text", text: request.prompt }];
+    
+    if (request.images && request.images.length > 0) {
+      for (const image of request.images) {
+        const base64Data = image.data.toString("base64");
+        const dataUrl = `data:${image.mimeType};base64,${base64Data}`;
+        content.push({
+          type: "image_url",
+          image_url: { url: dataUrl },
+        });
+      }
+    }
+    
     const completion = await openaiClient.chat.completions.create({
       model: modelId,
       messages: [
         {
           role: "user",
-          content: request.prompt,
+          content,
         },
       ],
       // GPT-5 models only support temperature of 1 (default)
@@ -98,12 +116,30 @@ export async function* streamOpenAI(
 
   try {
     const openaiClient = getClient();
+    
+    // Build content array (text + images if present)
+    const content: Array<
+      | { type: "text"; text: string }
+      | { type: "image_url"; image_url: { url: string } }
+    > = [{ type: "text", text: request.prompt }];
+    
+    if (request.images && request.images.length > 0) {
+      for (const image of request.images) {
+        const base64Data = image.data.toString("base64");
+        const dataUrl = `data:${image.mimeType};base64,${base64Data}`;
+        content.push({
+          type: "image_url",
+          image_url: { url: dataUrl },
+        });
+      }
+    }
+    
     const stream = await openaiClient.chat.completions.create({
       model: modelId,
       messages: [
         {
           role: "user",
-          content: request.prompt,
+          content,
         },
       ],
       max_completion_tokens: request.maxTokens ?? 16000,

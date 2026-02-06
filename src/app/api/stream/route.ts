@@ -2,11 +2,17 @@
  * LLM inference endpoint
  * Processes prompts through one or more models in parallel
  * Supports automatic model selection via intent router
+ * Supports file attachments (text + images) with strict token guardrails
  */
 
 import { routeToProvider } from "@/lib/llm/router";
 import { intentRouter } from "@/lib/llm/intent-router";
 import type { ModelId, LLMRequest } from "@/lib/llm/types";
+import { parseInferenceRequest } from "@/lib/attachments/request-parser";
+import { processAttachments, buildAttachmentsSection } from "@/lib/attachments/processor";
+import { resizeAndCompressImage } from "@/lib/attachments/image-resizer";
+import { supportsVision, anyModelSupportsVision, getDefaultVisionModel } from "@/lib/attachments/vision-support";
+import type { ProcessedImageAttachment } from "@/lib/attachments/processor";
 
 // Force Node.js runtime (not Edge)
 export const runtime = "nodejs";
@@ -180,9 +186,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = (await request.json()) as InferenceRequest;
-    const { prompt, models, temperature, previousPrompt, previousResponse } = body;
-    let { maxTokens } = body;
+    // Parse request (supports both JSON and multipart/form-data)
+    const parsedRequest = await parseInferenceRequest(request);
+    const { prompt, models, temperature, previousPrompt, previousResponse, files, stream } = parsedRequest;
+    let { maxTokens } = parsedRequest;
     
     // Construct contextual prompt if this is a follow-up
     let contextualPrompt = prompt;
@@ -194,6 +201,94 @@ Assistant: ${previousResponse}
 Follow-up question:
 ${prompt}`;
       console.log("Follow-up prompt detected, adding context");
+    }
+
+    // Process attachments if files are present
+    let attachmentResult: Awaited<ReturnType<typeof processAttachments>> | null = null;
+    let imageAttachmentsForProvider: Array<{ data: Buffer; mimeType: string; filename: string }> = [];
+    
+    if (files && files.length > 0) {
+      console.log(`Processing ${files.length} attachment(s)`);
+      
+      try {
+        attachmentResult = await processAttachments(files, prompt);
+        
+        // Check for validation errors
+        if (attachmentResult.errors.length > 0) {
+          return new Response(
+            JSON.stringify({
+              error: `Attachment validation failed: ${attachmentResult.errors.join(", ")}`,
+            }),
+            {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
+
+        // Extract image attachments for provider
+        const imageAttachments = attachmentResult.attachments.filter(
+          (a) => a.type === "image"
+        ) as ProcessedImageAttachment[];
+
+        // Resize and compress images
+        if (imageAttachments.length > 0) {
+          console.log(`Resizing ${imageAttachments.length} image(s)`);
+          for (const img of imageAttachments) {
+            try {
+              const resized = await resizeAndCompressImage(img.data, img.mimeType);
+              img.data = resized.buffer;
+              img.mimeType = resized.mimeType;
+              img.resized = true;
+              console.log(
+                `Image ${img.filename}: ${img.originalSize} → ${resized.compressedSize} bytes`
+              );
+              
+              // Store for provider
+              imageAttachmentsForProvider.push({
+                data: img.data,
+                mimeType: img.mimeType,
+                filename: img.filename,
+              });
+            } catch (imgError) {
+              console.error(`Failed to process image ${img.filename}:`, imgError);
+              return new Response(
+                JSON.stringify({
+                  error: `We couldn't process the image attachment "${img.filename}". Please re-upload a clearer screenshot or try a different image format.`,
+                }),
+                {
+                  status: 400,
+                  headers: { "Content-Type": "application/json" },
+                }
+              );
+            }
+          }
+        }
+
+        // Build attachments section with explicit context
+        const attachmentsSection = buildAttachmentsSection(attachmentResult, prompt);
+        // Replace the original prompt with the enriched version
+        contextualPrompt = attachmentsSection;
+        
+        console.log("Attachments processed:", {
+          totalFiles: attachmentResult.attachments.length,
+          images: imageAttachments.length,
+          textChars: attachmentResult.totalTextChars,
+          summarized: attachmentResult.summarized,
+          hasImages: attachmentResult.hasImages,
+        });
+      } catch (err) {
+        console.error("Attachment processing error:", err);
+        return new Response(
+          JSON.stringify({
+            error: `Failed to process attachments: ${err instanceof Error ? err.message : "Unknown error"}`,
+          }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
     }
 
     // Validate prompt
@@ -231,12 +326,13 @@ ${prompt}`;
     }
 
     // Clamp maxTokens to safe limits
+    const originalMaxTokens = maxTokens;
     if (!maxTokens) {
       maxTokens = DEFAULT_MAX_TOKENS;
     } else if (maxTokens > MAX_TOKENS_LIMIT) {
       maxTokens = MAX_TOKENS_LIMIT;
       console.log(
-        `Clamped maxTokens from ${body.maxTokens} to ${MAX_TOKENS_LIMIT}`
+        `Clamped maxTokens from ${originalMaxTokens} to ${MAX_TOKENS_LIMIT}`
       );
     }
 
@@ -311,8 +407,57 @@ ${prompt}`;
       console.log("Manual mode, running models:", modelsToRun);
     }
 
+    // STRICT vision capability enforcement when images are attached
+    if (attachmentResult && attachmentResult.hasImages) {
+      const hasVisionModel = anyModelSupportsVision(modelsToRun);
+      
+      if (!hasVisionModel) {
+        if (isAutoMode) {
+          // Auto mode: MUST fall back to a vision-capable model (no silent failures)
+          const visionModel = getDefaultVisionModel();
+          console.log(
+            `⚠️ Images attached but ${modelsToRun[0]} doesn't support vision. ENFORCING fallback to ${visionModel}`
+          );
+          modelsToRun = [visionModel];
+          routingMetadata = {
+            ...routingMetadata,
+            chosenModel: visionModel,
+            reason: `Switched to ${visionModel} because your request includes an image attachment. Only vision-capable models can analyze images.`,
+          };
+        } else {
+          // Manual mode: STRICT rejection if no vision model selected
+          const visionModels = modelsToRun.filter((m) => supportsVision(m));
+          if (visionModels.length === 0) {
+            return new Response(
+              JSON.stringify({
+                error: `This request includes an image attachment and requires a vision-capable model. Enable Verify/Advanced and select a vision model (GPT-5.2, Claude Opus 4.5, Claude Sonnet 4.5, Gemini 2.5 Flash, or Gemini 2.5 Pro), or remove the image.`,
+              }),
+              {
+                status: 400,
+                headers: { "Content-Type": "application/json" },
+              }
+            );
+          } else {
+            // Some models support vision, filter to ONLY those
+            const removedModels = modelsToRun.filter((m) => !supportsVision(m));
+            modelsToRun = visionModels;
+            console.log(
+              `⚠️ Images attached: filtered to vision-capable models only: ${modelsToRun.join(", ")}`
+            );
+            if (removedModels.length > 0) {
+              console.log(
+                `Removed non-vision models: ${removedModels.join(", ")}`
+              );
+            }
+          }
+        }
+      }
+      
+      console.log(`✓ Vision capability check passed. Using models: ${modelsToRun.join(", ")}`);
+    }
+
     // Check if streaming is requested
-    if (body.stream === true) {
+    if (stream === true) {
       // SSE streaming mode - start response immediately
       const requestId = Math.random().toString(36).substring(7);
       
@@ -430,6 +575,9 @@ ${prompt}`;
                   prompt: contextualPrompt,
                   temperature,
                   maxTokens,
+                  ...(imageAttachmentsForProvider.length > 0 && {
+                    images: imageAttachmentsForProvider,
+                  }),
                 };
 
                 // Start ping interval for this model (500ms until first chunk)
@@ -498,6 +646,9 @@ ${prompt}`;
       prompt: contextualPrompt,
       temperature,
       maxTokens,
+      ...(imageAttachmentsForProvider.length > 0 && {
+        images: imageAttachmentsForProvider,
+      }),
     };
 
     const results = await Promise.allSettled(

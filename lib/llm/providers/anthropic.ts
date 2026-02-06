@@ -26,6 +26,27 @@ export async function runAnthropic(
 
   try {
     const anthropicClient = getClient();
+    
+    // Build content array (text + images if present)
+    const content: Array<
+      | { type: "text"; text: string }
+      | { type: "image"; source: { type: "base64"; media_type: "image/jpeg" | "image/png" | "image/webp" | "image/gif"; data: string } }
+    > = [{ type: "text", text: request.prompt }];
+    
+    if (request.images && request.images.length > 0) {
+      for (const image of request.images) {
+        const base64Data = image.data.toString("base64");
+        content.push({
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: image.mimeType as "image/jpeg" | "image/png" | "image/webp" | "image/gif",
+            data: base64Data,
+          },
+        });
+      }
+    }
+    
     const message = await anthropicClient.messages.create({
       model: modelId,
       max_tokens: request.maxTokens ?? 16000,
@@ -33,7 +54,7 @@ export async function runAnthropic(
       messages: [
         {
           role: "user",
-          content: request.prompt,
+          content,
         },
       ],
     });
@@ -96,6 +117,27 @@ export async function* streamAnthropic(
 
   try {
     const anthropicClient = getClient();
+    
+    // Build content array (text + images if present)
+    const content: Array<
+      | { type: "text"; text: string }
+      | { type: "image"; source: { type: "base64"; media_type: "image/jpeg" | "image/png" | "image/webp" | "image/gif"; data: string } }
+    > = [{ type: "text", text: request.prompt }];
+    
+    if (request.images && request.images.length > 0) {
+      for (const image of request.images) {
+        const base64Data = image.data.toString("base64");
+        content.push({
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: image.mimeType as "image/jpeg" | "image/png" | "image/webp" | "image/gif",
+            data: base64Data,
+          },
+        });
+      }
+    }
+    
     const stream = await anthropicClient.messages.stream({
       model: modelId,
       max_tokens: request.maxTokens ?? 16000,
@@ -103,7 +145,7 @@ export async function* streamAnthropic(
       messages: [
         {
           role: "user",
-          content: request.prompt,
+          content,
         },
       ],
     });
