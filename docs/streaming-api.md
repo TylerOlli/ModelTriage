@@ -179,10 +179,10 @@ while (true) {
 ### TypeScript (with Provider interface)
 
 ```typescript
-import { MockProvider } from '@/lib/providers/mock-provider';
+import { streamGemini } from '@/lib/llm/providers/gemini';
 
-const provider = new MockProvider();
-const response = provider.stream('Hello!');
+const request = { prompt: 'Hello!', images: [] };
+const response = streamGemini(request, 'gemini-2.5-flash');
 
 // Stream chunks
 for await (const chunk of response.chunks) {
@@ -226,10 +226,11 @@ Open [http://localhost:3000/test-stream.html](http://localhost:3000/test-stream.
 
 ### Provider Usage
 
-By default, the API uses `MockProvider` unless `USE_LIVE_PROVIDERS=true`:
+The API uses real LLM providers:
 
-- **Development**: MockProvider (no API costs)
-- **Production**: Real providers (OpenAI, Anthropic) when flag is set
+- **OpenAI**: GPT models (gpt-5-mini, gpt-5.2)
+- **Anthropic**: Claude models (Opus, Sonnet, Haiku)
+- **Google**: Gemini models (Flash, Pro)
 
 ## Conventions
 

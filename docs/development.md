@@ -428,14 +428,14 @@ Tests should use relative imports:
 import { MockProvider } from '../../lib/providers/mock-provider';
 
 // May fail:
-import { MockProvider } from '@/lib/providers/mock-provider';
+import { intentRouter } from '@/lib/llm/intent-router';
 ```
 
 **2. Verify file paths:**
 ```bash
-# Test files should be in __tests__/
-ls __tests__/providers/mock-provider.test.ts
-ls __tests__/routing/router.test.ts
+# Test files should be in __tests__/ or tests/
+ls __tests__/llm/intent-router.test.ts
+ls tests/routing/attachment-routing.test.ts
 ```
 
 **3. Check `tsconfig.json` includes test files:**
@@ -447,7 +447,7 @@ ls __tests__/routing/router.test.ts
 
 **4. Run with verbose output:**
 ```bash
-npx tsx __tests__/providers/mock-provider.test.ts
+npx tsx __tests__/llm/intent-router.test.ts
 ```
 
 ---

@@ -30,10 +30,12 @@ modeltriage/
 │       └── index.ts            # Exports
 │
 ├── __tests__/                  # Unit tests
-│   ├── providers/
-│   │   └── mock-provider.test.ts
-│   └── routing/
-│       └── router.test.ts
+│   ├── attachments/
+│   │   └── processor.test.ts
+│   ├── diff/
+│   │   └── analyzer.test.ts
+│   └── llm/
+│       └── intent-router.test.ts
 │
 ├── docs/                       # Documentation
 ├── .specify/                   # Product specifications (source of truth)
@@ -60,43 +62,29 @@ modeltriage/
 - Streams events: routing → chunks → metadata
 - Implements per-model error isolation using `Promise.allSettled`
 
-### `lib/providers/` - Provider Abstraction
+### `lib/llm/` - LLM Provider Integration
 
-**Purpose:** Define a uniform interface for LLM providers to enable swapping between MockProvider and real providers (OpenAI, Anthropic, etc.) without changing application code.
+**Purpose:** Unified interface for all LLM provider implementations and intelligent routing.
 
-**`types.ts`:**
-- `Provider` interface: `stream(prompt, config) => Promise<ProviderResponse>`
-- `ProviderConfig`: maxTokens, temperature, etc.
-- `StreamChunk`: content, done
-- `StreamMetadata`: model, provider, latency, tokenUsage, estimatedCost
+**`providers/`:**
+- `openai.ts` - OpenAI GPT models (gpt-5-mini, gpt-5.2)
+- `anthropic.ts` - Anthropic Claude models (Opus, Sonnet, Haiku)
+- `gemini.ts` - Google Gemini models (Flash, Pro)
+- Each provider implements: `runModel()` and `streamModel()` functions
 
-**`mock-provider.ts`:**
-- Implements `Provider` interface
-- Simulates streaming with deterministic output
-- No external API calls (zero cost)
-- Generates predictable responses based on prompt hash
-
-**Future providers:**
-- `openai-provider.ts` (not yet implemented)
-- `anthropic-provider.ts` (not yet implemented)
-- `google-provider.ts` (not yet implemented)
-
-### `lib/routing/` - Model Selection
-
-**Purpose:** Rules-based routing to select the most appropriate model for a given prompt.
+**`intent-router.ts`:**
+- `IntentRouter` - Intelligent model selection based on prompt and attachments
+- Analyzes user intent (coding, writing, vision, analysis)
+- Routes to appropriate model with confidence scores
+- Supports attachment-aware routing (images → Gemini, code → Claude)
 
 **`router.ts`:**
-- `ModelRouter.route(prompt)` returns `RoutingDecision`
-- Priority order:
-  1. Analytical tasks → `mock-quality-1`
-  2. Code-related prompts → `mock-code-1`
-  3. Creative writing → `mock-quality-1`
-  4. Long prompts (> 1000 chars) → `mock-quality-1`
-  5. Short prompts (< 50 chars) → `mock-fast-1`
-  6. General prompts → `mock-balanced-1` (fallback)
+- `routeToProvider()` - Maps model IDs to their provider implementations
+- Handles dynamic imports and streaming setup
 
 **`types.ts`:**
-- `RoutingDecision`: model, reason, confidence
+- `LLMRequest`, `LLMResponse` - Unified request/response types
+- `ModelId` - Type-safe model identifiers
 
 ### `lib/diff/` - Comparison Analysis
 
@@ -271,23 +259,25 @@ Affects the entire stream (all panels).
 8. `chunk` (modelId: "model-2", done: true) → final chunk from model 2
 9. `metadata` (modelId: "model-2") → metadata for model 2
 
-## Why MockProvider Exists
+## Live LLM Providers
 
-### Zero Cost Development
+### Real Provider Integration
 
-**Problem:** Real LLM providers (OpenAI, Anthropic, Google) charge per API call. During development and testing, hundreds of requests can quickly become expensive.
+The application integrates with three major LLM providers:
 
-**Solution:** `MockProvider` simulates an LLM locally with:
-- ✅ **No external API calls** - works offline
-- ✅ **Zero API costs** - no accidental charges
-- ✅ **Deterministic output** - same prompt always produces the same response
+**OpenAI:**
+- Models: `gpt-5-mini` (fast), `gpt-5.2` (reasoning)
+- Used for: General tasks, complex reasoning
+
+**Anthropic Claude:**
+- Models: `claude-sonnet-4-5`, `claude-opus-4-5`, `claude-haiku-4-5`
+- Used for: Code analysis, writing, detailed responses
+
+**Google Gemini:**
+- Models: `gemini-2.5-flash` (fast), `gemini-2.5-pro` (quality)
+- Used for: Vision tasks (screenshots), multimodal requests
 - ✅ **Streaming simulation** - behaves like real providers (async chunks)
 - ✅ **Standard interface** - implements the `Provider` interface that real providers will use
-
-### Development Workflow
-
-1. **Default mode:** `MockProvider` only (cost: $0)
-2. **Future mode:** `USE_LIVE_PROVIDERS=true` enables real providers (cost: varies)
 
 ### Implementation Details
 
@@ -302,16 +292,9 @@ Affects the entire stream (all panels).
 - Returns async iterator compatible with real provider streaming
 
 **Metadata generation:**
-- Calculates realistic token counts based on content length
-- Returns zero cost for all MockProvider requests
-- Includes latency measurement (simulated)
-
-### Benefits
-
-| Aspect | MockProvider | Real Providers |
-|--------|-------------|----------------|
-| **Cost** | $0 | $0.01 - $0.10+ per request |
-| **Speed** | Instant | Network-dependent |
+- Token usage from provider APIs
+- Real latency measurement
+- Cost estimation based on provider pricing
 | **Reliability** | 100% | Subject to API outages |
 | **Offline** | ✅ Works | ❌ Requires internet |
 | **Testing** | ✅ Deterministic | ❌ Non-deterministic |
@@ -326,9 +309,9 @@ User Input (page.tsx)
   ↓
 POST /api/stream { prompt }
   ↓
-ModelRouter.route(prompt)
+IntentRouter.route(prompt, attachments)
   ↓ RoutingDecision
-MockProvider.stream(prompt, config)
+Provider.stream(prompt, config)
   ↓ AsyncIterator<StreamChunk>
 SSE Events: routing → chunks → metadata
   ↓
@@ -345,8 +328,8 @@ User Input (page.tsx)
 POST /api/stream { prompt, models: ["model-1", "model-2"] }
   ↓
 For each model in parallel:
-  ├─ ModelRouter.route(prompt, model)
-  ├─ MockProvider.stream(prompt, config)
+  ├─ IntentRouter.route(prompt, model, attachments)
+  ├─ Provider.stream(prompt, config)
   └─ SSE Events: routing → chunks → metadata (all with modelId)
   ↓
 Client parses SSE events by modelId
@@ -377,10 +360,10 @@ UI shows comparison summary
 - **Parallel processing** - runs while streams complete
 - **Graceful degradation** - if diff fails, streaming still works
 
-### 4. Provider Interface Abstraction
-- **Future-proof** - easy to add new providers
-- **Testable** - MockProvider enables offline testing
-- **Consistent** - all providers return same data structure
+### 4. Multi-Provider Support
+- **OpenAI, Anthropic, Gemini** - three major providers integrated
+- **Consistent interface** - all providers return same data structure
+- **Dynamic routing** - requests routed to optimal provider
 
 ### 5. Rules-Based Routing (not ML)
 - **Transparent** - users see why a model was chosen
@@ -403,7 +386,7 @@ UI shows comparison summary
 
 ### Intentional Design Choices
 
-1. **MockProvider only** - real providers not yet integrated
+1. **Real providers** - OpenAI, Anthropic, and Gemini integrated
 2. **Client-side persistence** - localStorage for UI settings only
 3. **No prompt history** - no saved sessions or replay
 4. **No export** - no download or share functionality

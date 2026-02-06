@@ -309,21 +309,7 @@ export const VISION_CAPABLE_MODELS: ModelId[] = [
 - Try a different image format (PNG recommended)
 
 **Model ignoring image or hallucinating**
-- This should NOT happen after the vision fix (see `docs/vision-attachment-fix.md`)
-- If it does, check:
+- If this occurs, check:
   - Model is vision-capable
   - Image appears in request payload (network tab)
   - No errors in server logs
-
----
-
-## Vision Fix (Important)
-
-If you experience issues where models ignore images or hallucinate unrelated content, see:
-**[docs/vision-attachment-fix.md](vision-attachment-fix.md)**
-
-This document details the comprehensive fix that ensures:
-- Images are ALWAYS sent to vision-capable models
-- Models receive images in correct provider-specific formats
-- Clear "no-guessing" instructions prevent hallucinations
-- Explicit attachment context makes images impossible to miss

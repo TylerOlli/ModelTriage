@@ -162,7 +162,8 @@ Tests verify:
 
 - `lib/routing/types.ts` - Type definitions
 - `lib/routing/router.ts` - Routing logic
-- `__tests__/routing/router.test.ts` - Unit tests
+- `__tests__/llm/intent-router.test.ts` - Unit tests for intent-based routing
+- `tests/routing/attachment-routing.test.ts` - Unit tests for attachment-aware routing
 - `src/app/api/stream/route.ts` - API integration
 - `src/app/page.tsx` - UI display
 
