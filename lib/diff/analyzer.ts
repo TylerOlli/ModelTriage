@@ -42,7 +42,6 @@ export class DiffAnalyzer {
         prompt: summaryPrompt,
         temperature: 0.0,
         maxTokens: this.SUMMARY_MAX_TOKENS,
-        stream: false,
       };
 
       // Use Claude Haiku for fast, cheap, reliable summary generation
