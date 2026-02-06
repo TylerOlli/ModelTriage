@@ -2,11 +2,19 @@
 
 ## Overview
 
-Added automatic code block detection and formatting for model responses. Code is now displayed in monospace with syntax highlighting support, copy buttons, and proper formatting.
+Added automatic code block detection and formatting with **syntax highlighting** for model responses. Code is now displayed with color-coded syntax, monospace font, copy buttons, and proper formatting.
 
 ## Features
 
-### 1. **Fenced Code Block Support**
+### 1. **Syntax Highlighting**
+Code blocks now include syntax highlighting using `react-syntax-highlighter`:
+
+- **Supported languages:** TypeScript, JavaScript, Python, Go, Rust, Java, C/C++, C#, PHP, Ruby, JSON, YAML, HTML, CSS, SCSS, SQL, Bash, Markdown, and more
+- **Theme:** oneDark (dark theme with good contrast and readability)
+- **Automatic language detection:** Uses language tags from fenced blocks (```ts, ```js, etc.)
+- **Fallback:** Plain monospace for unrecognized or missing language tags
+
+### 2. **Fenced Code Block Support**
 Detects and renders triple-backtick code blocks:
 
 ```typescript
@@ -19,7 +27,7 @@ function example() {
 - Shows language label in top-left corner
 - Maintains original indentation and formatting
 
-### 2. **Unfenced Code Detection**
+### 3. **Unfenced Code Detection**
 Automatically detects multi-line code segments without backticks using heuristics:
 
 ```javascript
@@ -35,125 +43,132 @@ Detection patterns:
 - Common code patterns (braces, semicolons, imports)
 - Requires 3+ consecutive code-like lines
 
-### 3. **Copy Button**
+### 4. **Copy Button**
 - Appears on hover over code blocks
 - One-click copy to clipboard
 - Shows "✓ Copied" confirmation
+- Positioned to not interfere with highlighted code
 
-### 4. **Responsive Design**
+### 5. **Responsive Design**
 - Horizontal scroll for long lines
 - Mobile-friendly layout
 - Proper spacing and padding
+- Dark background works in both light and dark mode contexts
 
-### 5. **Security**
-- All content is HTML-escaped
+### 6. **Security**
 - No `dangerouslySetInnerHTML` used
-- Safe rendering of user-generated content
+- `react-syntax-highlighter` uses safe React rendering
+- All content properly escaped
 
 ## Implementation
 
-### Files Created
+### Dependencies Added
 
-1. **`lib/response-parser.ts`**
-   - Parses responses into text and code segments
-   - Detects fenced and unfenced code blocks
-   - Heuristic-based code detection
-   - HTML escaping utility
-
-2. **`src/components/CodeBlock.tsx`**
-   - Renders individual code blocks
-   - Copy-to-clipboard functionality
-   - Language label display
-   - Hover effects and styling
-
-3. **`src/components/FormattedResponse.tsx`**
-   - Main component for rendering parsed responses
-   - Handles both text and code segments
-   - Maintains proper spacing and layout
-
-4. **`__tests__/response-parser.test.ts`**
-   - Unit tests for parser
-   - Tests all code detection scenarios
-   - Ensures normal text isn't mistaken for code
+- **`react-syntax-highlighter`** - Syntax highlighting component
+- **`@types/react-syntax-highlighter`** - TypeScript types
 
 ### Files Modified
 
-1. **`src/app/page.tsx`**
-   - Replaced `<pre>` tags with `<FormattedResponse>`
-   - Applied to both single-answer and Verify Mode
-   - Consistent formatting across all responses
+1. **`src/components/CodeBlock.tsx`**
+   - Added `react-syntax-highlighter` integration
+   - Language mapping for common aliases (ts→typescript, py→python, etc.)
+   - Uses `oneDark` theme for consistent styling
+   - Fallback to plain monospace for unknown languages
+   - Updated button styling for dark theme
 
-2. **`package.json`**
-   - Added `test:parser` script
+### Styling
+
+Code blocks now use:
+- **oneDark theme** - Professional, high-contrast dark theme
+- `bg-gray-900` background for plain code
+- `text-gray-300` for non-highlighted code
+- `border-gray-800` borders
+- Language tags and copy buttons use dark styling for consistency
+
+## Supported Languages
+
+The component supports 20+ languages with automatic alias mapping:
+
+| Input | Normalized | Language |
+|-------|-----------|----------|
+| `ts` | `typescript` | TypeScript |
+| `js` | `javascript` | JavaScript |
+| `jsx` | `jsx` | JSX |
+| `tsx` | `tsx` | TSX |
+| `py` | `python` | Python |
+| `rb` | `ruby` | Ruby |
+| `sh` | `bash` | Bash |
+| `yml` | `yaml` | YAML |
+| `json` | `json` | JSON |
+| `md` | `markdown` | Markdown |
+| `html` | `markup` | HTML |
+| `css` | `css` | CSS |
+| `go` | `go` | Go |
+| `rust` | `rust` | Rust |
+| `java` | `java` | Java |
+| `c` | `c` | C |
+| `cpp` | `cpp` | C++ |
+| `cs` | `csharp` | C# |
+| `php` | `php` | PHP |
+| `sql` | `sql` | SQL |
 
 ## Usage
 
-The FormattedResponse component is automatically used for all model responses. No configuration needed.
+The FormattedResponse component automatically applies syntax highlighting. No configuration needed.
 
-### Code Block Rendering
+### Example Rendering
 
 **Input (from model):**
 ```
-Here's a function:
+Here's a TypeScript function:
 
 \`\`\`typescript
-function greet(name: string): string {
-  return `Hello, ${name}!`;
+interface User {
+  name: string;
+  age: number;
+}
+
+function greet(user: User): string {
+  return `Hello, ${user.name}!`;
 }
 \`\`\`
 
-This function returns a greeting.
+This function greets a user.
 ```
 
-**Output:** Renders as formatted text + styled code block + more text
+**Output:** Renders with:
+- TypeScript syntax highlighting (keywords, types, strings colored)
+- "typescript" label in top-left
+- Copy button on hover
+- Dark theme background
+- Scrollable for long lines
 
-### Unfenced Code Rendering
+## Performance
 
-**Input (from model):**
-```
-Here's the solution:
-
-function calculate(x, y) {
-  let result = 0;
-  for (let i = x; i <= y; i++) {
-    result += i;
-  }
-  return result;
-}
-
-This adds numbers from x to y.
-```
-
-**Output:** Detects the function as code and renders it in a code block
+- **Bundle size:** ~50KB (react-syntax-highlighter with Prism)
+- **Runtime:** Highlighting happens after parsing, not during streaming
+- **No layout shift:** Code blocks have consistent sizing
+- **Lazy loading:** Only loaded when code blocks are present
 
 ## Testing
 
-Run tests:
+Run existing tests:
 ```bash
 npm run test:parser
 ```
 
-All 6 tests pass:
-- ✓ Fenced code block with language
-- ✓ Fenced code block without language
-- ✓ Multiple code blocks
-- ✓ Unfenced code detection
-- ✓ Normal text not mistaken for code
-- ✓ JSON structures detected as code
+All tests still pass (syntax highlighting doesn't affect parsing logic).
 
-## Styling
-
-Code blocks use:
-- `bg-gray-50` background
-- `border-gray-200` border
-- `font-mono` for code
-- `text-sm` for readability
-- `overflow-x-auto` for long lines
-- Hover effects for copy button
+Test manually:
+1. Submit a prompt with code (e.g., "Write a TypeScript function")
+2. Verify syntax highlighting appears
+3. Check copy button works
+4. Test with different languages
 
 ## Notes
 
 - Parser is conservative - requires strong code signals to avoid false positives
-- Normal paragraphs with occasional punctuation won't trigger code detection
-- Code blocks in the comparison summary are NOT affected (summary uses plain text)
+- Normal paragraphs won't trigger code detection
+- Code blocks in comparison summary are NOT highlighted (summary uses plain text)
 - Works with all providers (OpenAI, Anthropic, Gemini)
+- Theme is consistent across all code blocks
