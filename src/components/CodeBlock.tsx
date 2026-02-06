@@ -3,37 +3,12 @@
 import { useState } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { normalizeCodeLang } from "../../lib/code-lang-utils";
 
 interface CodeBlockProps {
   code: string;
   language?: string;
 }
-
-// Map common language aliases to supported languages
-const languageMap: Record<string, string> = {
-  ts: "typescript",
-  js: "javascript",
-  jsx: "jsx",
-  tsx: "tsx",
-  py: "python",
-  rb: "ruby",
-  sh: "bash",
-  yml: "yaml",
-  json: "json",
-  md: "markdown",
-  html: "markup",
-  xml: "markup",
-  css: "css",
-  scss: "scss",
-  go: "go",
-  rust: "rust",
-  java: "java",
-  c: "c",
-  cpp: "cpp",
-  cs: "csharp",
-  php: "php",
-  sql: "sql",
-};
 
 export function CodeBlock({ code, language }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
@@ -48,39 +23,40 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
     }
   };
 
-  // Normalize language name
-  const normalizedLanguage = language
-    ? languageMap[language.toLowerCase()] || language.toLowerCase()
-    : undefined;
+  // Normalize language tag
+  const normalized = normalizeCodeLang(language);
+  const { display: displayLabel, highlightKey } = normalized;
 
   return (
-    <div className="relative group my-4">
-      {/* Language label */}
-      {language && (
-        <div className="absolute top-2 left-3 text-xs font-medium text-gray-400 bg-gray-800 px-2 py-1 rounded z-10">
-          {language}
+    <div className="my-4 rounded-lg overflow-hidden border border-gray-800 bg-gray-900">
+      {/* Header row - always present to maintain consistent layout */}
+      <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
+        {/* Language label (left) */}
+        <div className="text-xs font-medium text-gray-400">
+          {displayLabel || <span className="opacity-0">-</span>}
         </div>
-      )}
 
-      {/* Copy button */}
-      <button
-        onClick={handleCopy}
-        className="absolute top-2 right-2 px-3 py-1 text-xs font-medium text-gray-300 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
-        aria-label="Copy code"
-      >
-        {copied ? "✓ Copied" : "Copy"}
-      </button>
+        {/* Copy button (right) */}
+        <button
+          onClick={handleCopy}
+          className="px-3 py-1 text-xs font-medium text-gray-300 bg-gray-700 border border-gray-600 rounded hover:bg-gray-600 transition-colors"
+          aria-label="Copy code"
+        >
+          {copied ? "✓ Copied" : "Copy"}
+        </button>
+      </div>
 
-      {/* Code content with syntax highlighting */}
-      {normalizedLanguage ? (
+      {/* Code content - no absolute positioning */}
+      {highlightKey ? (
         <SyntaxHighlighter
-          language={normalizedLanguage}
+          language={highlightKey}
           style={oneDark}
           customStyle={{
             margin: 0,
-            borderRadius: "0.5rem",
+            borderRadius: 0,
             fontSize: "0.875rem",
             padding: "1rem",
+            background: "transparent",
           }}
           codeTagProps={{
             style: {
@@ -92,7 +68,7 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
         </SyntaxHighlighter>
       ) : (
         // Fallback for no language - plain monospace
-        <pre className="bg-gray-900 border border-gray-800 rounded-lg p-4 overflow-x-auto">
+        <pre className="p-4 overflow-x-auto">
           <code className="text-sm font-mono text-gray-300 block whitespace-pre">
             {code}
           </code>
