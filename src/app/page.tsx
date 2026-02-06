@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import type { DiffSummary } from "@/lib/diff";
+import { FormattedResponse } from "../components/FormattedResponse";
 
 /**
  * Map model ID to provider name
@@ -1038,9 +1039,7 @@ export default function Home() {
                       )}
                     </div>
                     <div className="prose prose-sm max-w-none">
-                      <pre className="whitespace-pre-wrap font-sans text-gray-800 leading-relaxed">
-                        {response}
-                      </pre>
+                      <FormattedResponse response={response} />
                     </div>
                   </div>
                 )}
@@ -1277,9 +1276,9 @@ export default function Home() {
                     
                     {/* Show partial response if it exists */}
                     {panel.response && (
-                      <pre className="whitespace-pre-wrap font-sans text-sm text-gray-800 leading-relaxed mb-3">
-                        {panel.response}
-                      </pre>
+                      <div className="mb-3">
+                        <FormattedResponse response={panel.response} />
+                      </div>
                     )}
                     
                     {/* Show error card if panel errored */}
