@@ -1,0 +1,14 @@
+# TODO: Add the following image files to /public:
+#
+# Required for social sharing (1200x630 PNG):
+# - og-image.png
+#
+# Required for favicon (multiple sizes):
+# - favicon.ico (32x32 or multi-size ICO)
+# - icon-192.png (192x192 PNG for PWA)
+# - icon-512.png (512x512 PNG for PWA)
+# - apple-touch-icon.png (180x180 PNG for iOS)
+#
+# You can generate these at:
+# - https://realfavicongenerator.net/
+# - https://www.canva.com/ (for OG image)
