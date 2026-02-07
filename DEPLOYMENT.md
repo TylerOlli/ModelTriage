@@ -114,7 +114,7 @@ npm run test:image-gist-schema
 - [ ] API keys valid and have sufficient credits
 - [ ] Test file upload (text + images)
 - [ ] Test all 3 providers (OpenAI, Anthropic, Gemini)
-- [ ] Test Verify Mode with 2-3 models
+- [ ] Test Comparison Mode with 2-3 models
 - [ ] Social sharing preview works
 
 ---

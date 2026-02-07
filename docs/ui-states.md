@@ -17,7 +17,7 @@ The UI provides clear states and actions to guide users through the application 
      - One AI response
      - Auto-selected model
      - Fast and cost-effective
-  2. **Verify Mode** (Optional) - ⚡
+  2. **Comparison Mode** (Optional) - ⚡
      - Compare 2-3 models
      - Side-by-side comparison
      - Higher cost/latency warning
@@ -34,7 +34,7 @@ The UI provides clear states and actions to guide users through the application 
 - Submit button shows "Streaming..."
 - Cancel button appears
 
-**Verify Mode:**
+**Comparison Mode:**
 - Spinning indicator per panel
 - Independent loading states per model
 - All panels stream simultaneously
@@ -47,7 +47,7 @@ The UI provides clear states and actions to guide users through the application 
 - Metadata (model, provider, latency, tokens)
 - Clear button appears
 
-**Verify Mode:**
+**Comparison Mode:**
 - Side-by-side panels with routing info
 - Independent responses per model
 - Per-panel metadata
@@ -86,7 +86,7 @@ The UI provides clear states and actions to guide users through the application 
 
 **Behavior:**
 - Single-Answer Mode: Calls single model
-- Verify Mode: Calls multiple models in parallel
+- Comparison Mode: Calls multiple models in parallel
 
 ### Cancel Button
 
@@ -106,9 +106,9 @@ The UI provides clear states and actions to guide users through the application 
 - Clears error state
 - Removes routing info
 - Clears metadata
-- Removes diff summary (Verify Mode)
+- Removes diff summary (Comparison Mode)
 - Clears prompt text and removes from localStorage
-- **Does not clear:** Verify Mode setting, model count
+- **Does not clear:** Comparison Mode setting, model count
 
 **Purpose:** Quick way to start completely fresh while preserving mode settings.
 
@@ -136,11 +136,11 @@ Success State
 Empty State (Instructions hidden)
 ```
 
-### Normal Flow (Verify Mode)
+### Normal Flow (Comparison Mode)
 
 ```
 Empty State
-    ↓ (User enables Verify Mode, enters prompt, submits)
+    ↓ (User enables Comparison Mode, enters prompt, submits)
 Loading State (multiple panels)
     ↓ (All streams complete)
 Success State (with diff summary)
@@ -229,7 +229,7 @@ const handleClear = () => {
   setRouting(null);
   setMetadata(null);
 
-  // Reset Verify Mode state
+  // Reset Comparison Mode state
   setModelPanels({});
   setDiffSummary(null);
   setDiffError(null);
@@ -275,7 +275,7 @@ const hasResults = response || error || Object.keys(modelPanels).length > 0;
 1. **Clear Guidance:** Instructions explain both modes before use
 2. **Quick Recovery:** Try Again button for immediate retry
 3. **Clean Reset:** Clear button to start fresh
-4. **Preserved Settings:** Clear doesn't reset Verify Mode or prompt
+4. **Preserved Settings:** Clear doesn't reset Comparison Mode or prompt
 5. **State Awareness:** Always clear what's happening (loading, error, success)
 
 ## File Location

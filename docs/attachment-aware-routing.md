@@ -172,7 +172,7 @@ Falls back to traditional intent-based routing (unchanged).
 - End-to-end implementation
 
 **Claude Opus 4.5 (Secondary):**
-- Only in Verify mode for comparison
+- Only in Comparison mode for multi-model comparison
 - Never as default auto-selection
 - User can manually select in Advanced mode
 
@@ -190,12 +190,12 @@ Falls back to traditional intent-based routing (unchanged).
 
 ---
 
-## Verify Mode Smart Defaults
+## Comparison Mode Smart Defaults
 
 **File:** `lib/attachments/vision-support.ts`
 
 ```typescript
-export function getVerifyModeDefaults(hasImages: boolean): ModelId[] {
+export function getComparisonModeDefaults(hasImages: boolean): ModelId[] {
   if (hasImages) {
     // Vision: Gemini Pro + deep reasoning for second opinion
     return ["gemini-2.5-pro", "gpt-5.2"];
@@ -446,7 +446,7 @@ Check logs: "requiresDeepReasoning: true"
 
 ✅ **No breaking changes:**
 - Requests without attachments use traditional routing (unchanged)
-- Verify mode manual selection works as before
+- Comparison mode manual selection works as before
 - All existing model capabilities preserved
 
 ✅ **Opt-in behavior:**
@@ -477,7 +477,7 @@ Check logs: "requiresDeepReasoning: true"
 
 **No Frontend Changes:**
 - Frontend continues to work as-is
-- Verify mode defaults can be updated separately if needed
+- Comparison mode defaults can be updated separately if needed
 
 ---
 

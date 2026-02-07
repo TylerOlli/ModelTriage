@@ -50,7 +50,7 @@ All attachments are processed server-side with automatic truncation, compression
   - `gemini-2.5-flash`
   - `gemini-2.5-pro`
 - In auto-routing mode: automatically falls back to a vision-capable model if images are attached
-- In Verify/Advanced mode: filters to only vision-capable models, or returns an error if none are selected
+- In Comparison/Advanced mode: filters to only vision-capable models, or returns an error if none are selected
 
 ### 3. Security
 
@@ -130,7 +130,7 @@ const fileInputRef = useRef<HTMLInputElement>(null);
 
 1. Attach an image file
 2. If in auto-routing mode: automatically routed to a vision-capable model (e.g., `gemini-2.5-flash`)
-3. If in Verify mode: only vision-capable selected models will receive the image
+3. If in Comparison mode: only vision-capable selected models will receive the image
 
 ### Mixed Attachments
 
@@ -294,7 +294,7 @@ export const VISION_CAPABLE_MODELS: ModelId[] = [
 - Check total file count <= 3
 
 **"Images require a vision-capable model"**
-- Enable Verify/Advanced mode
+- Enable Comparison/Advanced mode
 - Select at least one vision-capable model
 - OR: Let auto-routing handle it (default behavior)
 

@@ -19,7 +19,7 @@ The streaming API endpoint provides Server-Sent Events (SSE) for real-time LLM r
 |-----------|------|----------|---------|-------------|
 | `prompt` | string | Yes | - | The input prompt (max 4,000 characters) |
 | `model` | string | No | `"mock-model-1"` | Model identifier (single-answer mode) |
-| `models` | string[] | No | - | Array of model identifiers (Verify Mode, 2-3 models) |
+| `models` | string[] | No | - | Array of model identifiers (Comparison Mode, 2-3 models) |
 | `maxTokens` | number | No | `800` | Maximum output tokens |
 
 ### Example Requests
@@ -32,7 +32,7 @@ curl -X POST http://localhost:3000/api/stream \
   -d '{"prompt": "Hello, how are you?"}'
 ```
 
-**Verify Mode (2-3 models):**
+**Comparison Mode (2-3 models):**
 
 ```bash
 curl -X POST http://localhost:3000/api/stream \
@@ -83,7 +83,7 @@ Sent once after streaming completes.
 
 Sent if an error occurs during streaming.
 
-**Per-Model Error (Verify Mode):**
+**Per-Model Error (Comparison Mode):**
 
 Isolated to a specific panel. Other models continue processing.
 
@@ -97,7 +97,7 @@ Isolated to a specific panel. Other models continue processing.
 
 **Global Error:**
 
-Affects the entire stream (all panels in Verify Mode).
+Affects the entire stream (all panels in Comparison Mode).
 
 ```json
 {
@@ -126,13 +126,13 @@ Returned for validation errors:
 
 ```json
 {
-  "error": "Verify Mode requires at least 2 models"
+  "error": "Comparison Mode requires at least 2 models"
 }
 ```
 
 ```json
 {
-  "error": "Maximum 3 models allowed in Verify Mode"
+  "error": "Maximum 3 models allowed in Comparison Mode"
 }
 ```
 

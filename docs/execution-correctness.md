@@ -2,7 +2,7 @@
 
 ## Overview
 
-The application implements robust execution controls to prevent race conditions, ensure single-run enforcement, and provide proper error isolation in Verify Mode.
+The application implements robust execution controls to prevent race conditions, ensure single-run enforcement, and provide proper error isolation in Comparison Mode.
 
 ## Concurrent Run Prevention
 
@@ -70,7 +70,7 @@ Click 2-N: ❌ Guard returns early, logs warning
 - No wasted API calls
 - Clean console warning for debugging
 
-## Error Isolation in Verify Mode
+## Error Isolation in Comparison Mode
 
 ### Problem
 
@@ -429,7 +429,7 @@ Finally: isStreaming=false, abortControllerRef=null (guaranteed)
 ### Test 2: Panel Error Isolation
 
 **Steps:**
-1. Enable Verify Mode, 3 models
+1. Enable Comparison Mode, 3 models
 2. Submit prompt
 3. Simulate one panel error (via API modification)
 
@@ -441,7 +441,7 @@ Finally: isStreaming=false, abortControllerRef=null (guaranteed)
 ### Test 3: All Panels Error
 
 **Steps:**
-1. Enable Verify Mode, 2 models
+1. Enable Comparison Mode, 2 models
 2. Submit prompt that causes all to error
 3. Check UI
 
@@ -453,7 +453,7 @@ Finally: isStreaming=false, abortControllerRef=null (guaranteed)
 ### Test 4: Partial Response + Error
 
 **Steps:**
-1. Enable Verify Mode, 2 models
+1. Enable Comparison Mode, 2 models
 2. Submit prompt
 3. Simulate Panel 1 error mid-stream
 

@@ -118,9 +118,9 @@ export function getDefaultCodeModel(lightweight: boolean = false): ModelId {
 }
 
 /**
- * Get default models for Verify mode based on request type
+ * Get default models for Comparison mode based on request type
  */
-export function getVerifyModeDefaults(hasImages: boolean): ModelId[] {
+export function getComparisonModeDefaults(hasImages: boolean): ModelId[] {
   if (hasImages) {
     // Vision: Gemini Pro + deep reasoning for second opinion
     return [MODEL_DEFAULTS.visionPrimary, MODEL_DEFAULTS.deepReasoningA];

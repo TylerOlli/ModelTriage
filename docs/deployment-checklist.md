@@ -77,7 +77,7 @@ git ls-files | grep ".env"  # Should return nothing
 **Features:**
 - ✅ SSE streaming (Server-Sent Events)
 - ✅ Single-answer mode
-- ✅ Verify Mode (2-3 models in parallel)
+- ✅ Comparison Mode (2-3 models in parallel)
 - ✅ Input validation (prompt length, model count)
 - ✅ Error isolation (per-model try-catch)
 - ✅ Clean stream closure
@@ -117,8 +117,8 @@ git push origin main
 3. Check: Routing explanation displays
 4. Check: Metadata shows (model, latency, tokens)
 
-**Test Verify Mode:**
-1. Enable Verify Mode toggle
+**Test Comparison Mode:**
+1. Enable Comparison Mode toggle
 2. Select 2 models
 3. Enter prompt: "Compare React and Vue"
 4. Verify: Both panels stream independently
@@ -181,7 +181,7 @@ Default Next.js settings work out-of-the-box:
 
 - ✅ Works on Vercel out-of-the-box
 - ✅ No buffering with Node.js runtime
-- ✅ Supports parallel streams (Verify Mode)
+- ✅ Supports parallel streams (Comparison Mode)
 
 ## Troubleshooting
 
@@ -241,7 +241,7 @@ Chunks should appear progressively.
    - API route errors (should be 0% for valid requests)
    - Client-side errors (check browser console)
 
-3. **Verify Mode:**
+3. **Comparison Mode:**
    - Both/all panels should stream simultaneously
    - Diff summary should appear after completion
    - Error isolation (one panel error doesn't affect others)
@@ -285,9 +285,9 @@ Deployment is successful when:
 ✅ Build completes without errors
 ✅ Homepage loads and renders correctly
 ✅ Single-answer mode streams progressively
-✅ Verify Mode runs 2-3 models in parallel
+✅ Comparison Mode runs 2-3 models in parallel
 ✅ Routing explanation displays for each request
-✅ Diff summary appears after Verify Mode completes
+✅ Diff summary appears after Comparison Mode completes
 ✅ Error handling works (validation, cancellation, try again)
 ✅ No console errors in browser
 ✅ No serverless errors in Vercel logs

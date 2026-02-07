@@ -2,7 +2,7 @@
 
 ## What is ModelTriage?
 
-ModelTriage is an LLM decision and verification layer that intelligently routes prompts to the most appropriate model and optionally runs multiple models in parallel for comparison. Instead of guessing which model to use, ModelTriage analyzes your prompt and explains why it selected a particular model (e.g., analytical tasks get routed to quality-focused models, code tasks to code-specialized models). Verify Mode allows side-by-side comparison of 2-3 models with automatic diff analysis to highlight agreements, disagreements, and conflicting assumptions. The system streams responses progressively using Server-Sent Events (SSE) for a responsive, real-time experience.
+ModelTriage is an LLM decision and verification layer that intelligently routes prompts to the most appropriate model and optionally runs multiple models in parallel for comparison. Instead of guessing which model to use, ModelTriage analyzes your prompt and explains why it selected a particular model (e.g., analytical tasks get routed to quality-focused models, code tasks to code-specialized models). Comparison Mode allows side-by-side comparison of 2-3 models with automatic diff analysis to highlight agreements, disagreements, and conflicting assumptions. The system streams responses progressively using Server-Sent Events (SSE) for a responsive, real-time experience.
 
 ## MVP v1 Features
 
@@ -19,14 +19,14 @@ This is the **MVP (Minimum Viable Product)** implementation. The following featu
 - Input validation (4,000 character max)
 - **File attachments** (text + images) with strict token/cost guardrails
 
-### ✅ Verify Mode
+### ✅ Comparison Mode
 - Toggle to enable multi-model comparison (default: OFF)
 - Parallel execution of 2-3 models simultaneously
 - Side-by-side streaming panels (each model streams independently)
 - Per-panel error isolation (one failure doesn't affect others)
 - Diff summary showing agreement, disagreement, omissions, and conflicts
-- Cost warning displayed only when Verify Mode is ON
-- localStorage persistence for Verify Mode settings and last prompt
+- Cost warning displayed only when Comparison Mode is ON
+- localStorage persistence for Comparison Mode settings and last prompt
 
 ### ✅ Routing Explanation
 - Every request shows which model was selected and why
@@ -34,7 +34,7 @@ This is the **MVP (Minimum Viable Product)** implementation. The following featu
 - Example: "Compare React and Vue" routes to `mock-quality-1` because it's an analytical task
 
 ### ✅ Diff Summary
-- Automatically compares outputs from multiple models in Verify Mode
+- Automatically compares outputs from multiple models in Comparison Mode
 - Highlights:
   - Agreement (what all models agree on)
   - Disagreement (where models differ)
@@ -150,8 +150,8 @@ After deployment, test the following:
 3. Check routing explanation displays correctly
 4. Verify metadata shows (model, latency, tokens)
 
-**✅ Verify Mode:**
-1. Enable Verify Mode toggle
+**✅ Comparison Mode:**
+1. Enable Comparison Mode toggle
 2. Select 2 or 3 models
 3. Enter a prompt
 4. Verify both/all panels stream independently
@@ -225,11 +225,11 @@ ModelTriage uses **Server-Sent Events (SSE)** to stream LLM responses in real-ti
 - No buffering delays (chunks appear immediately)
 - Partial output preserved if stream is cancelled or errors
 - Clean stream closure on completion
-- Multiple models can stream in parallel (Verify Mode)
+- Multiple models can stream in parallel (Comparison Mode)
 
-### Verify Mode (High-Level)
+### Comparison Mode (High-Level)
 
-When Verify Mode is enabled, the workflow changes:
+When Comparison Mode is enabled, the workflow changes:
 
 1. **Client sends prompt with model list** → `POST /api/stream` with `models: ["model-1", "model-2"]`
 2. **Server starts parallel streams** → Each model gets its own provider instance
@@ -259,13 +259,13 @@ When Verify Mode is enabled, the workflow changes:
 modeltriage/
 ├── src/app/              # Next.js App Router
 │   ├── api/stream/       # SSE streaming endpoint
-│   ├── page.tsx          # Main UI with Verify Mode
+│   ├── page.tsx          # Main UI with Comparison Mode
 │   ├── layout.tsx        # Root layout
 │   └── globals.css       # Global styles
 ├── lib/                  # Core library modules
 │   ├── providers/        # Provider interface + MockProvider
 │   ├── routing/          # Rules-based router
-│   └── diff/             # Diff analyzer for Verify Mode
+│   └── diff/             # Diff analyzer for Comparison Mode
 ├── __tests__/            # Unit tests
 ├── docs/                 # Technical documentation
 ├── .specify/             # Product specifications (source of truth)
@@ -290,9 +290,9 @@ modeltriage/
 - Runs client-side to avoid blocking streaming
 
 **Streaming API (`src/app/api/stream/`):**
-- Single endpoint for both single-answer and Verify Mode
+- Single endpoint for both single-answer and Comparison Mode
 - Validates input (prompt length, model count)
-- Streams SSE events with proper multiplexing for Verify Mode
+- Streams SSE events with proper multiplexing for Comparison Mode
 - Per-model error isolation (uses `Promise.allSettled`)
 
 ## Future Flags (Not Yet Implemented)
@@ -342,7 +342,7 @@ See `docs/` for detailed technical documentation:
 
 ### Feature Documentation
 - `streaming-api.md` - SSE endpoint reference
-- `verify-mode.md` - Verify Mode implementation details
+- `comparison-mode.md` - Comparison Mode implementation details
 - `routing.md` - Routing logic and priority rules
 - `persistence.md` - localStorage usage
 - `ui-states.md` - UI states, button behavior, and user actions

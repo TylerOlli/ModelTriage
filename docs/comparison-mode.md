@@ -1,8 +1,8 @@
-# Verify Mode
+# Comparison Mode
 
 ## Overview
 
-Verify Mode allows users to compare responses from multiple models side-by-side, helping to evaluate quality, consistency, and identify potential issues through parallel execution and diff analysis.
+Comparison Mode allows users to compare responses from multiple models side-by-side, helping to evaluate quality, consistency, and identify potential issues through parallel execution and diff analysis.
 
 ## Features
 
@@ -31,7 +31,7 @@ Verify Mode allows users to compare responses from multiple models side-by-side,
 
 ### UI Toggle
 
-1. **Enable Verify Mode**
+1. **Enable Comparison Mode**
    - Toggle switch in the UI (default: OFF)
    - Warning: "higher cost and latency"
 
@@ -47,7 +47,7 @@ Verify Mode allows users to compare responses from multiple models side-by-side,
 
 **Endpoint:** `POST /api/stream`
 
-**Request (Verify Mode):**
+**Request (Comparison Mode):**
 ```json
 {
   "prompt": "Your prompt here",
@@ -193,7 +193,7 @@ Here's a code example...
 
 ## User Flow
 
-1. User enables Verify Mode toggle
+1. User enables Comparison Mode toggle
 2. Selects number of models (2 or 3)
 3. Enters prompt (max 4,000 chars)
 4. Clicks Submit
@@ -210,14 +210,14 @@ Here's a code example...
 
 - `lib/diff/types.ts` - Diff types
 - `lib/diff/analyzer.ts` - Diff analysis logic
-- `src/app/api/stream/route.ts` - API with Verify Mode support
+- `src/app/api/stream/route.ts` - API with Comparison Mode support
 - `src/app/page.tsx` - UI with side-by-side panels
 
 ## Compliance
 
 Per `.specify/requirements.md`:
 
-✅ Verify Mode explicitly enabled (not default)
+✅ Comparison Mode explicitly enabled (not default)
 ✅ Cost and latency warning displayed
 ✅ Multiple models execute in parallel
 ✅ Default: 2 models

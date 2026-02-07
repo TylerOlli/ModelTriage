@@ -148,7 +148,7 @@ function isMoreDescriptive(newReason: string | undefined, existingReason: string
 export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [verifyMode, setVerifyMode] = useState(false);
+  const [comparisonMode, setComparisonMode] = useState(false);
 
   // File attachment state
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
@@ -229,7 +229,7 @@ export default function Home() {
   const [previousResponse, setPreviousResponse] = useState<string>("");
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Verify Mode state
+  // Comparison Mode state
   const [modelPanels, setModelPanels] = useState<Record<string, ModelPanel>>({});
   const [diffSummary, setDiffSummary] = useState<DiffSummary | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
@@ -238,21 +238,21 @@ export default function Home() {
 
   // Load persisted state on mount
   useEffect(() => {
-    const persistedVerifyMode = localStorage.getItem("verifyMode");
+    const persistedComparisonMode = localStorage.getItem("comparisonMode");
     const persistedPrompt = localStorage.getItem("lastPrompt");
 
-    if (persistedVerifyMode !== null) {
-      setVerifyMode(persistedVerifyMode === "true");
+    if (persistedComparisonMode !== null) {
+      setComparisonMode(persistedComparisonMode === "true");
     }
     if (persistedPrompt) {
       setPrompt(persistedPrompt);
     }
   }, []);
 
-  // Persist Verify Mode state
+  // Persist Comparison Mode state
   useEffect(() => {
-    localStorage.setItem("verifyMode", verifyMode.toString());
-  }, [verifyMode]);
+    localStorage.setItem("comparisonMode", comparisonMode.toString());
+  }, [comparisonMode]);
 
   // Load persisted model selection
   useEffect(() => {
@@ -463,7 +463,7 @@ export default function Home() {
       return;
     }
 
-    if (verifyMode) {
+    if (comparisonMode) {
       await handleVerifyModeSubmit();
     } else {
       await handleSingleAnswerSubmit();
@@ -873,8 +873,8 @@ export default function Home() {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         
-        // Mark all active panels as cancelled in Verify Mode
-        if (verifyMode && Object.keys(modelPanels).length > 0) {
+        // Mark all active panels as cancelled in Comparison Mode
+        if (comparisonMode && Object.keys(modelPanels).length > 0) {
           setModelPanels((prevPanels) => {
             const updatedPanels = { ...prevPanels };
             Object.keys(updatedPanels).forEach((modelId) => {
@@ -907,7 +907,7 @@ export default function Home() {
     setRouting(null);
     setMetadata(null);
 
-    // Reset Verify Mode state
+    // Reset Comparison Mode state
     setModelPanels({});
     setDiffSummary(null);
     setDiffError(null);
@@ -1028,31 +1028,31 @@ export default function Home() {
           </p>
         </header>
 
-        {/* Verify Mode Toggle */}
+        {/* Comparison Mode Toggle */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-sm font-semibold text-gray-900 mb-1">
-                Verify Mode
+                Comparison Mode
               </h3>
               <p className="text-sm text-gray-600">
                 Compare responses from multiple models
-                {verifyMode && (
+                {comparisonMode && (
                   <span className="text-orange-600 font-medium"> (higher cost and latency)</span>
                 )}
               </p>
             </div>
             <button
               type="button"
-              onClick={() => setVerifyMode(!verifyMode)}
+              onClick={() => setComparisonMode(!comparisonMode)}
               disabled={isStreaming}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                verifyMode ? "bg-blue-600" : "bg-gray-300"
+                comparisonMode ? "bg-blue-600" : "bg-gray-300"
               } ${isStreaming ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
             >
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  verifyMode ? "translate-x-6" : "translate-x-1"
+                  comparisonMode ? "translate-x-6" : "translate-x-1"
                 }`}
               />
             </button>
@@ -1210,8 +1210,8 @@ export default function Home() {
               )}
             </div>
 
-            {/* Model Picker - Only show in Advanced/Verify Mode */}
-            {verifyMode && (
+            {/* Model Picker - Only show in Advanced/Comparison Mode */}
+            {comparisonMode && (
               <div className="mt-6">
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Select Models to Compare
@@ -1292,7 +1292,7 @@ export default function Home() {
         </form>
 
         {/* Loading State */}
-        {isStreaming && !verifyMode && !response && streamingStage && (
+        {isStreaming && !comparisonMode && !response && streamingStage && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center gap-3 text-gray-600">
               <div className="animate-spin w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full" />
@@ -1307,7 +1307,7 @@ export default function Home() {
         )}
 
         {/* Single-Answer Mode Display */}
-        {!verifyMode && Object.keys(modelPanels).length === 0 && (
+        {!comparisonMode && Object.keys(modelPanels).length === 0 && (
           <>
             {/* Routing Information */}
             {routing && routing.mode === "auto" && (
@@ -1319,7 +1319,7 @@ export default function Home() {
                       <h3 className="text-sm font-semibold text-indigo-900">
                         Auto-selected Model
                       </h3>
-                      {verifyMode && confidenceToLabel(routing.confidence) && (
+                      {comparisonMode && confidenceToLabel(routing.confidence) && (
                         <span className="text-xs text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded">
                           {confidenceToLabel(routing.confidence)}
                         </span>
@@ -1508,10 +1508,10 @@ export default function Home() {
                     </ul>
                   </div>
 
-                  {/* Verify Mode */}
+                  {/* Comparison Mode */}
                   <div className="pt-3 border-t border-gray-200">
                     <h4 className="text-sm font-medium text-gray-900 mb-2">
-                      ⚡ Verify Mode (Optional)
+                      ⚡ Comparison Mode (Optional)
                     </h4>
                     <ul className="space-y-1.5 text-sm text-gray-600">
                       <li className="flex items-start gap-2">
@@ -1548,7 +1548,7 @@ export default function Home() {
           </>
         )}
 
-        {/* Verify Mode Display */}
+        {/* Comparison Mode Display */}
         {/* Multi-Model Comparison (works for both single-answer with multiple models and verify mode) */}
         {Object.keys(modelPanels).length > 0 && (
           <>
@@ -1770,7 +1770,7 @@ export default function Home() {
               </div>
             )}
 
-            {/* Continue Conversation Button for Verify Mode */}
+            {/* Continue Conversation Button for Comparison Mode */}
             {!isStreaming && Object.keys(modelPanels).length > 0 && (
               (() => {
                 const hasAnyResponse = Object.values(modelPanels).some(

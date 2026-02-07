@@ -6,8 +6,8 @@ The UI implements lightweight localStorage persistence to maintain user preferen
 
 ## Persisted State
 
-### 1. Verify Mode (boolean)
-- **Key:** `verifyMode`
+### 1. Comparison Mode (boolean)
+- **Key:** `comparisonMode`
 - **Values:** `"true"` or `"false"`
 - **Default:** `false` (OFF)
 - **When saved:** Immediately on toggle
@@ -32,7 +32,7 @@ The UI implements lightweight localStorage persistence to maintain user preferen
 
 ```typescript
 useEffect(() => {
-  const persistedVerifyMode = localStorage.getItem("verifyMode");
+  const persistedComparisonMode = localStorage.getItem("comparisonMode");
   const persistedModelCount = localStorage.getItem("modelCount");
   const persistedPrompt = localStorage.getItem("lastPrompt");
 
@@ -53,11 +53,11 @@ useEffect(() => {
 
 ### Save on Change
 
-**Verify Mode:**
+**Comparison Mode:**
 ```typescript
 useEffect(() => {
-  localStorage.setItem("verifyMode", verifyMode.toString());
-}, [verifyMode]);
+  localStorage.setItem("comparisonMode", comparisonMode.toString());
+}, [comparisonMode]);
 ```
 
 **Model Count:**
@@ -89,15 +89,15 @@ The "higher cost and latency" message is now conditional:
 ```typescript
 <p className="text-sm text-gray-600">
   Compare responses from multiple models
-  {verifyMode && (
+  {comparisonMode && (
     <span className="text-orange-600 font-medium"> (higher cost and latency)</span>
   )}
 </p>
 ```
 
 **Behavior:**
-- **Verify Mode OFF:** "Compare responses from multiple models"
-- **Verify Mode ON:** "Compare responses from multiple models (higher cost and latency)"
+- **Comparison Mode OFF:** "Compare responses from multiple models"
+- **Comparison Mode ON:** "Compare responses from multiple models (higher cost and latency)"
 
 The warning appears in orange (`text-orange-600`) and only when the mode is actively enabled.
 
@@ -105,13 +105,13 @@ The warning appears in orange (`text-orange-600`) and only when the mode is acti
 
 ### First Visit
 1. User arrives at page
-2. Verify Mode is OFF by default
+2. Comparison Mode is OFF by default
 3. Model count is 2 by default
 4. Prompt is empty
 
 ### Return Visit
 1. User arrives at page
-2. Verify Mode state restored from last session
+2. Comparison Mode state restored from last session
 3. Model count restored from last session
 4. Last prompt restored (if user typed something)
 
@@ -122,7 +122,7 @@ Users can clear persisted data by:
 2. Clearing browser localStorage manually
 3. Using browser dev tools → Application → Local Storage
 
-**Note:** The Clear button only removes the prompt; Verify Mode and model count settings are preserved.
+**Note:** The Clear button only removes the prompt; Comparison Mode and model count settings are preserved.
 
 ## Privacy
 
@@ -145,8 +145,8 @@ localStorage is supported in all modern browsers:
 
 ### Manual Testing
 
-1. **Test Verify Mode persistence:**
-   - Toggle Verify Mode ON
+1. **Test Comparison Mode persistence:**
+   - Toggle Comparison Mode ON
    - Refresh page
    - ✓ Should remain ON
 
@@ -162,9 +162,9 @@ localStorage is supported in all modern browsers:
    - ✓ Should restore "Test prompt"
 
 4. **Test Cost Warning:**
-   - Verify Mode OFF → No warning shown
-   - Toggle Verify Mode ON → Warning appears in orange
-   - Toggle Verify Mode OFF → Warning disappears
+   - Comparison Mode OFF → No warning shown
+   - Toggle Comparison Mode ON → Warning appears in orange
+   - Toggle Comparison Mode OFF → Warning disappears
 
 5. **Test Prompt clearing:**
    - Type some text in the prompt
@@ -177,12 +177,12 @@ localStorage is supported in all modern browsers:
 
 ```javascript
 // Check stored values
-localStorage.getItem("verifyMode")    // "true" or "false"
+localStorage.getItem("comparisonMode")    // "true" or "false"
 localStorage.getItem("modelCount")    // "2" or "3"
 localStorage.getItem("lastPrompt")    // stored prompt or null
 
 // Manually set values
-localStorage.setItem("verifyMode", "true")
+localStorage.setItem("comparisonMode", "true")
 localStorage.setItem("modelCount", "3")
 localStorage.setItem("lastPrompt", "Test")
 // Refresh page to see changes

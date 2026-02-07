@@ -96,7 +96,7 @@ npm run test:stream
 ```
 - Sends test requests to `/api/stream` endpoint
 - **Requires dev server to be running** (`npm run dev` in another terminal)
-- Tests both single-answer and Verify Mode
+- Tests both single-answer and Comparison Mode
 
 ## Project Structure
 
@@ -147,7 +147,7 @@ modeltriage/
 1. Start dev server: `npm run dev`
 2. Open [http://localhost:3000](http://localhost:3000)
 3. Enter prompts and verify streaming
-4. Check Verify Mode with 2-3 models
+4. Check Comparison Mode with 2-3 models
 
 **API testing:**
 1. Start dev server: `npm run dev`
@@ -549,7 +549,7 @@ Add to `.eslintrc.json`:
 
 ### 2. Testing
 - ✅ Run unit tests before committing
-- ✅ Test both single-answer and Verify Mode
+- ✅ Test both single-answer and Comparison Mode
 - ✅ Verify streaming behavior in browser
 
 ### 3. Code Changes
@@ -616,7 +616,7 @@ DATABASE_URL=postgresql://...
 ### Documentation
 - **Architecture:** `docs/architecture.md`
 - **Streaming API:** `docs/streaming-api.md`
-- **Verify Mode:** `docs/verify-mode.md`
+- **Comparison Mode:** `docs/verify-mode.md`
 - **Routing:** `docs/routing.md`
 - **UI States:** `docs/ui-states.md`
 

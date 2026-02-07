@@ -10,8 +10,8 @@ ModelTriage is built on Next.js 15 (App Router) with TypeScript and Tailwind CSS
 modeltriage/
 ├── src/app/                    # Next.js App Router
 │   ├── api/stream/
-│   │   └── route.ts            # SSE streaming endpoint (single + Verify Mode)
-│   ├── page.tsx                # Main UI with prompt input, Verify Mode toggle
+│   │   └── route.ts            # SSE streaming endpoint (single + Comparison Mode)
+│   ├── page.tsx                # Main UI with prompt input, Comparison Mode toggle
 │   ├── layout.tsx              # Root layout
 │   └── globals.css             # Global styles
 │
@@ -24,7 +24,7 @@ modeltriage/
 │   │   ├── types.ts            # Routing types (RoutingDecision)
 │   │   ├── router.ts           # ModelRouter implementation
 │   │   └── index.ts            # Exports
-│   └── diff/                   # Diff analysis for Verify Mode
+│   └── diff/                   # Diff analysis for Comparison Mode
 │       ├── types.ts            # Diff types (DiffSummary)
 │       ├── analyzer.ts         # DiffAnalyzer implementation
 │       └── index.ts            # Exports
@@ -48,7 +48,7 @@ modeltriage/
 
 **`src/app/page.tsx`:**
 - Main UI component
-- Handles prompt input, Verify Mode toggle, model count selection
+- Handles prompt input, Comparison Mode toggle, model count selection
 - Manages streaming state (isStreaming, panels, error)
 - Calls `/api/stream` endpoint
 - Renders response panels and diff summary
@@ -58,7 +58,7 @@ modeltriage/
 - SSE streaming endpoint (`POST /api/stream`)
 - Validates input (prompt length, model count)
 - Routes single-answer requests to appropriate model
-- Multiplexes Verify Mode requests (2-3 models in parallel)
+- Multiplexes Comparison Mode requests (2-3 models in parallel)
 - Streams events: routing → chunks → metadata
 - Implements per-model error isolation using `Promise.allSettled`
 
@@ -88,7 +88,7 @@ modeltriage/
 
 ### `lib/diff/` - Comparison Analysis
 
-**Purpose:** Compare outputs from multiple models in Verify Mode to identify agreement, disagreement, omissions, and conflicts.
+**Purpose:** Compare outputs from multiple models in Comparison Mode to identify agreement, disagreement, omissions, and conflicts.
 
 **`analyzer.ts`:**
 - `DiffAnalyzer.analyze(responses[])` returns `DiffSummary`
@@ -125,7 +125,7 @@ Sent **first** to indicate which model was selected and why.
 }
 ```
 
-**Verify Mode (with modelId):**
+**Comparison Mode (with modelId):**
 ```json
 {
   "type": "routing",
@@ -160,7 +160,7 @@ Sent **multiple times** as content is generated. The `done` field indicates whet
 }
 ```
 
-**Verify Mode (with modelId):**
+**Comparison Mode (with modelId):**
 ```json
 {
   "type": "chunk",
@@ -192,7 +192,7 @@ Sent **once** after streaming completes.
 }
 ```
 
-**Verify Mode (with modelId):**
+**Comparison Mode (with modelId):**
 ```json
 {
   "type": "metadata",
@@ -215,7 +215,7 @@ Sent **once** after streaming completes.
 
 Sent if an error occurs during streaming.
 
-**Per-Model Error (Verify Mode):**
+**Per-Model Error (Comparison Mode):**
 
 Isolated to a specific panel. Other models continue processing.
 
@@ -248,7 +248,7 @@ Affects the entire stream (all panels).
 5. `chunk` (done: true) → final text chunk
 6. `metadata` → latency, tokens, cost
 
-**Verify Mode (2 models):**
+**Comparison Mode (2 models):**
 1. `routing` (modelId: "model-1") → model selection for panel 1
 2. `routing` (modelId: "model-2") → model selection for panel 2
 3. `chunk` (modelId: "model-1", done: false) → text from model 1
@@ -320,7 +320,7 @@ Client parses SSE events
 UI updates progressively
 ```
 
-### Verify Mode Request
+### Comparison Mode Request
 
 ```
 User Input (page.tsx)
@@ -380,7 +380,7 @@ UI shows comparison summary
 3. **Single user** - no multi-tenancy
 4. **No retries** - errors require manual "Try again"
 5. **Simple diff** - text-based comparison only (no semantic analysis)
-6. **Max 3 models** - Verify Mode limited to 3 parallel streams
+6. **Max 3 models** - Comparison Mode limited to 3 parallel streams
 7. **4,000 char prompt limit** - enforced at API level
 8. **800 token max output** - enforced per request
 
