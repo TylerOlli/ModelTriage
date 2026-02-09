@@ -1058,7 +1058,7 @@ export default function Home() {
           </div>
           
           {/* Helper text */}
-          <p className="text-xs text-gray-500 mt-2">
+          <p className="text-xs text-gray-500 mt-2 leading-relaxed">
             {!comparisonMode 
               ? "We automatically choose the best model for your prompt."
               : "Select multiple models to compare responses side-by-side."}
@@ -1075,7 +1075,7 @@ export default function Home() {
         >
           {comparisonMode && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-              <label className="block text-sm font-semibold text-gray-900 mb-3">
+              <label className="block text-sm font-bold text-gray-900 mb-3 tracking-tight">
                 Select Models
               </label>
               <div className="grid grid-cols-4 gap-3">
@@ -1109,10 +1109,10 @@ export default function Home() {
                         className="mt-0.5 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-2 focus:ring-blue-500/30 focus:ring-offset-0 transition-colors"
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-gray-900 leading-snug">
+                        <div className="text-sm font-bold text-gray-900 leading-tight">
                           {model.label}
                         </div>
-                        <div className="text-xs text-gray-500 mt-0.5 leading-snug">
+                        <div className="text-xs text-gray-500 mt-0.5 leading-relaxed">
                           {model.description}
                         </div>
                       </div>
@@ -1120,10 +1120,10 @@ export default function Home() {
                   );
                 })}
               </div>
-              <p className="text-xs text-gray-500 mt-3">
+              <p className="text-xs text-gray-400 mt-3 leading-relaxed">
                 {selectedModels.length} model{selectedModels.length !== 1 ? "s" : ""} selected
                 {selectedModels.length > 1 && (
-                  <span className="text-gray-600 font-medium"> • Higher cost and latency</span>
+                  <span className="text-gray-500 font-medium"> • Higher cost and latency</span>
                 )}
               </p>
             </div>
@@ -1136,7 +1136,7 @@ export default function Home() {
             <div className="flex items-center justify-between mb-2">
               <label
                 htmlFor="prompt"
-                className="block text-sm font-medium text-gray-600"
+                className="block text-sm font-bold text-gray-900 tracking-tight"
               >
                 Prompt
               </label>
@@ -1191,7 +1191,7 @@ export default function Home() {
                   📎 Attach Files
                 </button>
                 {attachedFiles.length > 0 && (
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-gray-400 font-medium">
                     {attachedFiles.length}/3
                   </span>
                 )}
@@ -1200,8 +1200,8 @@ export default function Home() {
               <div className="flex items-center gap-4">
                 <span
                   id="character-count"
-                  className={`text-xs ${
-                    isOverLimit ? "text-red-600" : "text-gray-500"
+                  className={`text-xs font-medium ${
+                    isOverLimit ? "text-red-600" : "text-gray-400"
                   }`}
                 >
                   {characterCount} / 4,000
@@ -1210,7 +1210,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setShowHistory(!showHistory)}
-                    className="text-xs text-gray-600 hover:text-gray-800"
+                    className="text-xs text-gray-500 hover:text-gray-700 font-medium"
                   >
                     {showHistory ? "Hide History" : "Show History"}
                   </button>
@@ -1222,13 +1222,13 @@ export default function Home() {
             {showHistory && promptHistory.length > 0 && (
               <div className="mt-4 bg-white rounded-lg border border-gray-200 p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-semibold text-gray-900">
+                  <h4 className="text-sm font-bold text-gray-900 tracking-tight">
                     Recent Prompts
                   </h4>
                   <button
                     type="button"
                     onClick={clearHistory}
-                    className="text-xs text-red-600 hover:text-red-700 font-medium"
+                    className="text-xs text-red-600 hover:text-red-700 font-semibold"
                   >
                     Clear History
                   </button>
@@ -1504,17 +1504,17 @@ export default function Home() {
             {/* Instructions - Tier 3 (Supporting) */}
             {!response && !isStreaming && !error && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-8">
-                <h3 className="text-sm font-semibold text-gray-700 mb-4">
+                <h3 className="text-sm font-bold text-gray-900 mb-4 tracking-tight">
                   How it works
                 </h3>
                 
                 <div className="space-y-4">
                   {/* Single-Answer Mode */}
                   <div>
-                    <h4 className="text-sm font-medium text-gray-900 mb-2">
+                    <h4 className="text-sm font-semibold text-gray-900 mb-2">
                       🎯 Single-Answer Mode (Default)
                     </h4>
-                    <ul className="space-y-1.5 text-sm text-gray-600">
+                    <ul className="space-y-1.5 text-sm text-gray-600 leading-relaxed">
                       <li className="flex items-start gap-2">
                         <span className="text-gray-400 mt-0.5">•</span>
                         <span>
@@ -1538,10 +1538,10 @@ export default function Home() {
 
                   {/* Comparison Mode */}
                   <div className="pt-3 border-t border-gray-200">
-                    <h4 className="text-sm font-medium text-gray-900 mb-2">
+                    <h4 className="text-sm font-semibold text-gray-900 mb-2">
                       ⚡ Comparison Mode (Optional)
                     </h4>
-                    <ul className="space-y-1.5 text-sm text-gray-600">
+                    <ul className="space-y-1.5 text-sm text-gray-600 leading-relaxed">
                       <li className="flex items-start gap-2">
                         <span className="text-orange-600 mt-0.5">•</span>
                         <span>
@@ -1564,7 +1564,7 @@ export default function Home() {
                   </div>
 
                   {/* General Info */}
-                  <div className="pt-3 border-t border-gray-200 text-xs text-gray-500">
+                  <div className="pt-3 border-t border-gray-200 text-xs text-gray-400 leading-relaxed">
                     <p>
                       Maximum prompt length: 4,000 characters • 
                       Responses stream in real-time
