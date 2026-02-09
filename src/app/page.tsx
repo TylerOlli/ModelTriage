@@ -1082,40 +1082,46 @@ export default function Home() {
                 </label>
               </div>
               <div className="grid grid-cols-4 gap-3">
-                {availableModels.map((model) => (
-                  <label
-                    key={model.id}
-                    className={`flex items-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-all ${
-                      selectedModels.includes(model.id)
-                        ? "border-blue-500 bg-blue-50"
-                        : "border-gray-200 bg-white hover:border-gray-300"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedModels.includes(model.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedModels([...selectedModels, model.id]);
-                        } else {
-                          if (selectedModels.length > 1) {
-                            setSelectedModels(
-                              selectedModels.filter((id) => id !== model.id)
-                            );
+                {availableModels.map((model) => {
+                  const isSelected = selectedModels.includes(model.id);
+                  
+                  return (
+                    <label
+                      key={model.id}
+                      className={`flex items-start gap-2.5 px-4 py-3 rounded-lg border cursor-pointer transition-all duration-200 ${
+                        isSelected
+                          ? "border-blue-500/60 bg-blue-50/50 shadow-sm"
+                          : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedModels([...selectedModels, model.id]);
+                          } else {
+                            if (selectedModels.length > 1) {
+                              setSelectedModels(
+                                selectedModels.filter((id) => id !== model.id)
+                              );
+                            }
                           }
-                        }
-                      }}
-                      disabled={isStreaming}
-                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                    />
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {model.label}
+                        }}
+                        disabled={isStreaming}
+                        className="mt-0.5 w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500/20 focus:ring-offset-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-gray-900 leading-snug">
+                          {model.label}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5 leading-snug">
+                          {model.description}
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-500">{model.description}</div>
-                    </div>
-                  </label>
-                ))}
+                    </label>
+                  );
+                })}
               </div>
               <p className="text-xs text-gray-500 mt-3">
                 {selectedModels.length} model{selectedModels.length !== 1 ? "s" : ""} selected
