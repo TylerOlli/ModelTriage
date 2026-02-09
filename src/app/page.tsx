@@ -1075,12 +1075,9 @@ export default function Home() {
         >
           {comparisonMode && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="h-0.5 w-8 bg-blue-500 rounded-full" />
-                <label className="text-sm font-semibold text-gray-900">
-                  Select Models
-                </label>
-              </div>
+              <label className="block text-sm font-semibold text-gray-900 mb-3">
+                Select Models
+              </label>
               <div className="grid grid-cols-4 gap-3">
                 {availableModels.map((model) => {
                   const isSelected = selectedModels.includes(model.id);
@@ -1090,8 +1087,8 @@ export default function Home() {
                       key={model.id}
                       className={`flex items-start gap-2.5 px-4 py-3 rounded-lg border cursor-pointer transition-all duration-200 ${
                         isSelected
-                          ? "border-blue-500/60 bg-blue-50/50 shadow-sm"
-                          : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50"
+                          ? "border-blue-500/60 bg-blue-500/5 shadow-sm ring-1 ring-blue-500/20"
+                          : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
                       }`}
                     >
                       <input
@@ -1109,7 +1106,7 @@ export default function Home() {
                           }
                         }}
                         disabled={isStreaming}
-                        className="mt-0.5 w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500/20 focus:ring-offset-0"
+                        className="mt-0.5 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-2 focus:ring-blue-500/30 focus:ring-offset-0 transition-colors"
                       />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-semibold text-gray-900 leading-snug">
@@ -1126,7 +1123,7 @@ export default function Home() {
               <p className="text-xs text-gray-500 mt-3">
                 {selectedModels.length} model{selectedModels.length !== 1 ? "s" : ""} selected
                 {selectedModels.length > 1 && (
-                  <span className="text-orange-600 font-medium"> • Higher cost and latency</span>
+                  <span className="text-gray-600 font-medium"> • Higher cost and latency</span>
                 )}
               </p>
             </div>
@@ -1245,7 +1242,7 @@ export default function Home() {
                         setPrompt(historyItem);
                         setShowHistory(false);
                       }}
-                      className="w-full text-left px-3 py-2 text-sm text-gray-700 bg-gray-50 hover:bg-blue-50 rounded border border-gray-200 hover:border-blue-300 transition-colors"
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 bg-gray-50 hover:bg-gray-100 rounded border border-gray-200 hover:border-gray-300 transition-colors"
                     >
                       <span className="line-clamp-2">{historyItem}</span>
                     </button>
@@ -1261,22 +1258,22 @@ export default function Home() {
                   {attachedFiles.map((file, index) => (
                     <div
                       key={`${file.name}-${index}`}
-                      className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm"
+                      className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
                     >
-                      <span className="text-blue-700">
+                      <span className="text-gray-600">
                         {file.type.startsWith("image/") ? "🖼️" : "📄"}
                       </span>
-                      <span className="text-blue-900 font-medium">
+                      <span className="text-gray-900 font-medium">
                         {file.name}
                       </span>
-                      <span className="text-blue-600 text-xs">
+                      <span className="text-gray-500 text-xs">
                         ({formatFileSize(file.size)})
                       </span>
                       <button
                         type="button"
                         onClick={() => handleRemoveFile(index)}
                         disabled={isStreaming}
-                        className="ml-1 text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                        className="ml-1 text-gray-500 hover:text-gray-700 disabled:opacity-50"
                         aria-label={`Remove ${file.name}`}
                       >
                         ✕
@@ -1294,7 +1291,7 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={isStreaming || !prompt.trim() || isOverLimit}
-                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:translate-y-[1px] disabled:bg-gray-300 disabled:cursor-not-allowed font-medium transition-all shadow-sm"
+                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-gradient-to-br hover:from-blue-600 hover:to-blue-700 active:translate-y-[1px] disabled:bg-gray-300 disabled:cursor-not-allowed font-medium transition-all duration-200 shadow-sm"
               >
                 {isStreaming ? "Processing..." : "Submit"}
               </button>
@@ -1303,7 +1300,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition-colors"
+                  className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 font-medium transition-all duration-200"
                 >
                   Cancel
                 </button>
@@ -1313,7 +1310,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={handleClear}
-                  className="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition-colors"
+                  className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 font-medium transition-all duration-200"
                 >
                   Clear
                 </button>
@@ -1434,7 +1431,7 @@ export default function Home() {
 
                 {/* Metadata */}
                 {metadata && (
-                  <div className="bg-blue-50 rounded-lg border border-blue-200 p-4">
+                  <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
                         <span className="text-gray-600">Model:</span>
@@ -1470,7 +1467,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={handleContinueConversation}
-                      className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors text-sm flex items-center gap-2"
+                      className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-gradient-to-br hover:from-blue-600 hover:to-blue-700 font-medium transition-all duration-200 text-sm flex items-center gap-2"
                     >
                       <span>💬</span>
                       Ask a follow-up
@@ -1519,19 +1516,19 @@ export default function Home() {
                     </h4>
                     <ul className="space-y-1.5 text-sm text-gray-600">
                       <li className="flex items-start gap-2">
-                        <span className="text-blue-600 mt-0.5">•</span>
+                        <span className="text-gray-400 mt-0.5">•</span>
                         <span>
                           Submit a prompt and get one AI response
                         </span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-blue-600 mt-0.5">•</span>
+                        <span className="text-gray-400 mt-0.5">•</span>
                         <span>
                           Model is automatically selected based on your prompt type
                         </span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-blue-600 mt-0.5">•</span>
+                        <span className="text-gray-400 mt-0.5">•</span>
                         <span>
                           Fast and cost-effective for most use cases
                         </span>
@@ -1732,13 +1729,13 @@ export default function Home() {
                 {/* Key Differences */}
                 {diffSummary.keyDifferences.length > 0 && (
                   <div className="mb-6">
-                    <h4 className="text-sm font-semibold text-blue-900 mb-3">
+                    <h4 className="text-sm font-semibold text-gray-900 mb-3">
                       Key Differences
                     </h4>
                     <div className="space-y-4">
                       {diffSummary.keyDifferences.map((diff, idx) => (
                         <div key={idx}>
-                          <h5 className="text-sm font-medium text-blue-800 mb-2">
+                          <h5 className="text-sm font-medium text-gray-800 mb-2">
                             {diff.model}
                           </h5>
                           <ul className="space-y-1.5 ml-3">
@@ -1813,7 +1810,7 @@ export default function Home() {
                       <button
                         type="button"
                         onClick={handleContinueConversation}
-                        className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors text-sm flex items-center gap-2"
+                        className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-gradient-to-br hover:from-blue-600 hover:to-blue-700 font-medium transition-all duration-200 text-sm flex items-center gap-2"
                       >
                         <span>💬</span>
                         Ask a follow-up
@@ -1835,8 +1832,8 @@ export default function Home() {
                 
                 if (errorCount > 0 && successfulCount < 2) {
                   return (
-                    <div className="bg-blue-50 rounded-lg border border-blue-200 p-4">
-                      <p className="text-sm text-blue-800">
+                    <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                      <p className="text-sm text-gray-700">
                         ℹ Comparison requires at least 2 successful responses. 
                         {successfulCount === 1 
                           ? " Only 1 panel completed successfully."
