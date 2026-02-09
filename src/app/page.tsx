@@ -1028,35 +1028,103 @@ export default function Home() {
           </p>
         </header>
 
-        {/* Comparison Mode Toggle - Tier 2 */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-0.5">
-                Comparison Mode
-              </h3>
-              <p className="text-xs text-gray-500">
-                Compare responses from multiple models
-                {comparisonMode && (
-                  <span className="text-orange-600 font-medium"> (higher cost and latency)</span>
+        {/* Mode Selector - Tier 2 (Secondary) */}
+        <div className="mb-4">
+          <div className="inline-flex rounded-lg bg-gray-100 p-1 gap-1">
+            <button
+              type="button"
+              onClick={() => setComparisonMode(false)}
+              disabled={isStreaming}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                !comparisonMode
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              } ${isStreaming ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+            >
+              Auto-select LLM
+            </button>
+            <button
+              type="button"
+              onClick={() => setComparisonMode(true)}
+              disabled={isStreaming}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                comparisonMode
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              } ${isStreaming ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+            >
+              Compare models
+            </button>
+          </div>
+          
+          {/* Helper text */}
+          <p className="text-xs text-gray-500 mt-2">
+            {!comparisonMode 
+              ? "We automatically choose the best model for your prompt."
+              : "Select multiple models to compare responses side-by-side."}
+          </p>
+        </div>
+        
+        {/* Model Selection (Comparison Mode) */}
+        <div
+          className={`transition-all duration-300 origin-top ${
+            comparisonMode
+              ? "max-h-[600px] opacity-100 mb-6"
+              : "max-h-0 opacity-0 overflow-hidden"
+          }`}
+        >
+          {comparisonMode && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="h-0.5 w-8 bg-blue-500 rounded-full" />
+                <label className="text-sm font-semibold text-gray-900">
+                  Select Models
+                </label>
+              </div>
+              <div className="grid grid-cols-4 gap-3">
+                {availableModels.map((model) => (
+                  <label
+                    key={model.id}
+                    className={`flex items-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      selectedModels.includes(model.id)
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 bg-white hover:border-gray-300"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedModels.includes(model.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedModels([...selectedModels, model.id]);
+                        } else {
+                          if (selectedModels.length > 1) {
+                            setSelectedModels(
+                              selectedModels.filter((id) => id !== model.id)
+                            );
+                          }
+                        }
+                      }}
+                      disabled={isStreaming}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                    />
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {model.label}
+                      </div>
+                      <div className="text-xs text-gray-500">{model.description}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 mt-3">
+                {selectedModels.length} model{selectedModels.length !== 1 ? "s" : ""} selected
+                {selectedModels.length > 1 && (
+                  <span className="text-orange-600 font-medium"> • Higher cost and latency</span>
                 )}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setComparisonMode(!comparisonMode)}
-              disabled={isStreaming}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                comparisonMode ? "bg-blue-600" : "bg-gray-300"
-              } ${isStreaming ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  comparisonMode ? "translate-x-6" : "translate-x-1"
-                }`}
-              />
-            </button>
-          </div>
+          )}
         </div>
 
         {/* Prompt Input Form - Tier 1 (Primary) */}
@@ -1208,55 +1276,6 @@ export default function Home() {
                 <p className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-2 py-1.5">
                   ⚠️ Avoid including secrets or sensitive data. Attachments are sent to the model.
                 </p>
-              </div>
-            )}
-
-            {/* Model Picker - Only show in Advanced/Comparison Mode */}
-            {comparisonMode && (
-              <div className="mt-6 pt-6 border-t border-gray-200">
-                <label className="block text-sm font-semibold text-gray-900 mb-3">
-                  Select Models to Compare
-                </label>
-              <div className="grid grid-cols-4 gap-3">
-                {availableModels.map((model) => (
-                  <label
-                    key={model.id}
-                    className={`flex items-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-all ${
-                      selectedModels.includes(model.id)
-                        ? "border-blue-500 bg-blue-50"
-                        : "border-gray-200 bg-white hover:border-gray-300"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedModels.includes(model.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedModels([...selectedModels, model.id]);
-                        } else {
-                          // Don't allow unchecking if it's the last selected model
-                          if (selectedModels.length > 1) {
-                            setSelectedModels(
-                              selectedModels.filter((id) => id !== model.id)
-                            );
-                          }
-                        }
-                      }}
-                      disabled={isStreaming}
-                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                    />
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {model.label}
-                      </div>
-                      <div className="text-xs text-gray-500">{model.description}</div>
-                    </div>
-                  </label>
-                ))}
-              </div>
-              <p className="text-xs text-gray-500 mt-2">
-                Selected: {selectedModels.length} model{selectedModels.length !== 1 ? "s" : ""}
-              </p>
               </div>
             )}
 
