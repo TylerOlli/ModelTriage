@@ -1028,14 +1028,14 @@ export default function Home() {
           </p>
         </header>
 
-        {/* Comparison Mode Toggle */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
+        {/* Comparison Mode Toggle - Tier 2 */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+          <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-1">
+              <h3 className="text-sm font-semibold text-gray-900 mb-0.5">
                 Comparison Mode
               </h3>
-              <p className="text-sm text-gray-600">
+              <p className="text-xs text-gray-500">
                 Compare responses from multiple models
                 {comparisonMode && (
                   <span className="text-orange-600 font-medium"> (higher cost and latency)</span>
@@ -1059,13 +1059,13 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Prompt Input Form */}
+        {/* Prompt Input Form - Tier 1 (Primary) */}
         <form onSubmit={handleSubmit} className="mb-8">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="bg-slate-50 rounded-lg shadow-md border border-gray-300 p-8">
             <div className="flex items-center justify-between mb-2">
               <label
                 htmlFor="prompt"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-medium text-gray-600"
               >
                 Prompt
               </label>
@@ -1086,36 +1086,65 @@ export default function Home() {
                   ? "Ask a follow-up question..." 
                   : "Enter your prompt here..."
               }
-              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-vertical bg-white text-gray-900 placeholder:text-gray-400 ${
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-vertical bg-white text-base leading-relaxed text-gray-900 placeholder:text-gray-400 ${
                 isOverLimit ? "border-red-500" : "border-gray-300"
               }`}
               rows={6}
               disabled={isStreaming}
               aria-describedby="character-count"
             />
-            <div className="flex justify-between items-center mt-2">
-              <span
-                id="character-count"
-                className={`text-sm ${
-                  isOverLimit ? "text-red-600" : "text-gray-500"
-                }`}
-              >
-                {characterCount} / 4,000 characters
-              </span>
-              {promptHistory.length > 0 && (
+            
+            {/* Utilities row - Tier 3 (Supporting) */}
+            <div className="flex justify-between items-center mt-3 gap-4">
+              <div className="flex items-center gap-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={handleFileSelect}
+                  multiple
+                  accept=".txt,.log,.json,.md,.ts,.tsx,.js,.jsx,.env,.yml,.yaml,image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  disabled={isStreaming}
+                />
                 <button
                   type="button"
-                  onClick={() => setShowHistory(!showHistory)}
-                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isStreaming || attachedFiles.length >= 3}
+                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 text-gray-600"
                 >
-                  {showHistory ? "Hide History" : "Show History"}
+                  📎 Attach Files
                 </button>
-              )}
+                {attachedFiles.length > 0 && (
+                  <span className="text-xs text-gray-500">
+                    {attachedFiles.length}/3
+                  </span>
+                )}
+              </div>
+              
+              <div className="flex items-center gap-4">
+                <span
+                  id="character-count"
+                  className={`text-xs ${
+                    isOverLimit ? "text-red-600" : "text-gray-500"
+                  }`}
+                >
+                  {characterCount} / 4,000
+                </span>
+                {promptHistory.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowHistory(!showHistory)}
+                    className="text-xs text-gray-600 hover:text-gray-800"
+                  >
+                    {showHistory ? "Hide History" : "Show History"}
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Prompt History */}
             {showHistory && promptHistory.length > 0 && (
-              <div className="mt-4 bg-gray-50 rounded-lg border border-gray-200 p-4">
+              <div className="mt-4 bg-white rounded-lg border border-gray-200 p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-sm font-semibold text-gray-900">
                     Recent Prompts
@@ -1137,7 +1166,7 @@ export default function Home() {
                         setPrompt(historyItem);
                         setShowHistory(false);
                       }}
-                      className="w-full text-left px-3 py-2 text-sm text-gray-700 bg-white hover:bg-blue-50 rounded border border-gray-200 hover:border-blue-300 transition-colors"
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 bg-gray-50 hover:bg-blue-50 rounded border border-gray-200 hover:border-blue-300 transition-colors"
                     >
                       <span className="line-clamp-2">{historyItem}</span>
                     </button>
@@ -1147,73 +1176,45 @@ export default function Home() {
             )}
 
             {/* File Attachments */}
-            <div className="mt-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  onChange={handleFileSelect}
-                  multiple
-                  accept=".txt,.log,.json,.md,.ts,.tsx,.js,.jsx,.env,.yml,.yaml,image/png,image/jpeg,image/webp"
-                  className="hidden"
-                  disabled={isStreaming}
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isStreaming || attachedFiles.length >= 3}
-                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                >
-                  📎 Attach Files
-                </button>
-                {attachedFiles.length > 0 && (
-                  <span className="text-xs text-gray-500">
-                    {attachedFiles.length}/3 files
-                  </span>
-                )}
-              </div>
-
-              {/* Attached Files Display */}
-              {attachedFiles.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex flex-wrap gap-2">
-                    {attachedFiles.map((file, index) => (
-                      <div
-                        key={`${file.name}-${index}`}
-                        className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm"
+            {attachedFiles.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  {attachedFiles.map((file, index) => (
+                    <div
+                      key={`${file.name}-${index}`}
+                      className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm"
+                    >
+                      <span className="text-blue-700">
+                        {file.type.startsWith("image/") ? "🖼️" : "📄"}
+                      </span>
+                      <span className="text-blue-900 font-medium">
+                        {file.name}
+                      </span>
+                      <span className="text-blue-600 text-xs">
+                        ({formatFileSize(file.size)})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFile(index)}
+                        disabled={isStreaming}
+                        className="ml-1 text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                        aria-label={`Remove ${file.name}`}
                       >
-                        <span className="text-blue-700">
-                          {file.type.startsWith("image/") ? "🖼️" : "📄"}
-                        </span>
-                        <span className="text-blue-900 font-medium">
-                          {file.name}
-                        </span>
-                        <span className="text-blue-600 text-xs">
-                          ({formatFileSize(file.size)})
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveFile(index)}
-                          disabled={isStreaming}
-                          className="ml-1 text-blue-600 hover:text-blue-800 disabled:opacity-50"
-                          aria-label={`Remove ${file.name}`}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-2 py-1.5">
-                    ⚠️ Avoid including secrets or sensitive data. Attachments are sent to the model.
-                  </p>
+                        ✕
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </div>
+                <p className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-2 py-1.5">
+                  ⚠️ Avoid including secrets or sensitive data. Attachments are sent to the model.
+                </p>
+              </div>
+            )}
 
             {/* Model Picker - Only show in Advanced/Comparison Mode */}
             {comparisonMode && (
-              <div className="mt-6">
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <label className="block text-sm font-semibold text-gray-900 mb-3">
                   Select Models to Compare
                 </label>
               <div className="grid grid-cols-4 gap-3">
@@ -1259,11 +1260,11 @@ export default function Home() {
               </div>
             )}
 
-            <div className="flex gap-3 mt-4">
+            <div className="flex gap-3 mt-6">
               <button
                 type="submit"
                 disabled={isStreaming || !prompt.trim() || isOverLimit}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium transition-colors"
+                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:translate-y-[1px] disabled:bg-gray-300 disabled:cursor-not-allowed font-medium transition-all shadow-sm"
               >
                 {isStreaming ? "Processing..." : "Submit"}
               </button>
@@ -1272,7 +1273,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition-colors"
+                  className="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition-colors"
                 >
                   Cancel
                 </button>
@@ -1282,7 +1283,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={handleClear}
-                  className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition-colors"
+                  className="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition-colors"
                 >
                   Clear
                 </button>
@@ -1473,10 +1474,10 @@ export default function Home() {
               </div>
             )}
 
-            {/* Instructions */}
+            {/* Instructions - Tier 3 (Supporting) */}
             {!response && !isStreaming && !error && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-8">
+                <h3 className="text-sm font-semibold text-gray-700 mb-4">
                   How it works
                 </h3>
                 
