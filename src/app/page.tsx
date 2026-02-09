@@ -149,6 +149,9 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [comparisonMode, setComparisonMode] = useState(false);
+  
+  // Run details disclosure state
+  const [showRunDetails, setShowRunDetails] = useState(false);
 
   // File attachment state
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
@@ -479,6 +482,7 @@ export default function Home() {
     setMetadata(null);
     setIsStreaming(true);
     setStreamingStage("connecting"); // Initial stage
+    setShowRunDetails(false); // Collapse details on new request
     
     // Reset IMAGE_GIST upgrade tracking
     imageGistUpgradedRef.current = false;
@@ -1419,26 +1423,56 @@ export default function Home() {
                     {/* Run Metadata Chips */}
                     {metadata && (
                       <div className="px-6 pb-4 pt-3">
-                        <div className="flex flex-wrap gap-2">
-                          <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
-                            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Model</span>
-                            <span className="text-xs font-bold text-gray-900 font-mono">{metadata.model}</span>
+                        <div className="flex items-center justify-between gap-4 mb-2">
+                          <div className="flex flex-wrap gap-2">
+                            {/* Always visible chips */}
+                            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
+                              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Model</span>
+                              <span className="text-xs font-bold text-gray-900 font-mono">{getFriendlyModelName(metadata.model)}</span>
+                            </div>
+                            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
+                              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Provider</span>
+                              <span className="text-xs font-bold text-gray-900">{metadata.provider}</span>
+                            </div>
                           </div>
-                          <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
-                            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Provider</span>
-                            <span className="text-xs font-bold text-gray-900">{metadata.provider}</span>
-                          </div>
-                          <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
-                            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Latency</span>
-                            <span className="text-xs font-bold text-gray-900 font-mono tabular-nums">
-                              {(metadata.latency / 1000).toFixed(1)}s
-                            </span>
-                          </div>
-                          <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
-                            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Tokens</span>
-                            <span className="text-xs font-bold text-gray-900 font-mono tabular-nums">
-                              {metadata.tokenUsage?.total || "N/A"}
-                            </span>
+                          
+                          {/* Run details disclosure toggle */}
+                          <button
+                            type="button"
+                            onClick={() => setShowRunDetails(!showRunDetails)}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors duration-150 rounded-md hover:bg-gray-100/50"
+                          >
+                            <span>Run details</span>
+                            <svg
+                              className={`w-3 h-3 transition-transform duration-200 ${showRunDetails ? 'rotate-180' : ''}`}
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                        </div>
+                        
+                        {/* Collapsible detail chips */}
+                        <div
+                          className={`overflow-hidden transition-all duration-200 ease-out ${
+                            showRunDetails ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'
+                          }`}
+                        >
+                          <div className="flex flex-wrap gap-2 pt-2">
+                            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
+                              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Latency</span>
+                              <span className="text-xs font-bold text-gray-900 font-mono tabular-nums">
+                                {(metadata.latency / 1000).toFixed(1)}s
+                              </span>
+                            </div>
+                            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
+                              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Tokens</span>
+                              <span className="text-xs font-bold text-gray-900 font-mono tabular-nums">
+                                {metadata.tokenUsage?.total || "N/A"}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
