@@ -1355,58 +1355,108 @@ export default function Home() {
         {/* Single-Answer Mode Display */}
         {!comparisonMode && Object.keys(modelPanels).length === 0 && (
           <>
-            {/* Routing Information */}
-            {routing && routing.mode === "auto" && (
-              <div className="bg-indigo-50 rounded-lg border border-indigo-200 p-4 mb-4">
-                <div className="flex items-start gap-3">
-                  <span className="text-indigo-600 text-lg">🎯</span>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-sm font-semibold text-indigo-900">
-                        Auto-selected Model
-                      </h3>
-                      {comparisonMode && confidenceToLabel(routing.confidence) && (
-                        <span className="text-xs text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded">
-                          {confidenceToLabel(routing.confidence)}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-indigo-800 mb-2">
-                      <span className="font-medium">
-                        {routing.chosenModel ? getFriendlyModelName(routing.chosenModel) : routing.chosenModel}
-                      </span>
-                    </p>
-                    <p className="text-sm text-indigo-700">
-                      {(() => {
-                        const displayReason = routing.reason || "Analyzing your request to select the best model...";
-                        console.log("[UI] AutoSelectedModel rendering routing.reason:", displayReason);
-                        return displayReason;
-                      })()}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Response Display */}
             {(response || error || metadata) && (
               <div className="space-y-4 animate-in fade-in duration-300">
                 {response && (
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center justify-between mb-3">
-                      <h2 className="text-lg font-semibold text-gray-900">
-                        Response
-                      </h2>
-                      {isStreaming && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full" />
-                          <span>Processing...</span>
+                  <div className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative"
+                    style={{
+                      backgroundImage: `
+                        repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
+                        repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
+                      `,
+                      backgroundSize: '20px 20px'
+                    }}
+                  >
+                    {/* Execution Header */}
+                    {routing && routing.mode === "auto" && (
+                      <div className="px-6 pt-4 pb-3 bg-white/40 backdrop-blur-sm relative">
+                        {/* Hairline gradient divider */}
+                        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
+                        
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                            <span className="text-gray-400 text-sm flex-shrink-0 mt-0.5">⚡</span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Auto-selected</span>
+                                <span className="text-sm font-bold text-gray-900 font-mono">
+                                  {routing.chosenModel ? getFriendlyModelName(routing.chosenModel) : routing.chosenModel}
+                                </span>
+                                <span className="px-1.5 py-0.5 text-[10px] font-bold text-gray-600 bg-gray-100/80 border border-gray-300/50 rounded uppercase tracking-wider">
+                                  Routed
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-500 leading-relaxed line-clamp-1">
+                                {routing.reason || "Analyzing your request to select the best model..."}
+                              </p>
+                            </div>
+                          </div>
                         </div>
-                      )}
+                      </div>
+                    )}
+                    
+                    {/* Response Content Panel */}
+                    <div className="m-3 bg-white rounded-lg border border-gray-200/60 shadow-sm">
+                      <div className="px-6 py-4">
+                        <div className="flex items-center justify-between mb-4">
+                          <h2 className="text-sm font-bold text-gray-900 tracking-tight uppercase text-gray-600 tracking-wider">
+                            Response
+                          </h2>
+                          {isStreaming && (
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              <div className="animate-spin w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full" />
+                              <span>Processing</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="prose prose-sm max-w-none text-[15px] leading-7">
+                          <FormattedResponse response={response} />
+                        </div>
+                      </div>
                     </div>
-                    <div className="prose prose-sm max-w-none">
-                      <FormattedResponse response={response} />
-                    </div>
+
+                    {/* Run Metadata Chips */}
+                    {metadata && (
+                      <div className="px-6 pb-4 pt-3">
+                        <div className="flex flex-wrap gap-2">
+                          <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
+                            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Model</span>
+                            <span className="text-xs font-bold text-gray-900 font-mono">{metadata.model}</span>
+                          </div>
+                          <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
+                            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Provider</span>
+                            <span className="text-xs font-bold text-gray-900">{metadata.provider}</span>
+                          </div>
+                          <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
+                            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Latency</span>
+                            <span className="text-xs font-bold text-gray-900 font-mono tabular-nums">
+                              {(metadata.latency / 1000).toFixed(1)}s
+                            </span>
+                          </div>
+                          <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
+                            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Tokens</span>
+                            <span className="text-xs font-bold text-gray-900 font-mono tabular-nums">
+                              {metadata.tokenUsage?.total || "N/A"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Follow-up Action */}
+                    {!isStreaming && !error && (
+                      <div className="px-6 pb-4 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={handleContinueConversation}
+                          className="px-4 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 hover:text-gray-900 active:translate-y-[0.5px] transition-all duration-150 flex items-center gap-1.5"
+                        >
+                          <span>💬</span>
+                          <span>Ask a follow-up</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1444,52 +1494,6 @@ export default function Home() {
                         </p>
                       </div>
                     </div>
-                  </div>
-                )}
-
-                {/* Metadata */}
-                {metadata && (
-                  <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-600">Model:</span>
-                        <span className="ml-2 font-medium text-gray-900">
-                          {metadata.model}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Provider:</span>
-                        <span className="ml-2 font-medium text-gray-900">
-                          {metadata.provider}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Latency:</span>
-                        <span className="ml-2 font-medium text-gray-900">
-                          {(metadata.latency / 1000).toFixed(1)} seconds
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Tokens:</span>
-                        <span className="ml-2 font-medium text-gray-900">
-                          {metadata.tokenUsage?.total || "N/A"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Continue Conversation Button */}
-                {response && !isStreaming && !error && (
-                  <div className="flex justify-center pt-2">
-                    <button
-                      type="button"
-                      onClick={handleContinueConversation}
-                      className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-gradient-to-br hover:from-blue-600 hover:to-blue-700 active:translate-y-[1px] font-medium transition-all duration-200 text-sm flex items-center gap-2"
-                    >
-                      <span>💬</span>
-                      Ask a follow-up
-                    </button>
                   </div>
                 )}
 
