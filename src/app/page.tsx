@@ -222,6 +222,20 @@ export default function Home() {
   
   // Draft prompt persistence toggle (default OFF for production)
   const [rememberDrafts, setRememberDrafts] = useState(false);
+  
+  // Mode switching safety
+  const [showModeSwitchConfirm, setShowModeSwitchConfirm] = useState(false);
+  const [pendingMode, setPendingMode] = useState<boolean | null>(null);
+  const [lastAutoSelectResult, setLastAutoSelectResult] = useState<{
+    response: string;
+    metadata: any;
+    routing: any;
+    error: string | null;
+  } | null>(null);
+  const [lastCompareResult, setLastCompareResult] = useState<{
+    modelPanels: Record<string, ModelPanel>;
+    diffSummary: any;
+  } | null>(null);
 
   // Single-answer mode state
   const [response, setResponse] = useState("");
@@ -1033,6 +1047,77 @@ export default function Home() {
     setShowUndoToast(false);
   };
   
+  const handleModeSwitch = (newMode: boolean) => {
+    // Check if there are existing results
+    const hasAutoSelectResults = !comparisonMode && (response || metadata || error);
+    const hasCompareResults = comparisonMode && Object.keys(modelPanels).length > 0;
+    
+    if (hasAutoSelectResults || hasCompareResults) {
+      // Show confirmation
+      setPendingMode(newMode);
+      setShowModeSwitchConfirm(true);
+    } else {
+      // No results, switch immediately
+      setComparisonMode(newMode);
+    }
+  };
+  
+  const confirmModeSwitch = () => {
+    if (pendingMode === null) return;
+    
+    // Store current results before clearing
+    if (!comparisonMode) {
+      // Switching from Auto-select to Compare
+      setLastAutoSelectResult({
+        response,
+        metadata,
+        routing,
+        error,
+      });
+      // Clear auto-select results
+      setResponse("");
+      setMetadata(null);
+      setRouting(null);
+      setError(null);
+    } else {
+      // Switching from Compare to Auto-select
+      setLastCompareResult({
+        modelPanels,
+        diffSummary,
+      });
+      // Clear compare results
+      setModelPanels({});
+      setDiffSummary(null);
+      setDiffError(null);
+    }
+    
+    // Perform switch
+    setComparisonMode(pendingMode);
+    setShowModeSwitchConfirm(false);
+    setPendingMode(null);
+  };
+  
+  const cancelModeSwitch = () => {
+    setShowModeSwitchConfirm(false);
+    setPendingMode(null);
+  };
+  
+  const restoreLastResults = () => {
+    if (!comparisonMode && lastAutoSelectResult) {
+      // Restore auto-select results
+      setResponse(lastAutoSelectResult.response);
+      setMetadata(lastAutoSelectResult.metadata);
+      setRouting(lastAutoSelectResult.routing);
+      setError(lastAutoSelectResult.error);
+      setLastAutoSelectResult(null);
+    } else if (comparisonMode && lastCompareResult) {
+      // Restore compare results
+      setModelPanels(lastCompareResult.modelPanels);
+      setDiffSummary(lastCompareResult.diffSummary);
+      setLastCompareResult(null);
+    }
+  };
+  
   const handleComparisonFollowUp = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // Submit on Enter, allow Shift+Enter for newline
     if (e.key === "Enter" && !e.shiftKey) {
@@ -1169,7 +1254,7 @@ export default function Home() {
           <div className="inline-flex rounded-lg bg-gray-100 p-1 gap-1">
             <button
               type="button"
-              onClick={() => setComparisonMode(false)}
+              onClick={() => handleModeSwitch(false)}
               disabled={isStreaming}
               className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                 !comparisonMode
@@ -1181,7 +1266,7 @@ export default function Home() {
             </button>
             <button
               type="button"
-              onClick={() => setComparisonMode(true)}
+              onClick={() => handleModeSwitch(true)}
               disabled={isStreaming}
               className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                 comparisonMode
@@ -1192,6 +1277,41 @@ export default function Home() {
               Compare models
             </button>
           </div>
+          
+          {/* Mode Switch Confirmation Bar */}
+          {showModeSwitchConfirm && (
+            <div className="mt-3 bg-orange-50 border border-orange-200 rounded-lg p-3 animate-in fade-in slide-in-from-top-1 duration-200">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-start gap-2 flex-1">
+                  <span className="text-orange-600 text-sm mt-0.5">⚠️</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-orange-900">
+                      Switching modes will clear the current results
+                    </p>
+                    <p className="text-xs text-orange-700 mt-0.5">
+                      You can restore them after switching if needed
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={cancelModeSwitch}
+                    className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:border-gray-400 transition-all duration-150"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmModeSwitch}
+                    className="px-3 py-1.5 text-xs font-medium text-orange-700 bg-orange-100 border border-orange-300 rounded-md hover:bg-orange-200 active:translate-y-[0.5px] transition-all duration-150"
+                  >
+                    Switch mode
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           
           {/* Helper text */}
           <p className="text-xs text-gray-500 mt-2 leading-relaxed">
@@ -1581,6 +1701,41 @@ export default function Home() {
               </button>
             </div>
           </div>
+        )}
+
+        {/* Restore Last Results Action */}
+        {!isStreaming && (
+          <>
+            {!comparisonMode && lastAutoSelectResult && !response && !error && (
+              <div className="mb-6 animate-in fade-in slide-in-from-top-1 duration-200">
+                <button
+                  type="button"
+                  onClick={restoreLastResults}
+                  className="w-full px-4 py-3 text-sm font-medium text-blue-700 bg-blue-50/50 border border-blue-200/50 rounded-lg hover:bg-blue-50 hover:border-blue-300 active:translate-y-[0.5px] transition-all duration-150 flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Restore last auto-select result
+                </button>
+              </div>
+            )}
+            
+            {comparisonMode && lastCompareResult && Object.keys(modelPanels).length === 0 && (
+              <div className="mb-6 animate-in fade-in slide-in-from-top-1 duration-200">
+                <button
+                  type="button"
+                  onClick={restoreLastResults}
+                  className="w-full px-4 py-3 text-sm font-medium text-blue-700 bg-blue-50/50 border border-blue-200/50 rounded-lg hover:bg-blue-50 hover:border-blue-300 active:translate-y-[0.5px] transition-all duration-150 flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Restore last comparison results
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {/* Unified Loading State - AI Pipeline (Both Modes) */}
