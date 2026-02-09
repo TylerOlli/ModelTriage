@@ -1414,7 +1414,7 @@ export default function Home() {
                   streamingStage === "streaming" ? "bg-green-500" : "bg-gray-300"
                 }`} />
 
-                {/* Step 3: Generating */}
+                {/* Step 3: Preparing response */}
                 <div className="flex items-center gap-2.5">
                   <div className={`flex items-center justify-center w-7 h-7 rounded-full border-2 transition-all duration-200 ${
                     streamingStage === "streaming"
@@ -1429,7 +1429,7 @@ export default function Home() {
                   </div>
                   <span className={`text-sm font-semibold transition-colors duration-200 ${
                     streamingStage === "streaming" ? "text-gray-900" : "text-gray-500"
-                  }`}>Generating</span>
+                  }`}>Preparing response</span>
                 </div>
               </div>
 
@@ -1439,13 +1439,13 @@ export default function Home() {
                   {streamingStage === "routing" && "Routing request"}
                   {streamingStage === "connecting" && "Connecting to provider"}
                   {streamingStage === "contacting" && "Connecting to provider"}
-                  {streamingStage === "streaming" && "Generating response"}
+                  {streamingStage === "streaming" && "Preparing response"}
                 </p>
                 <p className="text-sm text-gray-500 transition-opacity duration-200">
                   {streamingStage === "routing" && "Selecting the best model for your prompt"}
                   {streamingStage === "connecting" && "Establishing secure connection"}
                   {streamingStage === "contacting" && "Establishing secure connection"}
-                  {streamingStage === "streaming" && "Tokens will appear as they arrive"}
+                  {streamingStage === "streaming" && "Response will appear momentarily"}
                 </p>
               </div>
 
@@ -1521,10 +1521,9 @@ export default function Home() {
                             Response
                           </h2>
                           {isStreaming && (
-                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                              <div className="animate-spin w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full" />
-                              <span>Processing</span>
-                            </div>
+                            <span className="px-2 py-0.5 text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200/50 rounded uppercase tracking-wider">
+                              Streaming
+                            </span>
                           )}
                         </div>
                         <div className="prose prose-sm max-w-none text-[15px] leading-7">
@@ -1793,7 +1792,9 @@ export default function Home() {
                         Response
                       </h3>
                       {isStreaming && !panel.metadata && !panel.error && (
-                        <div className="animate-spin w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full" />
+                        <span className="px-2 py-0.5 text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200/50 rounded uppercase tracking-wider">
+                          Streaming
+                        </span>
                       )}
                     </div>
                     
