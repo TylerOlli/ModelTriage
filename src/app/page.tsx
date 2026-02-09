@@ -213,6 +213,12 @@ export default function Home() {
   const [promptHistory, setPromptHistory] = useState<string[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
+  
+  // Reset confirmation state
+  const [resetConfirming, setResetConfirming] = useState(false);
+  const [lastClearedPrompt, setLastClearedPrompt] = useState("");
+  const [showUndoToast, setShowUndoToast] = useState(false);
+  const resetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Single-answer mode state
   const [response, setResponse] = useState("");
@@ -961,6 +967,43 @@ export default function Home() {
     promptInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
   
+  const handleResetPrompt = () => {
+    if (!prompt.trim()) return;
+    
+    if (!resetConfirming) {
+      // First click - enter confirmation mode
+      setResetConfirming(true);
+      
+      // Auto-revert after 2 seconds
+      if (resetTimeoutRef.current) {
+        clearTimeout(resetTimeoutRef.current);
+      }
+      resetTimeoutRef.current = setTimeout(() => {
+        setResetConfirming(false);
+      }, 2000);
+    } else {
+      // Second click - clear the prompt
+      setLastClearedPrompt(prompt);
+      setPrompt("");
+      setResetConfirming(false);
+      
+      if (resetTimeoutRef.current) {
+        clearTimeout(resetTimeoutRef.current);
+      }
+      
+      // Show undo toast
+      setShowUndoToast(true);
+      setTimeout(() => {
+        setShowUndoToast(false);
+      }, 5000);
+    }
+  };
+  
+  const handleUndoClear = () => {
+    setPrompt(lastClearedPrompt);
+    setShowUndoToast(false);
+  };
+  
   const handleComparisonFollowUp = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // Submit on Enter, allow Shift+Enter for newline
     if (e.key === "Enter" && !e.shiftKey) {
@@ -1267,6 +1310,22 @@ export default function Home() {
                 >
                   {characterCount} / 4,000
                 </span>
+                
+                {/* Reset button */}
+                <button
+                  type="button"
+                  onClick={handleResetPrompt}
+                  disabled={!prompt.trim() || isStreaming}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-all duration-150 ${
+                    resetConfirming
+                      ? "text-orange-700 bg-orange-50 border border-orange-300 hover:bg-orange-100"
+                      : "text-gray-500 hover:text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  }`}
+                  title={resetConfirming ? "Click again to confirm" : "Clear prompt"}
+                >
+                  {resetConfirming ? "Click again to clear" : "Reset"}
+                </button>
+                
                 {promptHistory.length > 0 && (
                   <div className="relative">
                     <button
@@ -1451,6 +1510,22 @@ export default function Home() {
             </div>
           </div>
         </form>
+
+        {/* Undo Toast */}
+        {showUndoToast && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+            <div className="bg-gray-900 text-white rounded-lg shadow-xl px-4 py-3 flex items-center gap-3">
+              <span className="text-sm font-medium">Prompt cleared</span>
+              <button
+                type="button"
+                onClick={handleUndoClear}
+                className="text-sm font-semibold text-blue-400 hover:text-blue-300 transition-colors duration-150"
+              >
+                Undo
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Unified Loading State - AI Pipeline (Both Modes) */}
         {isStreaming && streamingStage && !response && Object.keys(modelPanels).length === 0 && (
