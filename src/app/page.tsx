@@ -219,6 +219,9 @@ export default function Home() {
   const [lastClearedPrompt, setLastClearedPrompt] = useState("");
   const [showUndoToast, setShowUndoToast] = useState(false);
   const resetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Draft prompt persistence toggle (default OFF for production)
+  const [rememberDrafts, setRememberDrafts] = useState(false);
 
   // Single-answer mode state
   const [response, setResponse] = useState("");
@@ -257,13 +260,23 @@ export default function Home() {
   // Load persisted state on mount
   useEffect(() => {
     const persistedComparisonMode = localStorage.getItem("comparisonMode");
+    const persistedDraftToggle = localStorage.getItem("rememberDrafts");
     const persistedPrompt = localStorage.getItem("lastPrompt");
 
     if (persistedComparisonMode !== null) {
       setComparisonMode(persistedComparisonMode === "true");
     }
-    if (persistedPrompt) {
+    
+    // Load draft toggle preference (default OFF for production)
+    const shouldRememberDrafts = persistedDraftToggle === "true";
+    setRememberDrafts(shouldRememberDrafts);
+    
+    // Only restore draft prompt if toggle is enabled
+    if (shouldRememberDrafts && persistedPrompt) {
       setPrompt(persistedPrompt);
+    } else {
+      // Clear any old draft on load if toggle is OFF
+      localStorage.removeItem("lastPrompt");
     }
   }, []);
 
@@ -320,7 +333,13 @@ export default function Home() {
   }, [promptHistory]);
 
   // Persist prompt (debounced to avoid excessive writes)
+  // ONLY saves draft if "Remember drafts" toggle is enabled (default OFF for production)
   useEffect(() => {
+    if (!rememberDrafts) {
+      // Toggle is OFF - do not save drafts
+      return;
+    }
+    
     const timeoutId = setTimeout(() => {
       if (prompt.trim()) {
         localStorage.setItem("lastPrompt", prompt);
@@ -330,7 +349,17 @@ export default function Home() {
     }, 500); // 500ms debounce
 
     return () => clearTimeout(timeoutId);
-  }, [prompt]);
+  }, [prompt, rememberDrafts]);
+  
+  // Persist draft toggle preference
+  useEffect(() => {
+    localStorage.setItem("rememberDrafts", rememberDrafts.toString());
+    
+    // If toggled OFF, immediately clear any saved draft
+    if (!rememberDrafts) {
+      localStorage.removeItem("lastPrompt");
+    }
+  }, [rememberDrafts]);
 
   // Generate diff summary after streaming completes with multiple models
   useEffect(() => {
@@ -1357,56 +1386,83 @@ export default function Home() {
                 <div className="relative z-20 mt-3 animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="bg-white/95 backdrop-blur-sm rounded-xl border border-gray-200 shadow-xl overflow-hidden">
                     {/* Header */}
-                    <div className="px-4 py-3 bg-gradient-to-b from-gray-50/50 to-transparent border-b border-gray-100 flex items-start justify-between">
-                      <div className="flex-1">
-                        <h4 className="text-sm font-bold text-gray-900 tracking-tight flex items-center gap-2">
-                          <span className="text-gray-400">🕐</span>
-                          <span>Recent prompts</span>
-                        </h4>
-                        <p className="text-xs text-gray-600 mt-0.5">
-                          Click a prompt to reuse it instantly
-                        </p>
+                    <div className="px-4 py-3 bg-gradient-to-b from-gray-50/50 to-transparent border-b border-gray-100">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h4 className="text-sm font-bold text-gray-900 tracking-tight flex items-center gap-2">
+                            <span className="text-gray-400">🕐</span>
+                            <span>Recent prompts</span>
+                          </h4>
+                          <p className="text-xs text-gray-600 mt-0.5">
+                            Click a prompt to reuse it instantly
+                          </p>
+                        </div>
+                        
+                        {/* Overflow menu */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowHistoryMenu(!showHistoryMenu);
+                            }}
+                            className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100/80 rounded-md transition-all duration-150"
+                            aria-label="History options"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                            </svg>
+                          </button>
+                          
+                          {/* Dropdown menu */}
+                          {showHistoryMenu && (
+                            <>
+                              <div 
+                                className="fixed inset-0 z-30" 
+                                onClick={() => setShowHistoryMenu(false)}
+                              />
+                              <div className="absolute right-0 top-full mt-1 z-40 bg-white rounded-lg border border-gray-200 shadow-lg py-1 min-w-[180px] animate-in fade-in slide-in-from-top-1 duration-150">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    clearHistory();
+                                    setShowHistoryMenu(false);
+                                    setShowHistory(false);
+                                  }}
+                                  className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors duration-150"
+                                >
+                                  Clear history
+                                </button>
+                                <div className="h-px bg-gray-100 my-1" />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRememberDrafts(!rememberDrafts);
+                                    setShowHistoryMenu(false);
+                                  }}
+                                  className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors duration-150 flex items-center justify-between gap-2"
+                                >
+                                  <span>Remember drafts</span>
+                                  <div className={`w-8 h-4 rounded-full transition-colors duration-200 ${
+                                    rememberDrafts ? 'bg-blue-600' : 'bg-gray-300'
+                                  }`}>
+                                    <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-200 mt-0.5 ${
+                                      rememberDrafts ? 'ml-4' : 'ml-0.5'
+                                    }`} />
+                                  </div>
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
                       </div>
                       
-                      {/* Overflow menu */}
-                      <div className="relative">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowHistoryMenu(!showHistoryMenu);
-                          }}
-                          className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100/80 rounded-md transition-all duration-150"
-                          aria-label="History options"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                          </svg>
-                        </button>
-                        
-                        {/* Dropdown menu */}
-                        {showHistoryMenu && (
-                          <>
-                            <div 
-                              className="fixed inset-0 z-30" 
-                              onClick={() => setShowHistoryMenu(false)}
-                            />
-                            <div className="absolute right-0 top-full mt-1 z-40 bg-white rounded-lg border border-gray-200 shadow-lg py-1 min-w-[140px] animate-in fade-in slide-in-from-top-1 duration-150">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  clearHistory();
-                                  setShowHistoryMenu(false);
-                                  setShowHistory(false);
-                                }}
-                                className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors duration-150"
-                              >
-                                Clear history
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
+                      {/* Draft toggle hint */}
+                      {rememberDrafts && (
+                        <p className="text-[10px] text-blue-600 bg-blue-50/50 px-2 py-1 rounded">
+                          Draft auto-saved on this device
+                        </p>
+                      )}
                     </div>
                     
                     {/* History List */}
