@@ -2233,7 +2233,7 @@ export default function Home() {
               </div>
             )}
 
-            {/* Loading state for comparison summary */}
+            {/* Loading state for comparison summary - AI-native design */}
             {!isStreaming && !diffSummary && !diffError && Object.keys(modelPanels).length >= 2 && (
               (() => {
                 const successfulCount = Object.values(modelPanels).filter(
@@ -2242,10 +2242,59 @@ export default function Home() {
                 
                 if (successfulCount >= 2) {
                   return (
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                      <div className="flex items-center gap-3 text-gray-600">
-                        <div className="animate-spin w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full" />
-                        <span className="text-sm">Generating comparison summary...</span>
+                    <div className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative animate-in fade-in duration-300"
+                      style={{
+                        backgroundImage: `
+                          repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
+                          repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
+                        `,
+                        backgroundSize: '20px 20px'
+                      }}
+                    >
+                      <div className="p-8">
+                        {/* Header with spinner */}
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="animate-spin w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full" />
+                          <div className="flex-1">
+                            <h3 className="text-base font-bold text-gray-900 tracking-tight">
+                              Comparing responses
+                            </h3>
+                            <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                              Synthesizing similarities, differences, and gaps across models
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Skeleton Preview */}
+                        <div className="space-y-4">
+                          {/* Verdict skeleton */}
+                          <div className="bg-blue-50/30 border border-blue-200/30 rounded-lg p-4">
+                            <div className="space-y-2">
+                              <div className="h-3 bg-blue-200/40 rounded w-20 animate-pulse" />
+                              <div className="h-3 bg-blue-200/40 rounded w-full animate-pulse" />
+                              <div className="h-3 bg-blue-200/40 rounded w-4/5 animate-pulse" />
+                            </div>
+                          </div>
+
+                          {/* Summary cards skeleton */}
+                          <div className="grid md:grid-cols-3 gap-3">
+                            <div className="bg-white/50 rounded-lg border border-gray-200/40 p-3 space-y-2">
+                              <div className="h-2.5 bg-gray-200/60 rounded w-24 animate-pulse" />
+                              <div className="h-2 bg-gray-200/60 rounded w-full animate-pulse" />
+                              <div className="h-2 bg-gray-200/60 rounded w-5/6 animate-pulse" />
+                            </div>
+                            <div className="bg-white/50 rounded-lg border border-gray-200/40 p-3 space-y-2">
+                              <div className="h-2.5 bg-gray-200/60 rounded w-28 animate-pulse" />
+                              <div className="h-2 bg-gray-200/60 rounded w-full animate-pulse" />
+                              <div className="h-2 bg-gray-200/60 rounded w-4/5 animate-pulse" />
+                            </div>
+                            <div className="bg-white/50 rounded-lg border border-gray-200/40 p-3 space-y-2">
+                              <div className="h-2.5 bg-gray-200/60 rounded w-20 animate-pulse" />
+                              <div className="h-2 bg-gray-200/60 rounded w-full animate-pulse" />
+                              <div className="h-2 bg-gray-200/60 rounded w-3/4 animate-pulse" />
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   );
