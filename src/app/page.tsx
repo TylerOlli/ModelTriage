@@ -212,6 +212,7 @@ export default function Home() {
   // Prompt history state
   const [promptHistory, setPromptHistory] = useState<string[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showHistoryMenu, setShowHistoryMenu] = useState(false);
 
   // Single-answer mode state
   const [response, setResponse] = useState("");
@@ -1267,48 +1268,120 @@ export default function Home() {
                   {characterCount} / 4,000
                 </span>
                 {promptHistory.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowHistory(!showHistory)}
-                    className="text-xs text-gray-500 hover:text-gray-700 font-medium transition-colors duration-150"
-                  >
-                    {showHistory ? "Hide History" : "Show History"}
-                  </button>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowHistory(!showHistory)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 hover:text-gray-900 transition-all duration-150 group"
+                      title="Reuse or refine previous prompts"
+                    >
+                      <svg className="w-3.5 h-3.5 transition-transform duration-150 group-hover:rotate-[-15deg]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>History</span>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
 
-            {/* Prompt History */}
+            {/* Prompt History Popover */}
             {showHistory && promptHistory.length > 0 && (
-              <div className="mt-4 bg-white rounded-lg border border-gray-200 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-bold text-gray-900 tracking-tight">
-                    Recent Prompts
-                  </h4>
-                  <button
-                    type="button"
-                    onClick={clearHistory}
-                    className="text-xs text-red-600 hover:text-red-700 font-semibold transition-colors duration-150"
-                  >
-                    Clear History
-                  </button>
+              <>
+                {/* Backdrop to close on click outside */}
+                <div 
+                  className="fixed inset-0 z-10" 
+                  onClick={() => setShowHistory(false)}
+                />
+                
+                {/* Popover Panel */}
+                <div className="relative z-20 mt-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="bg-white/95 backdrop-blur-sm rounded-xl border border-gray-200 shadow-xl overflow-hidden">
+                    {/* Header */}
+                    <div className="px-4 py-3 bg-gradient-to-b from-gray-50/50 to-transparent border-b border-gray-100 flex items-start justify-between">
+                      <div className="flex-1">
+                        <h4 className="text-sm font-bold text-gray-900 tracking-tight flex items-center gap-2">
+                          <span className="text-gray-400">🕐</span>
+                          <span>Recent prompts</span>
+                        </h4>
+                        <p className="text-xs text-gray-600 mt-0.5">
+                          Click a prompt to reuse it instantly
+                        </p>
+                      </div>
+                      
+                      {/* Overflow menu */}
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowHistoryMenu(!showHistoryMenu);
+                          }}
+                          className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100/80 rounded-md transition-all duration-150"
+                          aria-label="History options"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                          </svg>
+                        </button>
+                        
+                        {/* Dropdown menu */}
+                        {showHistoryMenu && (
+                          <>
+                            <div 
+                              className="fixed inset-0 z-30" 
+                              onClick={() => setShowHistoryMenu(false)}
+                            />
+                            <div className="absolute right-0 top-full mt-1 z-40 bg-white rounded-lg border border-gray-200 shadow-lg py-1 min-w-[140px] animate-in fade-in slide-in-from-top-1 duration-150">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  clearHistory();
+                                  setShowHistoryMenu(false);
+                                  setShowHistory(false);
+                                }}
+                                className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors duration-150"
+                              >
+                                Clear history
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* History List */}
+                    <div className="max-h-64 overflow-y-auto">
+                      {promptHistory.map((historyItem, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => {
+                            setPrompt(historyItem);
+                            setShowHistory(false);
+                          }}
+                          className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-blue-50/50 active:bg-blue-100/50 transition-all duration-150 border-b border-gray-50 last:border-b-0 group cursor-pointer"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="flex-1 truncate leading-relaxed">{historyItem}</span>
+                            <div className="flex items-center gap-1.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex-shrink-0">
+                              <span className="text-xs font-medium">Reuse</span>
+                              <svg 
+                                className="w-3.5 h-3.5" 
+                                fill="none" 
+                                viewBox="0 0 24 24" 
+                                stroke="currentColor"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {promptHistory.map((historyItem, index) => (
-                    <button
-                      key={index}
-                      type="button"
-                      onClick={() => {
-                        setPrompt(historyItem);
-                        setShowHistory(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-sm text-gray-700 bg-gray-50 hover:bg-gray-100 rounded border border-gray-200 hover:border-gray-300 transition-all duration-150"
-                    >
-                      <span className="line-clamp-2">{historyItem}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              </>
             )}
 
             {/* File Attachments */}
