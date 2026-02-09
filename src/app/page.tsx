@@ -1122,9 +1122,6 @@ export default function Home() {
               </div>
               <p className="text-xs text-gray-400 mt-3 leading-relaxed">
                 {selectedModels.length} model{selectedModels.length !== 1 ? "s" : ""} selected
-                {selectedModels.length > 1 && (
-                  <span className="text-gray-500 font-medium"> • Higher cost and latency</span>
-                )}
               </p>
             </div>
           )}
@@ -1504,72 +1501,78 @@ export default function Home() {
             {/* Instructions - Tier 3 (Supporting) */}
             {!response && !isStreaming && !error && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-8">
-                <h3 className="text-sm font-bold text-gray-900 mb-4 tracking-tight">
+                <h3 className="text-sm font-bold text-gray-900 mb-5 tracking-tight">
                   How it works
                 </h3>
                 
-                <div className="space-y-4">
+                {/* Two-column layout for modes */}
+                <div className="grid md:grid-cols-2 gap-8 mb-5">
                   {/* Single-Answer Mode */}
                   <div>
-                    <h4 className="text-sm font-semibold text-gray-900 mb-2">
-                      🎯 Single-Answer Mode (Default)
-                    </h4>
-                    <ul className="space-y-1.5 text-sm text-gray-600 leading-relaxed">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-base">🎯</span>
+                      <h4 className="text-sm font-semibold text-gray-900">
+                        Single-Answer Mode
+                      </h4>
+                    </div>
+                    <p className="text-sm text-gray-700 mb-3 leading-relaxed">
+                      One response, automatically routed to the best model for your prompt.
+                    </p>
+                    <ul className="space-y-2 text-sm text-gray-600 leading-relaxed mb-3">
                       <li className="flex items-start gap-2">
                         <span className="text-gray-400 mt-0.5">•</span>
-                        <span>
-                          Submit a prompt and get one AI response
-                        </span>
+                        <span>Submit a prompt and get one AI response</span>
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="text-gray-400 mt-0.5">•</span>
-                        <span>
-                          Model is automatically selected based on your prompt type
-                        </span>
+                        <span>Model is auto-selected based on prompt type</span>
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="text-gray-400 mt-0.5">•</span>
-                        <span>
-                          Fast and cost-effective for most use cases
-                        </span>
+                        <span>Fast and cost-effective for most requests</span>
                       </li>
                     </ul>
+                    <p className="text-xs text-gray-400">
+                      <span className="font-medium text-gray-500">Best for:</span> everyday questions, coding, brainstorming, summaries
+                    </p>
                   </div>
 
                   {/* Comparison Mode */}
-                  <div className="pt-3 border-t border-gray-200">
-                    <h4 className="text-sm font-semibold text-gray-900 mb-2">
-                      ⚡ Comparison Mode (Optional)
-                    </h4>
-                    <ul className="space-y-1.5 text-sm text-gray-600 leading-relaxed">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-base">⚡</span>
+                      <h4 className="text-sm font-semibold text-gray-900">
+                        Comparison Mode
+                      </h4>
+                    </div>
+                    <p className="text-sm text-gray-700 mb-3 leading-relaxed">
+                      Run the same prompt across multiple models and compare results side-by-side.
+                    </p>
+                    <ul className="space-y-2 text-sm text-gray-600 leading-relaxed mb-3">
                       <li className="flex items-start gap-2">
-                        <span className="text-orange-600 mt-0.5">•</span>
-                        <span>
-                          Select and compare multiple models side-by-side
-                        </span>
+                        <span className="text-gray-400 mt-0.5">•</span>
+                        <span>Select models, then submit once to run them all</span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-orange-600 mt-0.5">•</span>
-                        <span>
-                          See differences, agreements, and potential conflicts
-                        </span>
+                        <span className="text-gray-400 mt-0.5">•</span>
+                        <span>See differences, agreement, and potential conflicts</span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-orange-600 mt-0.5">•</span>
-                        <span>
-                          Higher cost and latency - best for critical decisions
-                        </span>
+                        <span className="text-gray-400 mt-0.5">•</span>
+                        <span>Useful when accuracy or tone matters</span>
                       </li>
                     </ul>
-                  </div>
-
-                  {/* General Info */}
-                  <div className="pt-3 border-t border-gray-200 text-xs text-gray-400 leading-relaxed">
-                    <p>
-                      Maximum prompt length: 4,000 characters • 
-                      Responses stream in real-time
+                    <p className="text-xs text-gray-400">
+                      <span className="font-medium text-gray-500">Best for:</span> critical decisions, evaluation, verification
                     </p>
                   </div>
+                </div>
+
+                {/* Footer metadata */}
+                <div className="pt-4 border-t border-gray-200">
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    4,000 character limit • Real-time streaming
+                  </p>
                 </div>
               </div>
             )}
