@@ -1841,7 +1841,7 @@ export default function Home() {
                         {isStreaming && !panel.metadata && !panel.error && (
                           <div className="flex justify-end mb-3">
                             <span className="px-2 py-0.5 text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200/50 rounded uppercase tracking-wider">
-                              Streaming
+                              Generating
                             </span>
                           </div>
                         )}
@@ -2242,11 +2242,11 @@ export default function Home() {
                 
                 if (successfulCount >= 2) {
                   return (
-                    <div className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative animate-in fade-in duration-300"
+                    <div className="bg-slate-900/[0.03] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative animate-in fade-in duration-300"
                       style={{
                         backgroundImage: `
-                          repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
-                          repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
+                          repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.015) 1px, rgb(0 0 0 / 0.015) 2px),
+                          repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.015) 1px, rgb(0 0 0 / 0.015) 2px)
                         `,
                         backgroundSize: '20px 20px'
                       }}
@@ -2254,12 +2254,17 @@ export default function Home() {
                       <div className="p-8">
                         {/* Header with spinner */}
                         <div className="flex items-center gap-3 mb-6">
-                          <div className="animate-spin w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full" />
+                          <div 
+                            className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full"
+                            style={{
+                              animation: 'spin 1.5s linear infinite'
+                            }}
+                          />
                           <div className="flex-1">
-                            <h3 className="text-base font-bold text-gray-900 tracking-tight">
+                            <h3 className="text-base font-extrabold text-gray-900 tracking-[-0.01em]">
                               Comparing responses
                             </h3>
-                            <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                            <p className="text-xs text-gray-500/80 mt-1 leading-[1.6]">
                               Synthesizing similarities, differences, and gaps across models
                             </p>
                           </div>
@@ -2268,30 +2273,88 @@ export default function Home() {
                         {/* Skeleton Preview */}
                         <div className="space-y-4">
                           {/* Verdict skeleton */}
-                          <div className="bg-blue-50/30 border border-blue-200/30 rounded-lg p-4">
+                          <div className="bg-blue-50/40 border border-blue-200/40 rounded-lg p-4">
                             <div className="space-y-2">
-                              <div className="h-3 bg-blue-200/40 rounded w-20 animate-pulse" />
-                              <div className="h-3 bg-blue-200/40 rounded w-full animate-pulse" />
-                              <div className="h-3 bg-blue-200/40 rounded w-4/5 animate-pulse" />
+                              <div className="h-3 bg-gradient-to-r from-blue-200/30 via-blue-200/50 to-blue-200/30 rounded w-20 animate-shimmer" 
+                                style={{
+                                  backgroundSize: '200% 100%'
+                                }}
+                              />
+                              <div className="h-3 bg-gradient-to-r from-blue-200/30 via-blue-200/50 to-blue-200/30 rounded w-full animate-shimmer" 
+                                style={{
+                                  backgroundSize: '200% 100%',
+                                  animationDelay: '0.1s'
+                                }}
+                              />
+                              <div className="h-3 bg-gradient-to-r from-blue-200/30 via-blue-200/50 to-blue-200/30 rounded w-4/5 animate-shimmer" 
+                                style={{
+                                  backgroundSize: '200% 100%',
+                                  animationDelay: '0.2s'
+                                }}
+                              />
                             </div>
                           </div>
 
                           {/* Summary cards skeleton */}
                           <div className="grid md:grid-cols-3 gap-3">
-                            <div className="bg-white/50 rounded-lg border border-gray-200/40 p-3 space-y-2">
-                              <div className="h-2.5 bg-gray-200/60 rounded w-24 animate-pulse" />
-                              <div className="h-2 bg-gray-200/60 rounded w-full animate-pulse" />
-                              <div className="h-2 bg-gray-200/60 rounded w-5/6 animate-pulse" />
+                            <div className="bg-white/60 rounded-lg border border-gray-200/50 p-3 space-y-2">
+                              <div className="h-2.5 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-24 animate-shimmer" 
+                                style={{
+                                  backgroundSize: '200% 100%'
+                                }}
+                              />
+                              <div className="h-2 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-full animate-shimmer" 
+                                style={{
+                                  backgroundSize: '200% 100%',
+                                  animationDelay: '0.15s'
+                                }}
+                              />
+                              <div className="h-2 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-5/6 animate-shimmer" 
+                                style={{
+                                  backgroundSize: '200% 100%',
+                                  animationDelay: '0.3s'
+                                }}
+                              />
                             </div>
-                            <div className="bg-white/50 rounded-lg border border-gray-200/40 p-3 space-y-2">
-                              <div className="h-2.5 bg-gray-200/60 rounded w-28 animate-pulse" />
-                              <div className="h-2 bg-gray-200/60 rounded w-full animate-pulse" />
-                              <div className="h-2 bg-gray-200/60 rounded w-4/5 animate-pulse" />
+                            <div className="bg-white/60 rounded-lg border border-gray-200/50 p-3 space-y-2">
+                              <div className="h-2.5 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-28 animate-shimmer" 
+                                style={{
+                                  backgroundSize: '200% 100%',
+                                  animationDelay: '0.1s'
+                                }}
+                              />
+                              <div className="h-2 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-full animate-shimmer" 
+                                style={{
+                                  backgroundSize: '200% 100%',
+                                  animationDelay: '0.25s'
+                                }}
+                              />
+                              <div className="h-2 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-4/5 animate-shimmer" 
+                                style={{
+                                  backgroundSize: '200% 100%',
+                                  animationDelay: '0.4s'
+                                }}
+                              />
                             </div>
-                            <div className="bg-white/50 rounded-lg border border-gray-200/40 p-3 space-y-2">
-                              <div className="h-2.5 bg-gray-200/60 rounded w-20 animate-pulse" />
-                              <div className="h-2 bg-gray-200/60 rounded w-full animate-pulse" />
-                              <div className="h-2 bg-gray-200/60 rounded w-3/4 animate-pulse" />
+                            <div className="bg-white/60 rounded-lg border border-gray-200/50 p-3 space-y-2">
+                              <div className="h-2.5 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-20 animate-shimmer" 
+                                style={{
+                                  backgroundSize: '200% 100%',
+                                  animationDelay: '0.2s'
+                                }}
+                              />
+                              <div className="h-2 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-full animate-shimmer" 
+                                style={{
+                                  backgroundSize: '200% 100%',
+                                  animationDelay: '0.35s'
+                                }}
+                              />
+                              <div className="h-2 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-3/4 animate-shimmer" 
+                                style={{
+                                  backgroundSize: '200% 100%',
+                                  animationDelay: '0.5s'
+                                }}
+                              />
                             </div>
                           </div>
                         </div>
