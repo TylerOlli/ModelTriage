@@ -97,6 +97,8 @@ interface ModelPanel {
     finishReason?: string;
   } | null;
   error: string | null;
+  showRunDetails?: boolean;
+  isExpanded?: boolean;
 }
 
 /**
@@ -753,6 +755,8 @@ export default function Home() {
         response: "",
         metadata: null,
         error: null,
+        showRunDetails: false,
+        isExpanded: false,
       };
     });
 
@@ -1335,136 +1339,169 @@ export default function Home() {
           </div>
         </form>
 
-        {/* Loading State - AI Pipeline */}
-        {isStreaming && !comparisonMode && !response && streamingStage && (
-          <div className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative"
-            style={{
-              backgroundImage: `
-                repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
-                repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
-              `,
-              backgroundSize: '20px 20px'
-            }}
-          >
-            <div className="p-8">
-              {/* Execution Header */}
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-4">
-                Executing
-              </div>
+        {/* Unified Loading State - AI Pipeline (Both Modes) */}
+        {isStreaming && streamingStage && !response && Object.keys(modelPanels).length === 0 && (
+          <div className="space-y-6">
+            {/* Loading Pipeline */}
+            <div className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative"
+              style={{
+                backgroundImage: `
+                  repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
+                  repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
+                `,
+                backgroundSize: '20px 20px'
+              }}
+            >
+              <div className="p-8">
+                {/* Execution Header */}
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-4">
+                  Executing
+                </div>
 
-              {/* Pipeline Stepper */}
-              <div className="flex items-center gap-2.5 mb-6">
-                {/* Step 1: Routing */}
-                <div className="flex items-center gap-2.5">
-                  <div className={`flex items-center justify-center w-7 h-7 rounded-full border-2 transition-all duration-200 ${
-                    streamingStage === "routing" 
-                      ? "border-blue-600 bg-blue-50" 
-                      : streamingStage === "connecting" || streamingStage === "contacting" || streamingStage === "streaming"
-                      ? "border-green-500 bg-green-50"
-                      : "border-gray-300 bg-white"
-                  }`}>
-                    {(streamingStage === "connecting" || streamingStage === "contacting" || streamingStage === "streaming") ? (
-                      <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : streamingStage === "routing" ? (
-                      <div className="animate-spin w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full" />
-                    ) : (
-                      <div className="w-2 h-2 rounded-full bg-gray-300" />
-                    )}
+                {/* Pipeline Stepper */}
+                <div className="flex items-center gap-2.5 mb-6">
+                  {/* Step 1: Routing */}
+                  <div className="flex items-center gap-2.5">
+                    <div className={`flex items-center justify-center w-7 h-7 rounded-full border-2 transition-all duration-200 ${
+                      streamingStage === "routing" 
+                        ? "border-blue-600 bg-blue-50" 
+                        : streamingStage === "connecting" || streamingStage === "contacting" || streamingStage === "streaming"
+                        ? "border-green-500 bg-green-50"
+                        : "border-gray-300 bg-white"
+                    }`}>
+                      {(streamingStage === "connecting" || streamingStage === "contacting" || streamingStage === "streaming") ? (
+                        <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : streamingStage === "routing" ? (
+                        <div className="animate-spin w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full" />
+                      ) : (
+                        <div className="w-2 h-2 rounded-full bg-gray-300" />
+                      )}
+                    </div>
+                    <span className={`text-sm font-semibold transition-colors duration-200 ${
+                      streamingStage === "routing" ? "text-gray-900" : "text-gray-500"
+                    }`}>Routing</span>
                   </div>
-                  <span className={`text-sm font-semibold transition-colors duration-200 ${
-                    streamingStage === "routing" ? "text-gray-900" : "text-gray-500"
-                  }`}>Routing</span>
-                </div>
 
-                {/* Connector */}
-                <div className={`h-0.5 w-10 rounded-full transition-colors duration-200 ${
-                  streamingStage === "connecting" || streamingStage === "contacting" || streamingStage === "streaming"
-                    ? "bg-green-500"
-                    : "bg-gray-300"
-                }`} />
+                  {/* Connector */}
+                  <div className={`h-0.5 w-10 rounded-full transition-colors duration-200 ${
+                    streamingStage === "connecting" || streamingStage === "contacting" || streamingStage === "streaming"
+                      ? "bg-green-500"
+                      : "bg-gray-300"
+                  }`} />
 
-                {/* Step 2: Connecting */}
-                <div className="flex items-center gap-2.5">
-                  <div className={`flex items-center justify-center w-7 h-7 rounded-full border-2 transition-all duration-200 ${
-                    streamingStage === "connecting" || streamingStage === "contacting"
-                      ? "border-blue-600 bg-blue-50"
-                      : streamingStage === "streaming"
-                      ? "border-green-500 bg-green-50"
-                      : "border-gray-300 bg-white"
-                  }`}>
-                    {streamingStage === "streaming" ? (
-                      <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (streamingStage === "connecting" || streamingStage === "contacting") ? (
-                      <div className="animate-spin w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full" />
-                    ) : (
-                      <div className="w-2 h-2 rounded-full bg-gray-300" />
-                    )}
+                  {/* Step 2: Connecting */}
+                  <div className="flex items-center gap-2.5">
+                    <div className={`flex items-center justify-center w-7 h-7 rounded-full border-2 transition-all duration-200 ${
+                      streamingStage === "connecting" || streamingStage === "contacting"
+                        ? "border-blue-600 bg-blue-50"
+                        : streamingStage === "streaming"
+                        ? "border-green-500 bg-green-50"
+                        : "border-gray-300 bg-white"
+                    }`}>
+                      {streamingStage === "streaming" ? (
+                        <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (streamingStage === "connecting" || streamingStage === "contacting") ? (
+                        <div className="animate-spin w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full" />
+                      ) : (
+                        <div className="w-2 h-2 rounded-full bg-gray-300" />
+                      )}
+                    </div>
+                    <span className={`text-sm font-semibold transition-colors duration-200 ${
+                      streamingStage === "connecting" || streamingStage === "contacting" ? "text-gray-900" : "text-gray-500"
+                    }`}>Connecting</span>
                   </div>
-                  <span className={`text-sm font-semibold transition-colors duration-200 ${
-                    streamingStage === "connecting" || streamingStage === "contacting" ? "text-gray-900" : "text-gray-500"
-                  }`}>Connecting</span>
-                </div>
 
-                {/* Connector */}
-                <div className={`h-0.5 w-10 rounded-full transition-colors duration-200 ${
-                  streamingStage === "streaming" ? "bg-green-500" : "bg-gray-300"
-                }`} />
+                  {/* Connector */}
+                  <div className={`h-0.5 w-10 rounded-full transition-colors duration-200 ${
+                    streamingStage === "streaming" ? "bg-green-500" : "bg-gray-300"
+                  }`} />
 
-                {/* Step 3: Preparing response */}
-                <div className="flex items-center gap-2.5">
-                  <div className={`flex items-center justify-center w-7 h-7 rounded-full border-2 transition-all duration-200 ${
-                    streamingStage === "streaming"
-                      ? "border-blue-600 bg-blue-50"
-                      : "border-gray-300 bg-white"
-                  }`}>
-                    {streamingStage === "streaming" ? (
-                      <div className="animate-spin w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full" />
-                    ) : (
-                      <div className="w-2 h-2 rounded-full bg-gray-300" />
-                    )}
+                  {/* Step 3: Preparing response */}
+                  <div className="flex items-center gap-2.5">
+                    <div className={`flex items-center justify-center w-7 h-7 rounded-full border-2 transition-all duration-200 ${
+                      streamingStage === "streaming"
+                        ? "border-blue-600 bg-blue-50"
+                        : "border-gray-300 bg-white"
+                    }`}>
+                      {streamingStage === "streaming" ? (
+                        <div className="animate-spin w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full" />
+                      ) : (
+                        <div className="w-2 h-2 rounded-full bg-gray-300" />
+                      )}
+                    </div>
+                    <span className={`text-sm font-semibold transition-colors duration-200 ${
+                      streamingStage === "streaming" ? "text-gray-900" : "text-gray-500"
+                    }`}>Preparing response</span>
                   </div>
-                  <span className={`text-sm font-semibold transition-colors duration-200 ${
-                    streamingStage === "streaming" ? "text-gray-900" : "text-gray-500"
-                  }`}>Preparing response</span>
                 </div>
-              </div>
 
-              {/* Two-line Status */}
-              <div className="mb-7 space-y-1.5">
-                <p className="text-lg font-semibold text-gray-900 transition-opacity duration-200">
-                  {streamingStage === "routing" && "Routing request"}
-                  {streamingStage === "connecting" && "Connecting to provider"}
-                  {streamingStage === "contacting" && "Connecting to provider"}
-                  {streamingStage === "streaming" && "Preparing response"}
-                </p>
-                <p className="text-sm text-gray-500 transition-opacity duration-200">
-                  {streamingStage === "routing" && "Selecting the best model for your prompt"}
-                  {streamingStage === "connecting" && "Establishing secure connection"}
-                  {streamingStage === "contacting" && "Establishing secure connection"}
-                  {streamingStage === "streaming" && "Response will appear momentarily"}
-                </p>
+                {/* Two-line Status */}
+                <div className="mb-7 space-y-1.5">
+                  <p className="text-lg font-semibold text-gray-900 transition-opacity duration-200">
+                    {streamingStage === "routing" && "Routing request"}
+                    {streamingStage === "connecting" && "Connecting to provider"}
+                    {streamingStage === "contacting" && "Connecting to provider"}
+                    {streamingStage === "streaming" && "Preparing response"}
+                  </p>
+                  <p className="text-sm text-gray-500 transition-opacity duration-200">
+                    {streamingStage === "routing" && (comparisonMode ? "Preparing all models" : "Selecting the best model for your prompt")}
+                    {streamingStage === "connecting" && "Establishing secure connection"}
+                    {streamingStage === "contacting" && "Establishing secure connection"}
+                    {streamingStage === "streaming" && (comparisonMode ? "Responses will appear momentarily" : "Response will appear momentarily")}
+                  </p>
+                </div>
               </div>
+            </div>
 
-              {/* Response Skeleton Preview */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-sm font-bold text-gray-700 tracking-tight">Response</span>
-                  <span className="px-2 py-0.5 text-[10px] font-bold text-gray-500 bg-gray-200/60 border border-gray-300/50 rounded uppercase tracking-wider">
-                    Pending
-                  </span>
+            {/* Skeleton Response Cards */}
+            <div className={`grid gap-6 ${comparisonMode ? (selectedModels.length === 2 ? "md:grid-cols-2" : selectedModels.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2") : ""}`}>
+              {(comparisonMode ? selectedModels : ["single"]).map((modelId, idx) => (
+                <div 
+                  key={modelId}
+                  className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative"
+                  style={{
+                    backgroundImage: `
+                      repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
+                      repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
+                    `,
+                    backgroundSize: '20px 20px'
+                  }}
+                >
+                  {/* Skeleton Header */}
+                  {comparisonMode && (
+                    <div className="px-6 pt-4 pb-3 bg-white/40 backdrop-blur-sm relative">
+                      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className="h-3 w-24 bg-gray-200/70 rounded animate-pulse" />
+                        <div className="h-3 w-32 bg-gray-200/70 rounded animate-pulse" />
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Skeleton Response Content */}
+                  <div className="m-3 bg-white rounded-lg border border-gray-200/60 shadow-sm">
+                    <div className="px-6 py-4">
+                      <div className="flex items-center gap-2.5 mb-4">
+                        <span className="text-sm font-bold text-gray-700 tracking-tight">Response</span>
+                        <span className="px-2 py-0.5 text-[10px] font-bold text-gray-500 bg-gray-200/60 border border-gray-300/50 rounded uppercase tracking-wider">
+                          Pending
+                        </span>
+                      </div>
+                      <div className="space-y-3.5">
+                        <div className="h-4 bg-gray-200/70 rounded-md w-full animate-pulse" />
+                        <div className="h-4 bg-gray-200/70 rounded-md w-[97%] animate-pulse" />
+                        <div className="h-4 bg-gray-200/70 rounded-md w-[82%] animate-pulse" />
+                        <div className="h-4 bg-gray-200/70 rounded-md w-[93%] animate-pulse" />
+                        <div className="h-4 bg-gray-200/70 rounded-md w-[68%] animate-pulse" />
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-3.5">
-                  <div className="h-4 bg-gray-200/70 rounded-md w-full animate-pulse" />
-                  <div className="h-4 bg-gray-200/70 rounded-md w-[97%] animate-pulse" />
-                  <div className="h-4 bg-gray-200/70 rounded-md w-[82%] animate-pulse" />
-                  <div className="h-4 bg-gray-200/70 rounded-md w-[93%] animate-pulse" />
-                  <div className="h-4 bg-gray-200/70 rounded-md w-[68%] animate-pulse" />
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         )}
@@ -1750,131 +1787,207 @@ export default function Home() {
           </>
         )}
 
-        {/* Comparison Mode Display */}
-        {/* Multi-Model Comparison (works for both single-answer with multiple models and verify mode) */}
+        {/* Unified Response Display (Both Modes) */}
         {Object.keys(modelPanels).length > 0 && (
           <>
-            {/* Side-by-side Model Panels */}
+            {/* Response Cards Grid */}
             <div className={`grid gap-6 mb-6 ${selectedModels.length === 2 ? "md:grid-cols-2" : selectedModels.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
-              {Object.entries(modelPanels).map(([modelId, panel]) => (
+              {Object.entries(modelPanels).map(([modelId, panel], idx) => (
                 <div
                   key={modelId}
-                  className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
+                  className="animate-in fade-in duration-300 h-full"
+                  style={{ animationDelay: `${idx * 60}ms` }}
                 >
-                  {/* Routing Info */}
-                  {panel.routing && (
-                    <div className="bg-indigo-50 rounded-lg border border-indigo-200 p-3 mb-4">
-                      <div className="flex items-start gap-2">
-                        <span className="text-indigo-600">🎯</span>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h4 className="text-xs font-semibold text-indigo-900">
-                              {getFriendlyModelName(panel.routing.model)}
-                            </h4>
-                            {confidenceToLabel(Number(panel.routing.confidence)) && (
-                              <span className="text-xs text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded">
-                                {confidenceToLabel(Number(panel.routing.confidence))}
+                  <div className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative flex flex-col h-full"
+                    style={{
+                      backgroundImage: `
+                        repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
+                        repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
+                      `,
+                      backgroundSize: '20px 20px'
+                    }}
+                  >
+                    {/* Execution Header */}
+                    <div className="px-6 pt-4 pb-3 bg-white/40 backdrop-blur-sm relative">
+                      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
+                      
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                          <span className="text-gray-400 text-sm flex-shrink-0 mt-0.5">⚡</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Model</span>
+                              <span className="text-sm font-bold text-gray-900 font-mono">
+                                {getFriendlyModelName(modelId)}
                               </span>
+                            </div>
+                            {panel.routing && (
+                              <p className="text-xs text-gray-500 leading-relaxed line-clamp-1">
+                                {panel.routing.reason}
+                              </p>
                             )}
                           </div>
-                          <p className="text-xs text-indigo-700">
-                            {panel.routing.reason}
-                          </p>
                         </div>
                       </div>
                     </div>
-                  )}
+                    
+                    {/* Response Content Panel */}
+                    <div className="m-3 bg-white rounded-lg border border-gray-200/60 shadow-sm flex-1 flex flex-col">
+                      <div className="px-6 py-4 flex-1 flex flex-col">
+                        {/* Streaming indicator - top right only */}
+                        {isStreaming && !panel.metadata && !panel.error && (
+                          <div className="flex justify-end mb-3">
+                            <span className="px-2 py-0.5 text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200/50 rounded uppercase tracking-wider">
+                              Streaming
+                            </span>
+                          </div>
+                        )}
+                        
+                        {/* Response or Error/Empty States */}
+                        {panel.error ? (
+                          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                            <div className="flex items-start gap-2">
+                              <span className="text-red-600 text-lg">❌</span>
+                              <div>
+                                <h4 className="text-sm font-semibold text-red-900 mb-1">
+                                  Error
+                                </h4>
+                                <p className="text-sm text-red-700">
+                                  {getUserFriendlyError(panel.error)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : !panel.response && panel.metadata ? (
+                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <div className="flex items-start gap-2">
+                              <span className="text-yellow-600 text-lg">⚠️</span>
+                              <div>
+                                <h4 className="text-sm font-semibold text-yellow-900 mb-1">
+                                  Empty Response
+                                </h4>
+                                <p className="text-sm text-yellow-800">
+                                  The model completed but returned no text. This may happen if all tokens were used for internal reasoning.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : panel.response ? (
+                          <div className="flex-1 flex flex-col min-h-0">
+                            {/* Constrained content container */}
+                            <div className={`relative transition-all duration-200 ease-out ${panel.isExpanded ? '' : 'max-h-[280px]'} ${!panel.isExpanded ? 'overflow-hidden' : ''}`}>
+                              <div className="compare-response-content">
+                                <FormattedResponse response={panel.response} mode="compare" />
+                              </div>
+                              
+                              {/* Gradient fade for collapsed state */}
+                              {!panel.isExpanded && panel.response.length > 400 && (
+                                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+                              )}
+                            </div>
+                            
+                            {/* Expand/Collapse control */}
+                            {panel.response.length > 400 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setModelPanels(prev => ({
+                                    ...prev,
+                                    [modelId]: {
+                                      ...prev[modelId],
+                                      isExpanded: !prev[modelId].isExpanded
+                                    }
+                                  }));
+                                }}
+                                className="mt-3 text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors duration-150 text-left"
+                              >
+                                {panel.isExpanded ? '↑ Show less' : '↓ Expand full response'}
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-400">
+                            Waiting for response...
+                          </div>
+                        )}
 
-                  {/* Response */}
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-sm font-semibold text-gray-900">
-                        Response
-                      </h3>
-                      {isStreaming && !panel.metadata && !panel.error && (
-                        <span className="px-2 py-0.5 text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200/50 rounded uppercase tracking-wider">
-                          Streaming
-                        </span>
-                      )}
+                        {/* Token Limit Warning */}
+                        {panel.metadata?.finishReason === "length" && (
+                          <div className="bg-yellow-50 rounded-lg border border-yellow-200 p-3 mt-4">
+                            <div className="flex items-start gap-2">
+                              <span className="text-yellow-600">⚠️</span>
+                              <div>
+                                <h4 className="text-xs font-semibold text-yellow-900 mb-1">
+                                  Response Incomplete
+                                </h4>
+                                <p className="text-xs text-yellow-800">
+                                  Response cut off due to token limit.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    
-                    {/* Show partial response if it exists */}
-                    {panel.response && (
-                      <div className="mb-3">
-                        <FormattedResponse response={panel.response} />
-                      </div>
-                    )}
-                    
-                    {/* Show error card if panel errored */}
-                    {panel.error ? (
-                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                        <div className="flex items-start gap-2">
-                          <span className="text-red-600 text-lg">❌</span>
-                          <div>
-                            <h4 className="text-sm font-semibold text-red-900 mb-1">
-                              Error
-                            </h4>
-                            <p className="text-sm text-red-700">
-                              {getUserFriendlyError(panel.error)}
-                            </p>
+
+                    {/* Run Metadata Chips */}
+                    {panel.metadata && (
+                      <div className="px-6 pb-4 pt-3">
+                        <div className="flex items-center justify-between gap-4 mb-2">
+                          <div className="flex flex-wrap gap-2">
+                            {/* Always visible chips */}
+                            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
+                              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Provider</span>
+                              <span className="text-xs font-bold text-gray-900">{panel.metadata.provider}</span>
+                            </div>
+                          </div>
+                          
+                          {/* Run details disclosure toggle */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setModelPanels(prev => ({
+                                ...prev,
+                                [modelId]: {
+                                  ...prev[modelId],
+                                  showRunDetails: !prev[modelId].showRunDetails
+                                }
+                              }));
+                            }}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors duration-150 rounded-md hover:bg-gray-100/50"
+                          >
+                            <span>Run details</span>
+                            <svg
+                              className={`w-3 h-3 transition-transform duration-200 ${panel.showRunDetails ? 'rotate-180' : ''}`}
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                        </div>
+                        
+                        {/* Collapsible run details */}
+                        <div className={`overflow-hidden transition-all duration-200 ease-out ${panel.showRunDetails ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'}`}>
+                          <div className="flex flex-wrap gap-2 pt-2">
+                            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
+                              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Latency</span>
+                              <span className="text-xs font-bold text-gray-900 font-mono tabular-nums">
+                                {(panel.metadata.latency / 1000).toFixed(1)}s
+                              </span>
+                            </div>
+                            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
+                              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Tokens</span>
+                              <span className="text-xs font-bold text-gray-900 font-mono tabular-nums">
+                                {panel.metadata.tokenUsage?.total || "N/A"}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ) : !panel.response && panel.metadata ? (
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                        <div className="flex items-start gap-2">
-                          <span className="text-yellow-600 text-lg">⚠️</span>
-                          <div>
-                            <h4 className="text-sm font-semibold text-yellow-900 mb-1">
-                              Empty Response
-                            </h4>
-                            <p className="text-sm text-yellow-800">
-                              The model completed but returned no text. This may happen if all tokens were used for internal reasoning. Try a simpler prompt or check the token limit warning above.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ) : !panel.response && (
-                      <div className="text-sm text-gray-400">
-                        Waiting for response...
                       </div>
                     )}
                   </div>
-
-                  {/* Token Limit Warning */}
-                  {panel.metadata?.finishReason === "length" && (
-                    <div className="bg-yellow-50 rounded-lg border border-yellow-200 p-3 mb-3">
-                      <div className="flex items-start gap-2">
-                        <span className="text-yellow-600">⚠️</span>
-                        <div>
-                          <h4 className="text-xs font-semibold text-yellow-900 mb-1">
-                            Response Incomplete
-                          </h4>
-                          <p className="text-xs text-yellow-800">
-                            Response cut off due to token limit.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Metadata */}
-                  {panel.metadata && (
-                    <div className="bg-gray-50 rounded-lg p-3 text-xs space-y-1">
-                      <div>
-                        <span className="text-gray-600">Latency:</span>
-                        <span className="ml-2 font-medium text-gray-900">
-                          {(panel.metadata.latency / 1000).toFixed(1)} seconds
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Tokens:</span>
-                        <span className="ml-2 font-medium text-gray-900">
-                          {panel.metadata.tokenUsage?.total || "N/A"}
-                        </span>
-                      </div>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
