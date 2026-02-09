@@ -1154,12 +1154,17 @@ export default function Home() {
                   ? "Ask a follow-up question..." 
                   : "Enter your prompt here..."
               }
-              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-vertical bg-white text-base leading-relaxed text-gray-900 placeholder:text-gray-400 ${
-                isOverLimit ? "border-red-500" : "border-gray-300"
+              className={`w-full px-5 py-4 border-2 rounded-lg outline-none resize-vertical bg-white text-lg leading-7 text-gray-900 placeholder:text-gray-400/70 transition-all duration-300 ease-out ${
+                isOverLimit 
+                  ? "border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10" 
+                  : "border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
               }`}
               rows={6}
               disabled={isStreaming}
               aria-describedby="character-count"
+              style={{
+                boxShadow: 'none',
+              }}
             />
             
             {/* Utilities row - Tier 3 (Supporting) */}
