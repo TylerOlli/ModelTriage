@@ -481,7 +481,7 @@ export default function Home() {
     setRoutingReasonOverride(null);
     setMetadata(null);
     setIsStreaming(true);
-    setStreamingStage("connecting"); // Initial stage
+    setStreamingStage("routing"); // Initial stage: routing
     setShowRunDetails(false); // Collapse details on new request
     
     // Reset IMAGE_GIST upgrade tracking
@@ -522,10 +522,10 @@ export default function Home() {
 
       for await (const { event, data } of parseSSE(res)) {
         if (event === "meta") {
-          // First meta event - show routing stage immediately for auto mode
+          // First meta event - connection established
           if (data.status === "connected") {
-            // Initial connection established - show routing for auto mode
-            setStreamingStage("routing");
+            // Move to connecting stage after routing
+            setStreamingStage("connecting");
           }
           
           // Store routing metadata
@@ -540,19 +540,16 @@ export default function Home() {
               console.log("[STREAM] Skipping meta routing update - IMAGE_GIST has already upgraded reason");
             }
             
-            // After routing completes, switch to contacting
-            if (data.routing.mode === "auto") {
-              setStreamingStage("contacting");
-            } else {
-              setStreamingStage("contacting");
+            // After routing metadata arrives, move to connecting (if not already there)
+            if (streamingStage === "routing") {
+              setStreamingStage("connecting");
             }
           }
           if (data.models) {
             currentModel = data.models[0]; // Single answer mode has one model
           }
         } else if (event === "model_start") {
-          // Model is starting
-          setStreamingStage("contacting");
+          // Model is starting - stay on connecting, will move to streaming on first chunk
         } else if (event === "routing_update") {
           // Update routing with IMAGE_GIST-derived information
           console.log("Received routing_update event:", data);
@@ -763,7 +760,7 @@ export default function Home() {
     setDiffSummary(null);
     setDiffError(null);
     setIsStreaming(true);
-    setStreamingStage("connecting"); // Initial stage
+    setStreamingStage("routing"); // Initial stage: routing
 
     // Create abort controller
     abortControllerRef.current = new AbortController();
@@ -800,13 +797,10 @@ export default function Home() {
       // Parse SSE stream
       for await (const { event, data } of parseSSE(res)) {
         if (event === "meta") {
-          // Manual mode - show contacting as soon as connected
-          if (streamingStage === "connecting") {
-            setStreamingStage("contacting");
-          }
+          // Connection established - move to connecting stage
+          setStreamingStage("connecting");
         } else if (event === "model_start") {
-          // Models are starting
-          setStreamingStage("contacting");
+          // Models are starting - stay on connecting
         } else if (event === "ping") {
           // Keep-alive ping, ignore
         } else if (event === "chunk") {
