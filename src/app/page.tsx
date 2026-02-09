@@ -1204,7 +1204,7 @@ export default function Home() {
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isStreaming || attachedFiles.length >= 3}
-                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 text-gray-600"
+                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 active:translate-y-[0.5px] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 flex items-center gap-2 text-gray-600"
                 >
                   📎 Attach Files
                 </button>
@@ -1228,7 +1228,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setShowHistory(!showHistory)}
-                    className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+                    className="text-xs text-gray-500 hover:text-gray-700 font-medium transition-colors duration-150"
                   >
                     {showHistory ? "Hide History" : "Show History"}
                   </button>
@@ -1246,7 +1246,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={clearHistory}
-                    className="text-xs text-red-600 hover:text-red-700 font-semibold"
+                    className="text-xs text-red-600 hover:text-red-700 font-semibold transition-colors duration-150"
                   >
                     Clear History
                   </button>
@@ -1260,7 +1260,7 @@ export default function Home() {
                         setPrompt(historyItem);
                         setShowHistory(false);
                       }}
-                      className="w-full text-left px-3 py-2 text-sm text-gray-700 bg-gray-50 hover:bg-gray-100 rounded border border-gray-200 hover:border-gray-300 transition-colors"
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 bg-gray-50 hover:bg-gray-100 rounded border border-gray-200 hover:border-gray-300 transition-all duration-150"
                     >
                       <span className="line-clamp-2">{historyItem}</span>
                     </button>
@@ -1318,7 +1318,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 font-medium transition-all duration-200"
+                  className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 active:translate-y-[1px] font-medium transition-all duration-200"
                 >
                   Cancel
                 </button>
@@ -1328,7 +1328,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={handleClear}
-                  className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 font-medium transition-all duration-200"
+                  className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 active:translate-y-[1px] font-medium transition-all duration-200"
                 >
                   Clear
                 </button>
@@ -1390,7 +1390,7 @@ export default function Home() {
 
             {/* Response Display */}
             {(response || error || metadata) && (
-              <div className="space-y-4">
+              <div className="space-y-4 animate-in fade-in duration-300">
                 {response && (
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                     <div className="flex items-center justify-between mb-3">
@@ -1485,7 +1485,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={handleContinueConversation}
-                      className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-gradient-to-br hover:from-blue-600 hover:to-blue-700 font-medium transition-all duration-200 text-sm flex items-center gap-2"
+                      className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-gradient-to-br hover:from-blue-600 hover:to-blue-700 active:translate-y-[1px] font-medium transition-all duration-200 text-sm flex items-center gap-2"
                     >
                       <span>💬</span>
                       Ask a follow-up
@@ -1509,7 +1509,7 @@ export default function Home() {
                       <button
                         type="button"
                         onClick={handleClear}
-                        className="px-4 py-1 text-sm bg-white text-red-700 border border-red-300 rounded-lg hover:bg-red-50 font-medium transition-colors"
+                        className="px-4 py-1 text-sm bg-white text-red-700 border border-red-300 rounded-lg hover:bg-red-50 hover:border-red-400 active:translate-y-[0.5px] font-medium transition-all duration-150"
                       >
                         Try Again
                       </button>
@@ -1834,7 +1834,7 @@ export default function Home() {
                       <button
                         type="button"
                         onClick={handleContinueConversation}
-                        className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-gradient-to-br hover:from-blue-600 hover:to-blue-700 font-medium transition-all duration-200 text-sm flex items-center gap-2"
+                        className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-gradient-to-br hover:from-blue-600 hover:to-blue-700 active:translate-y-[1px] font-medium transition-all duration-200 text-sm flex items-center gap-2"
                       >
                         <span>💬</span>
                         Ask a follow-up
