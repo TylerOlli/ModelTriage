@@ -593,85 +593,100 @@ export default function Home() {
           // Log chunk delta (first 80 chars)
           console.log("[STREAM] chunk delta head:", data.delta.slice(0, 80));
           
-          // IMAGE_GIST parsing (frontend-only)
-          if (!gistParsed && gistBuffer.length < 800) {
-            gistBuffer += data.delta;
-            
-            // Check if IMAGE_GIST line is complete (has newline after it)
-            if (gistBuffer.includes("IMAGE_GIST:") && gistBuffer.includes("\n")) {
-              const gistLineStart = gistBuffer.indexOf("IMAGE_GIST:");
-              const gistLineEnd = gistBuffer.indexOf("\n", gistLineStart);
+          // IMAGE_GIST parsing (frontend-only, ONLY for image requests)
+          // Check if this might be an image response by looking for IMAGE_GIST in early chunks
+          if (!gistParsed) {
+            if (gistBuffer.length < 800) {
+              gistBuffer += data.delta;
               
-              if (gistLineEnd !== -1) {
-                // Extract and parse IMAGE_GIST
-                const gistLine = gistBuffer.substring(gistLineStart, gistLineEnd);
-                const jsonPart = gistLine.substring("IMAGE_GIST:".length).trim();
+              // Check if IMAGE_GIST line is complete (has newline after it)
+              if (gistBuffer.includes("IMAGE_GIST:") && gistBuffer.includes("\n")) {
+                const gistLineStart = gistBuffer.indexOf("IMAGE_GIST:");
+                const gistLineEnd = gistBuffer.indexOf("\n", gistLineStart);
                 
-                try {
-                  const gist = JSON.parse(jsonPart);
-                  console.log("[STREAM] parsed IMAGE_GIST:", gist);
+                if (gistLineEnd !== -1) {
+                  // Extract and parse IMAGE_GIST
+                  const gistLine = gistBuffer.substring(gistLineStart, gistLineEnd);
+                  const jsonPart = gistLine.substring("IMAGE_GIST:".length).trim();
                   
-                  // Infer user intent from prompt
-                  const promptLower = prompt.toLowerCase();
-                  let userIntent = "analyze the code";
-                  if (promptLower.match(/improve|optimize|refactor|enhance|better/)) {
-                    userIntent = "suggest improvements";
-                  } else if (promptLower.match(/explain|describe|what does|how does|understand/)) {
-                    userIntent = "explain what it does";
-                  } else if (promptLower.match(/fix|debug|error|issue|problem|bug|wrong/)) {
-                    userIntent = "identify issues and fixes";
-                  }
-                  
-                  // Build prompt-aware routing reason from gist
-                  const modelDisplayName = "Gemini 2.5 Flash";
-                  let newReason = "";
-                  
-                  if (gist.certainty === "high" && gist.language && gist.language !== "unknown" && gist.purpose && gist.purpose !== "unknown") {
-                    newReason = `This screenshot shows ${gist.language} code that ${gist.purpose}, so ${modelDisplayName} is a strong fit to accurately read code from images and ${userIntent}.`;
-                  } else if (gist.language && gist.language !== "unknown") {
-                    newReason = `This screenshot shows ${gist.language} code, so ${modelDisplayName} is a strong fit to accurately read code from images and ${userIntent}.`;
-                  } else {
-                    newReason = `This screenshot contains code, so ${modelDisplayName} is a strong fit to accurately read code from images and ${userIntent}.`;
-                  }
-                  
-                  console.log("[STREAM] updated routing.reason:", newReason);
-                  
-                  // Set UI-only override (persists through stream completion)
-                  setRoutingReasonOverride(newReason);
-                  
-                  // Mark that IMAGE_GIST has upgraded the routing reason
-                  imageGistUpgradedRef.current = true;
-                  console.log("[STREAM] IMAGE_GIST upgrade flag set - preventing future meta overwrites");
-                  
-                  setRouting((prev) => {
-                    if (prev) {
-                      return { ...prev, reason: newReason };
+                  try {
+                    const gist = JSON.parse(jsonPart);
+                    console.log("[STREAM] parsed IMAGE_GIST:", gist);
+                    
+                    // Infer user intent from prompt
+                    const promptLower = prompt.toLowerCase();
+                    let userIntent = "analyze the code";
+                    if (promptLower.match(/improve|optimize|refactor|enhance|better/)) {
+                      userIntent = "suggest improvements";
+                    } else if (promptLower.match(/explain|describe|what does|how does|understand/)) {
+                      userIntent = "explain what it does";
+                    } else if (promptLower.match(/fix|debug|error|issue|problem|bug|wrong/)) {
+                      userIntent = "identify issues and fixes";
                     }
-                    return prev;
-                  });
-                  
-                  gistParsed = true;
-                  
-                  // Strip IMAGE_GIST line from buffer
-                  const textAfterGist = gistBuffer.substring(gistLineEnd + 1);
-                  gistBuffer = "";
-                  gistLineFullyConsumed = true;
-                  
-                  // Start displaying text after the gist line
-                  textBuffer = textAfterGist;
-                  setResponse(textBuffer);
-                } catch (e) {
-                  console.warn("[UI] Failed to parse IMAGE_GIST:", e);
-                  gistParsed = true;
-                  gistLineFullyConsumed = true;
-                  // Show all text if parsing fails
-                  textBuffer += data.delta;
-                  setResponse(textBuffer);
+                    
+                    // Build prompt-aware routing reason from gist
+                    const modelDisplayName = "Gemini 2.5 Flash";
+                    let newReason = "";
+                    
+                    if (gist.certainty === "high" && gist.language && gist.language !== "unknown" && gist.purpose && gist.purpose !== "unknown") {
+                      newReason = `This screenshot shows ${gist.language} code that ${gist.purpose}, so ${modelDisplayName} is a strong fit to accurately read code from images and ${userIntent}.`;
+                    } else if (gist.language && gist.language !== "unknown") {
+                      newReason = `This screenshot shows ${gist.language} code, so ${modelDisplayName} is a strong fit to accurately read code from images and ${userIntent}.`;
+                    } else {
+                      newReason = `This screenshot contains code, so ${modelDisplayName} is a strong fit to accurately read code from images and ${userIntent}.`;
+                    }
+                    
+                    console.log("[STREAM] updated routing.reason:", newReason);
+                    
+                    // Set UI-only override (persists through stream completion)
+                    setRoutingReasonOverride(newReason);
+                    
+                    // Mark that IMAGE_GIST has upgraded the routing reason
+                    imageGistUpgradedRef.current = true;
+                    console.log("[STREAM] IMAGE_GIST upgrade flag set - preventing future meta overwrites");
+                    
+                    setRouting((prev) => {
+                      if (prev) {
+                        return { ...prev, reason: newReason };
+                      }
+                      return prev;
+                    });
+                    
+                    gistParsed = true;
+                    
+                    // Strip IMAGE_GIST line from buffer
+                    const textAfterGist = gistBuffer.substring(gistLineEnd + 1);
+                    gistBuffer = "";
+                    gistLineFullyConsumed = true;
+                    
+                    // Start displaying text after the gist line
+                    textBuffer = textAfterGist;
+                    setResponse(textBuffer);
+                  } catch (e) {
+                    console.warn("[UI] Failed to parse IMAGE_GIST:", e);
+                    gistParsed = true;
+                    gistLineFullyConsumed = true;
+                    // Show all text if parsing fails
+                    textBuffer += gistBuffer;
+                    gistBuffer = "";
+                    setResponse(textBuffer);
+                  }
                 }
               }
+            } else {
+              // Buffer reached 800 chars without finding IMAGE_GIST - this is NOT an image response
+              // Flush the buffer to textBuffer and stop buffering
+              console.log("[STREAM] No IMAGE_GIST found in first 800 chars - treating as normal response");
+              gistParsed = true; // Stop buffering
+              textBuffer += gistBuffer;
+              gistBuffer = "";
+              setResponse(textBuffer);
+              // Also add current delta
+              textBuffer += data.delta;
+              setResponse(textBuffer);
             }
           } else {
-            // Normal chunk processing (after gist is parsed or no gist)
+            // Normal chunk processing (after gist is parsed or buffer is full)
             textBuffer += data.delta;
             setResponse(textBuffer);
           }
@@ -690,7 +705,13 @@ export default function Home() {
           // Handle error
           throw new Error(data.message || "Stream error");
         } else if (event === "complete") {
-          // Stream complete
+          // Stream complete - flush any remaining gistBuffer content
+          if (gistBuffer.length > 0 && !gistParsed) {
+            console.log("[STREAM] Stream complete - flushing remaining buffer:", gistBuffer.length, "chars");
+            textBuffer += gistBuffer;
+            gistBuffer = "";
+            setResponse(textBuffer);
+          }
           break;
         }
       }
