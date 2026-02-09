@@ -157,6 +157,9 @@ export default function Home() {
   
   // Comparison summary accordion state
   const [showFullAnalysis, setShowFullAnalysis] = useState(false);
+  
+  // Comparison follow-up input state
+  const [comparisonFollowUp, setComparisonFollowUp] = useState("");
 
   // File attachment state
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
@@ -955,6 +958,40 @@ export default function Home() {
     promptInputRef.current?.focus();
     // Scroll to prompt input
     promptInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+  
+  const handleComparisonFollowUp = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Submit on Enter, allow Shift+Enter for newline
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      
+      const followUpText = comparisonFollowUp.trim();
+      if (!followUpText || isStreaming) return;
+      
+      // Build context from comparison summary
+      let contextPrompt = `Original prompt: ${prompt}\n\n`;
+      
+      if (diffSummary) {
+        contextPrompt += `Previous comparison summary:\n`;
+        if (diffSummary.commonGround.length > 0) {
+          contextPrompt += `Common Ground: ${diffSummary.commonGround.join("; ")}\n`;
+        }
+        if (diffSummary.keyDifferences.length > 0) {
+          contextPrompt += `Key Differences: ${diffSummary.keyDifferences.map(d => `${d.model}: ${d.points.join(", ")}`).join("; ")}\n`;
+        }
+      }
+      
+      contextPrompt += `\nFollow-up question: ${followUpText}`;
+      
+      // Set as new prompt and trigger submission
+      setPrompt(contextPrompt);
+      setComparisonFollowUp("");
+      
+      // Trigger comparison mode submission
+      setTimeout(() => {
+        handleVerifyModeSubmit();
+      }, 100);
+    }
   };
 
   // File attachment handlers
@@ -2230,6 +2267,74 @@ export default function Home() {
                     </div>
                   )}
                 </div>
+                
+                {/* Inline Follow-up Input */}
+                <div className="px-6 pb-5 pt-3 border-t border-gray-200/60">
+                  <div className="relative flex items-center gap-2">
+                    <textarea
+                      value={comparisonFollowUp}
+                      onChange={(e) => setComparisonFollowUp(e.target.value)}
+                      onKeyDown={handleComparisonFollowUp}
+                      placeholder="Ask a follow-up about this comparison…"
+                      rows={1}
+                      disabled={isStreaming}
+                      className="flex-1 px-4 py-2.5 text-sm border border-gray-300 rounded-lg outline-none resize-none bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-200 ease-out focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed peer"
+                      style={{ minHeight: '44px', maxHeight: '120px' }}
+                      onInput={(e) => {
+                        const target = e.target as HTMLTextAreaElement;
+                        target.style.height = 'auto';
+                        target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+                      }}
+                    />
+                    
+                    {/* Send button - matches primary CTA styling */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const followUpText = comparisonFollowUp.trim();
+                        if (!followUpText || isStreaming) return;
+                        
+                        // Build context and submit (same logic as Enter handler)
+                        let contextPrompt = `Original prompt: ${prompt}\n\n`;
+                        
+                        if (diffSummary) {
+                          contextPrompt += `Previous comparison summary:\n`;
+                          if (diffSummary.commonGround.length > 0) {
+                            contextPrompt += `Common Ground: ${diffSummary.commonGround.join("; ")}\n`;
+                          }
+                          if (diffSummary.keyDifferences.length > 0) {
+                            contextPrompt += `Key Differences: ${diffSummary.keyDifferences.map(d => `${d.model}: ${d.points.join(", ")}`).join("; ")}\n`;
+                          }
+                        }
+                        
+                        contextPrompt += `\nFollow-up question: ${followUpText}`;
+                        
+                        setPrompt(contextPrompt);
+                        setComparisonFollowUp("");
+                        
+                        setTimeout(() => {
+                          handleVerifyModeSubmit();
+                        }, 100);
+                      }}
+                      disabled={!comparisonFollowUp.trim() || isStreaming}
+                      className="flex-shrink-0 w-11 h-11 flex items-center justify-center bg-blue-600 text-white rounded-lg hover:bg-gradient-to-br hover:from-blue-600 hover:to-blue-700 active:translate-y-[1px] disabled:bg-gray-300 disabled:cursor-not-allowed transition-all duration-200 shadow-sm group"
+                      aria-label="Send follow-up"
+                    >
+                      <svg 
+                        className="w-5 h-5 transition-transform duration-150 group-hover:translate-x-0.5" 
+                        fill="none" 
+                        viewBox="0 0 24 24" 
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  <p className="text-[10px] text-gray-400 mt-1.5 leading-relaxed opacity-60 peer-focus:opacity-100 transition-opacity duration-200">
+                    Press Enter to submit • Shift+Enter for new line
+                  </p>
+                </div>
               </div>
             )}
 
@@ -2374,30 +2479,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Continue Conversation Button for Comparison Mode */}
-            {!isStreaming && Object.keys(modelPanels).length > 0 && (
-              (() => {
-                const hasAnyResponse = Object.values(modelPanels).some(
-                  (p) => !p.error && p.response.length > 0
-                );
-                if (hasAnyResponse) {
-                  return (
-                    <div className="flex justify-center pt-2">
-                      <button
-                        type="button"
-                        onClick={handleContinueConversation}
-                        className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-gradient-to-br hover:from-blue-600 hover:to-blue-700 active:translate-y-[1px] font-medium transition-all duration-200 text-sm flex items-center gap-2"
-                      >
-                        <span>💬</span>
-                        Ask a follow-up
-                      </button>
-                    </div>
-                  );
-                }
-                return null;
-              })()
-            )}
-            
             {/* Show message when not enough successful panels for comparison */}
             {!isStreaming && !diffSummary && !diffError && Object.keys(modelPanels).length > 0 && (
               (() => {
