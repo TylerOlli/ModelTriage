@@ -25,10 +25,10 @@ export const BLOCKED_EXTENSIONS = {
   documents: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp'],
   databases: ['.db', '.sqlite', '.mdb'],
   other: ['.iso', '.img'],
-} as const;
+};
 
 // Flatten all blocked extensions
-const ALL_BLOCKED_EXTENSIONS = Object.values(BLOCKED_EXTENSIONS).flat();
+const ALL_BLOCKED_EXTENSIONS: string[] = Object.values(BLOCKED_EXTENSIONS).flat();
 
 export const ALLOWED_IMAGE_TYPES = [
   "image/png",
@@ -37,7 +37,7 @@ export const ALLOWED_IMAGE_TYPES = [
   "image/webp",
   "image/gif",
   "image/svg+xml",
-] as const;
+];
 
 // ===== Types =====
 
