@@ -194,30 +194,134 @@ export class IntentRouter {
       ? "GPT-5.2"
       : chosenModel.includes("claude-opus")
       ? "Claude Opus 4.5"
+      : chosenModel.includes("gpt-5-mini")
+      ? "GPT-5 Mini"
+      : chosenModel.includes("gemini-2.5-pro")
+      ? "Gemini 2.5 Pro"
+      : chosenModel.includes("gemini-2.5-flash")
+      ? "Gemini 2.5 Flash"
+      : chosenModel.includes("haiku")
+      ? "Claude Haiku 4.5"
       : "the selected model";
+    
+    // Build a natural file description: "a CSS stylesheet with responsive layout styles"
+    const fileDescription = this.buildFileDescription(gist);
     
     // Construct explanation based on gist
     if (isComplex) {
       // Complex/deep reasoning scenario
-      return `This upload is ${gist.kind.toLowerCase()} defining ${gist.topic}, and ${modelDisplayName} is well-suited for complex analysis and architectural decisions.`;
+      const complexCapability = this.getComplexCapability(gist);
+      return `This is ${fileDescription}, and ${modelDisplayName} is the best fit because it excels at ${complexCapability}.`;
     } else {
       // Standard file upload
-      let capability = "accurate code analysis and edits";
-      
-      if (gist.signals.includes("error codes") || gist.signals.includes("build failure")) {
-        capability = "debugging and pinpointing root causes";
-      } else if (gist.signals.includes("React") || gist.signals.includes("Next.js")) {
-        capability = `analyzing and refactoring ${gist.language || "code"} with framework knowledge`;
-      } else if (gist.signals.includes("types")) {
-        capability = "type-safe code analysis and refactoring";
-      } else if (gist.signals.includes("tests")) {
-        capability = "test analysis and coverage improvements";
-      } else if (gist.language && gist.language !== "text") {
-        capability = `accurate ${gist.language} analysis and edits`;
-      }
-      
-      return `This upload is ${gist.kind.toLowerCase()} defining ${gist.topic}, and ${modelDisplayName} is a strong fit for ${capability}.`;
+      const capability = this.getFileCapability(gist);
+      return `This is ${fileDescription}, and ${modelDisplayName} is the best fit for ${capability}.`;
     }
+  }
+
+  /**
+   * Build a natural-sounding file description from gist data
+   * e.g., "a CSS stylesheet with responsive layout styles" or "a TypeScript file defining React component with hooks"
+   */
+  private buildFileDescription(gist: { kind: string; language?: string; topic: string; signals: string[] }): string {
+    const kind = gist.kind.toLowerCase();
+    const topic = gist.topic;
+
+    // If the kind already includes the language (e.g., "CSS stylesheet", "TypeScript file"),
+    // just describe what it contains
+    if (topic && topic !== "code" && topic !== `${gist.language} code`) {
+      return `${this.articleFor(kind)} ${kind} with ${topic}`;
+    }
+    
+    // Generic: just the kind
+    return `${this.articleFor(kind)} ${kind}`;
+  }
+
+  /**
+   * Get the right capability description for complex file analysis
+   */
+  private getComplexCapability(gist: { signals: string[]; language?: string; topic: string }): string {
+    if (gist.signals.includes("database") || gist.signals.includes("schema")) {
+      return "complex schema analysis and database architecture decisions";
+    }
+    if (gist.signals.includes("infrastructure") || gist.signals.includes("Docker")) {
+      return "infrastructure analysis and deployment architecture";
+    }
+    if (gist.signals.includes("React") || gist.signals.includes("Next.js") || gist.signals.includes("Vue") || gist.signals.includes("Svelte")) {
+      return "deep component architecture analysis and framework-aware refactoring";
+    }
+    return "complex analysis, architectural decisions, and thorough code reasoning";
+  }
+
+  /**
+   * Get the right capability description for standard file uploads
+   */
+  private getFileCapability(gist: { signals: string[]; language?: string; topic: string; kind: string }): string {
+    // Error/debug scenarios
+    if (gist.signals.includes("error codes") || gist.signals.includes("build failure")) {
+      return "debugging and pinpointing root causes in error output";
+    }
+    // Styling files
+    if (gist.signals.includes("styling")) {
+      if (gist.signals.includes("Tailwind")) return "Tailwind CSS analysis and styling improvements";
+      if (gist.signals.includes("responsive")) return "responsive design analysis and CSS improvements";
+      if (gist.signals.includes("animations")) return "animation and transition refinements";
+      return "CSS analysis, styling updates, and visual design improvements";
+    }
+    // Markup files
+    if (gist.signals.includes("markup")) {
+      return "HTML structure analysis, accessibility improvements, and semantic markup";
+    }
+    // Database files
+    if (gist.signals.includes("database") || gist.signals.includes("schema")) {
+      return "SQL analysis, query optimization, and schema improvements";
+    }
+    // Scripting
+    if (gist.signals.includes("scripting") || gist.signals.includes("CI/CD")) {
+      return "script analysis, automation improvements, and best practices";
+    }
+    // Documentation
+    if (gist.signals.includes("documentation")) {
+      return "documentation improvements, clarity, and structure";
+    }
+    // Data files
+    if (gist.signals.includes("data")) {
+      return "data analysis, structure validation, and processing";
+    }
+    // Config files
+    if (gist.signals.includes("config")) {
+      return "configuration analysis and optimization";
+    }
+    // Framework-specific
+    if (gist.signals.includes("React") || gist.signals.includes("Next.js")) {
+      return `${gist.language || "code"} analysis and framework-aware improvements`;
+    }
+    // Type definitions
+    if (gist.signals.includes("types")) {
+      return "type-safe code analysis and refactoring";
+    }
+    // Tests
+    if (gist.signals.includes("tests")) {
+      return "test analysis, coverage improvements, and best practices";
+    }
+    // Academic
+    if (gist.signals.includes("academic")) {
+      return "LaTeX formatting, structure improvements, and content review";
+    }
+    // Language-specific fallback
+    if (gist.language && gist.language !== "text") {
+      return `${gist.language} analysis, improvements, and accurate edits`;
+    }
+    // Generic fallback
+    return "accurate file analysis and improvements";
+  }
+
+  /**
+   * Return "a" or "an" based on the word following it
+   */
+  private articleFor(word: string): string {
+    const firstChar = word.charAt(0).toLowerCase();
+    return ["a", "e", "i", "o", "u"].includes(firstChar) ? "an" : "a";
   }
 
   /**
