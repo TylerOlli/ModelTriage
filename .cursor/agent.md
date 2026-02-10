@@ -22,3 +22,13 @@ Cost and safety rules:
 Work output rules:
 - For each change, explicitly state which requirement(s) from .specify/requirements.md it implements.
 - Keep tasks small and incremental. Do not implement multiple major features in one change set.
+
+Documentation rules:
+- NEVER create markdown files in the project root directory.
+- ALL feature and technical documentation must go in the `docs/` folder.
+- Only `README.md` and `DEPLOYMENT.md` belong in the root.
+- When creating documentation about a feature implementation:
+  - Implementation details: `docs/feature-name.md`
+  - Testing guides: `docs/feature-name-testing.md`
+  - Architecture notes: `docs/architecture.md` (append to existing)
+- Before writing any .md file, check if it should go in `docs/` (it almost always should).

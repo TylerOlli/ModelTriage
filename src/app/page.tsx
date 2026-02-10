@@ -164,6 +164,8 @@ export default function Home() {
   // File attachment state
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const dragCounterRef = useRef(0); // Track nested drag events
   
   // Track if IMAGE_GIST has upgraded routing.reason (prevent overwrites)
   const imageGistUpgradedRef = useRef(false);
@@ -1173,6 +1175,85 @@ export default function Home() {
     setAttachedFiles(attachedFiles.filter((_, i) => i !== index));
   };
 
+  // Drag-and-drop handlers
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Prevent drag state if streaming or max files reached
+    if (isStreaming || attachedFiles.length >= 3) {
+      return;
+    }
+    
+    dragCounterRef.current += 1;
+    
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDraggingOver(true);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    dragCounterRef.current -= 1;
+    
+    if (dragCounterRef.current === 0) {
+      setIsDraggingOver(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsDraggingOver(false);
+    dragCounterRef.current = 0;
+    
+    // Prevent drop if streaming
+    if (isStreaming) {
+      return;
+    }
+    
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    
+    // Filter for supported file types
+    const supportedExtensions = ['.txt', '.log', '.json', '.md', '.ts', '.tsx', '.js', '.jsx', '.env', '.yml', '.yaml'];
+    const supportedImageTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    
+    const validFiles = droppedFiles.filter(file => {
+      const extension = '.' + file.name.split('.').pop()?.toLowerCase();
+      return supportedExtensions.includes(extension) || supportedImageTypes.includes(file.type);
+    });
+    
+    const invalidFiles = droppedFiles.filter(file => {
+      const extension = '.' + file.name.split('.').pop()?.toLowerCase();
+      return !supportedExtensions.includes(extension) && !supportedImageTypes.includes(file.type);
+    });
+    
+    // Show error for unsupported files
+    if (invalidFiles.length > 0) {
+      const fileNames = invalidFiles.map(f => f.name).join(', ');
+      alert(`Unsupported file type(s): ${fileNames}\n\nSupported: .txt, .log, .json, .md, .ts, .tsx, .js, .jsx, .env, .yml, .yaml, PNG, JPEG, WebP`);
+    }
+    
+    // Check total file count
+    if (attachedFiles.length + validFiles.length > 3) {
+      alert(`Maximum 3 files allowed. You have ${attachedFiles.length} file(s) attached and tried to add ${validFiles.length} more.`);
+      return;
+    }
+    
+    // Add valid files
+    if (validFiles.length > 0) {
+      setAttachedFiles([...attachedFiles, ...validFiles]);
+    }
+  };
+
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -1385,7 +1466,13 @@ export default function Home() {
 
         {/* Prompt Input Form - Tier 1 (Primary) */}
         <form onSubmit={handleSubmit} className="mb-8">
-          <div className="bg-slate-50 rounded-lg shadow-md border border-gray-300 p-8">
+          <div 
+            className="relative bg-slate-50 rounded-lg shadow-md border border-gray-300 p-8"
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             <div className="flex items-center justify-between mb-2">
               <label
                 htmlFor="prompt"
@@ -1400,6 +1487,20 @@ export default function Home() {
                 </span>
               )}
             </div>
+            
+            {/* Drag-and-drop indicator */}
+            {isDraggingOver && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-blue-50/80 backdrop-blur-sm rounded-lg border-2 border-blue-400 border-dashed pointer-events-none">
+                <div className="text-center">
+                  <div className="text-4xl mb-2">📎</div>
+                  <div className="text-sm font-medium text-blue-700">Drop files to attach</div>
+                  <div className="text-xs text-blue-600 mt-1">
+                    {attachedFiles.length > 0 && `${3 - attachedFiles.length} more file${3 - attachedFiles.length !== 1 ? 's' : ''} allowed`}
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <textarea
               ref={promptInputRef}
               id="prompt"
@@ -1411,9 +1512,11 @@ export default function Home() {
                   : "Enter your prompt here..."
               }
               className={`w-full px-5 py-4 border-2 rounded-lg outline-none resize-vertical bg-white text-lg leading-7 text-gray-900 placeholder:text-gray-400/70 transition-all duration-300 ease-out ${
-                isOverLimit 
-                  ? "border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10" 
-                  : "border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                isDraggingOver
+                  ? "border-blue-400 ring-4 ring-blue-500/20 bg-blue-50/30"
+                  : isOverLimit 
+                    ? "border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10" 
+                    : "border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
               }`}
               rows={6}
               disabled={isStreaming}
