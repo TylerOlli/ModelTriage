@@ -262,6 +262,10 @@ export default function Home() {
   // UI-only override for routing reason (from IMAGE_GIST)
   const [routingReasonOverride, setRoutingReasonOverride] = useState<string | null>(null);
 
+  // Reasoning expand/collapse state
+  const [isReasoningExpanded, setIsReasoningExpanded] = useState(false);
+  const [expandedModelReasonings, setExpandedModelReasonings] = useState<Record<string, boolean>>({});
+
   // Conversation continuation state (for follow-up prompts)
   const [previousPrompt, setPreviousPrompt] = useState<string>("");
   const [previousResponse, setPreviousResponse] = useState<string>("");
@@ -545,6 +549,7 @@ export default function Home() {
     setIsStreaming(true);
     setStreamingStage("routing"); // Initial stage: routing
     setShowRunDetails(false); // Collapse details on new request
+    setIsReasoningExpanded(false); // Collapse reasoning on new request
     
     // Reset IMAGE_GIST upgrade tracking
     imageGistUpgradedRef.current = false;
@@ -829,6 +834,7 @@ export default function Home() {
     setDiffError(null);
     setIsStreaming(true);
     setStreamingStage("routing"); // Initial stage: routing
+    setExpandedModelReasonings({}); // Collapse all model reasonings on new request
 
     // Create abort controller
     abortControllerRef.current = new AbortController();
@@ -1007,6 +1013,10 @@ export default function Home() {
     setPreviousPrompt("");
     setPreviousResponse("");
     setIsFollowUpMode(false);
+    
+    // Reset reasoning expand/collapse state
+    setIsReasoningExpanded(false);
+    setExpandedModelReasonings({});
 
     // Clear attached files
     setAttachedFiles([]);
@@ -2063,12 +2073,42 @@ export default function Home() {
                                   Routed
                                 </span>
                               </div>
-                              <p className="text-xs text-gray-500 leading-relaxed line-clamp-1">
+                              
+                              {/* Reasoning with expand/collapse */}
+                              <div className="flex items-start gap-2">
+                                <button
+                                  onClick={() => setIsReasoningExpanded(!isReasoningExpanded)}
+                                  className="text-xs text-gray-500 leading-relaxed line-clamp-1 flex-1 text-left hover:text-gray-700 transition-colors cursor-pointer"
+                                  aria-expanded={isReasoningExpanded}
+                                  aria-controls="reasoning-details"
+                                >
+                                  {routing.reason || "Analyzing your request to select the best model..."}
+                                </button>
+                                <button
+                                  onClick={() => setIsReasoningExpanded(!isReasoningExpanded)}
+                                  className="text-[10px] font-medium text-blue-600 hover:text-blue-700 uppercase tracking-wide flex-shrink-0 transition-colors"
+                                  aria-label={isReasoningExpanded ? "Hide reasoning details" : "Show reasoning details"}
+                                >
+                                  {isReasoningExpanded ? "Hide" : "Show"}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Expanded reasoning details */}
+                        {isReasoningExpanded && (
+                          <div 
+                            id="reasoning-details"
+                            className="px-6 pb-4 pt-2"
+                          >
+                            <div className="bg-slate-50/50 rounded-md border border-gray-200/50 px-3 py-2.5 max-h-40 overflow-y-auto">
+                              <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
                                 {routing.reason || "Analyzing your request to select the best model..."}
                               </p>
                             </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     )}
                     
@@ -2344,13 +2384,47 @@ export default function Home() {
                               </span>
                             </div>
                             {panel.routing && (
-                              <p className="text-xs text-gray-500 leading-relaxed line-clamp-1">
-                                {panel.routing.reason}
-                              </p>
+                              <div className="flex items-start gap-2">
+                                <button
+                                  onClick={() => setExpandedModelReasonings(prev => ({
+                                    ...prev,
+                                    [modelId]: !prev[modelId]
+                                  }))}
+                                  className="text-xs text-gray-500 leading-relaxed line-clamp-1 flex-1 text-left hover:text-gray-700 transition-colors cursor-pointer"
+                                  aria-expanded={expandedModelReasonings[modelId] || false}
+                                  aria-controls={`reasoning-details-${modelId}`}
+                                >
+                                  {panel.routing.reason}
+                                </button>
+                                <button
+                                  onClick={() => setExpandedModelReasonings(prev => ({
+                                    ...prev,
+                                    [modelId]: !prev[modelId]
+                                  }))}
+                                  className="text-[10px] font-medium text-blue-600 hover:text-blue-700 uppercase tracking-wide flex-shrink-0 transition-colors"
+                                  aria-label={expandedModelReasonings[modelId] ? "Hide reasoning details" : "Show reasoning details"}
+                                >
+                                  {expandedModelReasonings[modelId] ? "Hide" : "Show"}
+                                </button>
+                              </div>
                             )}
                           </div>
                         </div>
                       </div>
+                      
+                      {/* Expanded reasoning details */}
+                      {panel.routing && expandedModelReasonings[modelId] && (
+                        <div 
+                          id={`reasoning-details-${modelId}`}
+                          className="px-6 pb-4 pt-2"
+                        >
+                          <div className="bg-slate-50/50 rounded-md border border-gray-200/50 px-3 py-2.5 max-h-40 overflow-y-auto">
+                            <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
+                              {panel.routing.reason}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     
                     {/* Response Content Panel */}
