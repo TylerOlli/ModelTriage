@@ -265,6 +265,7 @@ export default function Home() {
   // Conversation continuation state (for follow-up prompts)
   const [previousPrompt, setPreviousPrompt] = useState<string>("");
   const [previousResponse, setPreviousResponse] = useState<string>("");
+  const [isFollowUpMode, setIsFollowUpMode] = useState(false);
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Comparison Mode state
@@ -786,6 +787,10 @@ export default function Home() {
       // Save conversation context for potential follow-up
       setPreviousPrompt(prompt);
       setPreviousResponse(textBuffer);
+      
+      // Reset follow-up mode after successful submission
+      // User needs to explicitly click "Ask a follow-up" again
+      setIsFollowUpMode(false);
     } catch (err) {
       if (err instanceof Error) {
         if (err.name === "AbortError") {
@@ -925,6 +930,10 @@ export default function Home() {
         setPreviousPrompt(prompt);
         setPreviousResponse(firstSuccessfulResponse);
       }
+      
+      // Reset follow-up mode after successful submission
+      // User needs to explicitly click "Ask a follow-up" again
+      setIsFollowUpMode(false);
     } catch (err) {
       if (err instanceof Error) {
         if (err.name === "AbortError") {
@@ -997,6 +1006,7 @@ export default function Home() {
     // Clear conversation context
     setPreviousPrompt("");
     setPreviousResponse("");
+    setIsFollowUpMode(false);
 
     // Clear attached files
     setAttachedFiles([]);
@@ -1007,6 +1017,8 @@ export default function Home() {
   };
 
   const handleContinueConversation = () => {
+    // Enable follow-up mode
+    setIsFollowUpMode(true);
     // Focus the prompt input to let user type a follow-up
     promptInputRef.current?.focus();
     // Scroll to prompt input
@@ -1062,6 +1074,8 @@ export default function Home() {
     } else {
       // No results, switch immediately
       setComparisonMode(newMode);
+      // Reset follow-up mode on mode switch
+      setIsFollowUpMode(false);
     }
   };
   
@@ -1098,6 +1112,9 @@ export default function Home() {
     setComparisonMode(pendingMode);
     setShowModeSwitchConfirm(false);
     setPendingMode(null);
+    
+    // Reset follow-up mode on mode switch
+    setIsFollowUpMode(false);
   };
   
   const cancelModeSwitch = () => {
@@ -1128,6 +1145,9 @@ export default function Home() {
       
       const followUpText = comparisonFollowUp.trim();
       if (!followUpText || isStreaming) return;
+      
+      // Enable follow-up mode since user is explicitly submitting a follow-up
+      setIsFollowUpMode(true);
       
       // Build context from comparison summary
       let contextPrompt = `Original prompt: ${prompt}\n\n`;
@@ -1481,7 +1501,7 @@ export default function Home() {
               >
                 Prompt
               </label>
-              {previousPrompt && previousResponse && (
+              {isFollowUpMode && (
                 <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-md border border-green-200 flex items-center gap-1">
                   <span>🔗</span>
                   Continuing conversation
@@ -1508,7 +1528,7 @@ export default function Home() {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder={
-                previousPrompt && previousResponse 
+                isFollowUpMode
                   ? "Ask a follow-up question..." 
                   : "Enter your prompt here..."
               }
@@ -2755,6 +2775,9 @@ export default function Home() {
                       onClick={() => {
                         const followUpText = comparisonFollowUp.trim();
                         if (!followUpText || isStreaming) return;
+                        
+                        // Enable follow-up mode since user is explicitly submitting a follow-up
+                        setIsFollowUpMode(true);
                         
                         // Build context and submit (same logic as Enter handler)
                         let contextPrompt = `Original prompt: ${prompt}\n\n`;
