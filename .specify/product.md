@@ -15,6 +15,9 @@ ModelTriage introduces judgment and transparency into model usage by:
 - Explaining why a model was chosen
 - Allowing optional verification across multiple models
 - Highlighting agreement, disagreement, and omissions instead of raw output dumps
+- Supporting file attachments (text and images) with intelligent routing
+- Maintaining conversation context for follow-up questions
+- Providing smart history and workflow features
 
 This reduces cognitive load while increasing trust in AI-assisted work.
 
@@ -22,6 +25,8 @@ This reduces cognitive load while increasing trust in AI-assisted work.
 - A tool for evaluating and verifying LLM outputs
 - A decision layer between users and AI models
 - Infrastructure for model comparison, not a chatbot
+- A system for analyzing files and images with appropriate AI models
+- A workflow tool with history, follow-ups, and context preservation
 
 ## What ModelTriage is not
 - A general-purpose chat application
@@ -31,9 +36,11 @@ This reduces cognitive load while increasing trust in AI-assisted work.
 
 ## Explicit non-goals (MVP)
 - User accounts, authentication, or billing
-- Long-term prompt or history storage across devices
+- Long-term prompt or history storage across devices (history is localStorage-only)
 - Enterprise features such as organizations, permissions, or audit logs
 - Automated actions taken on external systems
 - Fully learned or self-optimizing routing in the initial release
+- File storage or persistence (attachments processed in-memory only)
+- Real-time collaboration or sharing
 
-> If a feature is not described in this file, it must not be implemented.
+> If a feature is not described in this file or the requirements, it must not be implemented.

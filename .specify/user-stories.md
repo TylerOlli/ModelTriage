@@ -119,3 +119,86 @@ Acceptance criteria:
 - Output token limits are enforced per model request
 - Verify Mode cannot exceed the configured model maximum
 - Requests exceeding rate limits are blocked with a clear message
+
+---
+
+## File attachments
+
+### 11. Attach files to prompts
+As a user, I want to attach files (text and images) to my prompts so that I can ask questions about specific documents or get analysis of images.
+
+Acceptance criteria:
+- Can attach up to 3 files per request
+- Supported text files: .txt, .log, .json, .md, .ts, .tsx, .js, .jsx, .env, .yml, .yaml
+- Supported images: .png, .jpg, .webp
+- Text files are automatically truncated if too large
+- Images are automatically optimized and resized
+- File chips display with icon, name, size, and remove button
+- Security warning displayed about sensitive data
+
+### 12. Drag and drop files
+As a user, I want to drag files directly onto the prompt input so that I can quickly attach files without using the file picker.
+
+Acceptance criteria:
+- Can drag files anywhere over the prompt area
+- Blue highlight and overlay appear when dragging
+- Dropped files are validated and attached
+- Invalid file types show clear error message
+- Multiple files can be dropped at once
+- Works seamlessly with "Attach Files" button
+
+### 13. Smart routing with attachments
+As a user, I want the system to automatically select appropriate models based on my attachments so that I get the best analysis for my content.
+
+Acceptance criteria:
+- Code files route to strong coding models (Claude Sonnet 4.5)
+- Images route to vision-capable models only
+- File content analyzed for better routing decisions
+- Image gist generated for vision models
+- Never downgrade to fast models when files are uploaded
+
+---
+
+## Prompt history and reuse
+
+### 14. Access prompt history
+As a user, I want to see my recent prompts so that I can reuse or modify previous questions.
+
+Acceptance criteria:
+- History button appears when prompts have been submitted
+- Dropdown shows last 10 prompts
+- Click a prompt to reuse it
+- Can clear all history
+- History persists across browser sessions
+- No consecutive duplicate prompts saved
+
+---
+
+## Conversation continuation
+
+### 15. Ask follow-up questions
+As a user, I want to ask follow-up questions that reference my previous prompt and response so that I can have a conversation without repeating context.
+
+Acceptance criteria:
+- "Ask a follow-up" button appears after receiving response
+- Previous prompt and response included as context
+- Placeholder changes to indicate follow-up mode
+- In Compare mode, inline follow-up input available
+- Can break continuation and start fresh with Clear button
+- Visual indicator shows when in continuation mode
+
+---
+
+## Safe mode switching
+
+### 16. Switch modes safely
+As a user, I want confirmation before switching modes when I have results so that I don't accidentally lose my work.
+
+Acceptance criteria:
+- Warning appears when attempting to switch with results present
+- Can cancel or confirm the switch
+- Previous results are stored temporarily
+- "Restore previous results" button appears after switch
+- Can restore exact previous state
+- No confirmation needed if no results exist
+- Smooth animations during transitions

@@ -74,6 +74,16 @@ Numeric defaults (MVP)
   - Default models: 2
   - Absolute maximum: 3
 - Throttling: 10 requests per session per 5 minutes
+- File attachments:
+  - Max files per request: 3
+  - Max images per request: 2
+  - Max text file size: 2MB
+  - Max image file size: 5MB
+  - Max characters per text file: 20,000
+  - Max total characters across text files: 35,000
+  - Text summarization threshold: 12,000 characters
+  - Image max dimension: 1024px (resized)
+- Prompt history: 10 most recent prompts
 - These values are hard limits and must be enforced in code.
 
 Safe defaults
@@ -112,12 +122,27 @@ Logging
 - Provider-specific logic must live behind adapters and never inside UI components.
 - Support parallel execution for Verify Mode.
 - Streaming must be independent per model so one slow provider does not block others.
+- File attachment processing:
+  - Process files in-memory only (no disk writes in serverless)
+  - Use multipart/form-data for requests with attachments
+  - Automatic image optimization using sharp library
+  - Text file truncation and summarization using gpt-5-mini
+  - Vision model filtering based on attachment type
+  - Generate text gists for routing decisions
+  - Generate image gists from vision models during streaming
 
 ## Routing conventions
 - Phase 1 routing is rules-based only.
 - Routing must be explainable with a short human-readable reason.
 - Routing must have a clear fallback model if classification fails.
 - Learning and personalization are not MVP requirements unless explicitly added to requirements.md.
+- Attachment-aware routing:
+  - Uploaded code/text files always route to strong coding models (Claude Sonnet 4.5)
+  - Never downgrade to fast models (gpt-5-mini) when files are uploaded
+  - Images only route to vision-capable models
+  - File content and complexity inform routing decisions
+  - Text gist generation helps classify file-based requests
+  - Image gist generation (from vision models) improves routing reason quality
 
 ## Verification and diff conventions
 - Verify Mode runs the same prompt across multiple models in parallel.
@@ -151,6 +176,31 @@ Logging
   - single-answer mode
   - Verify Mode
 - Display cost and latency tradeoffs when available.
+- File attachments:
+  - Display file chips with icon, name, size, and remove button
+  - Show counter (X/3) when files are attached
+  - Show security warning about sensitive data
+  - Support drag-and-drop with visual feedback (blue border, overlay)
+  - Validate file types and show clear error messages
+- Prompt history:
+  - History button with dropdown popover
+  - Show last 10 prompts
+  - Click to reuse
+  - Can clear all history
+- Conversation continuation:
+  - "Ask a follow-up" button after responses
+  - Visual indicator when in continuation mode
+  - Inline follow-up input in Compare mode
+- Mode switching:
+  - Show confirmation when switching with results present
+  - "Restore previous results" button after switch
+  - Smooth animations for transitions
+- Streaming stages:
+  - Show progress indicators (connecting, routing, contacting, streaming)
+- Input controls:
+  - Character count with warning state at 4,000 limit
+  - Reset button with double-click confirmation
+  - Disable submit when over limit or no prompt entered
 
 ## Serverless streaming implementation rules
 - Do not implement streaming in a way that buffers the entire provider response.
