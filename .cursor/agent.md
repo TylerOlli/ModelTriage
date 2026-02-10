@@ -22,7 +22,6 @@ This project is evolving from MVP to a full product with real users. Focus on **
 - Implement directly based on user requests (most common path)
 - **Read before writing** - Always read files before editing to understand context
 - **Reuse and extend** - Look for existing patterns and extend them (don't duplicate)
-- **Be aware**: Multiple AI tools work on this codebase - respect existing implementations
 - Focus on working code and good documentation in `docs/`
 
 ### Code quality:
@@ -33,7 +32,6 @@ This project is evolving from MVP to a full product with real users. Focus on **
 
 ### Cost and safety:
 - Enforce all hard limits and rate limits
-- All database writes must be gated behind ENABLE_DB_WRITES
 
 ## Documentation Rules
 
@@ -42,8 +40,5 @@ This project is evolving from MVP to a full product with real users. Focus on **
 - ALL feature and technical documentation must go in the `docs/` folder
 - Only `README.md` and `DEPLOYMENT.md` belong in the root
 
-### When documenting features:
-- Implementation details: `docs/feature-name.md`
-- Testing guides: `docs/feature-name-testing.md`
-- Architecture notes: append to `docs/architecture.md`
-- Include code examples, edge cases, and testing checklists
+### When documenting:
+- Create files in `docs/` with clear names
