@@ -56,6 +56,15 @@ describe("Attachment validation", () => {
       );
     });
 
+    it("should accept any text-based code files (denylist approach)", () => {
+      expect(validateFileType("script.py", "text/plain", 1000).valid).toBe(true);
+      expect(validateFileType("main.go", "text/plain", 1000).valid).toBe(true);
+      expect(validateFileType("lib.rs", "text/plain", 1000).valid).toBe(true);
+      expect(validateFileType("style.css", "text/css", 1000).valid).toBe(true);
+      expect(validateFileType("component.vue", "text/plain", 1000).valid).toBe(true);
+      expect(validateFileType("config.toml", "text/plain", 1000).valid).toBe(true);
+    });
+
     it("should accept supported image files", () => {
       expect(validateFileType("image.png", "image/png", 1000).valid).toBe(true);
       expect(validateFileType("photo.jpg", "image/jpeg", 1000).valid).toBe(
@@ -64,13 +73,45 @@ describe("Attachment validation", () => {
       expect(validateFileType("graphic.webp", "image/webp", 1000).valid).toBe(
         true
       );
+      expect(validateFileType("icon.gif", "image/gif", 1000).valid).toBe(true);
+      expect(validateFileType("logo.svg", "image/svg+xml", 1000).valid).toBe(true);
     });
 
-    it("should reject unsupported file types", () => {
-      const result = validateFileType("video.mp4", "video/mp4", 1000);
+    it("should reject blocked file types (denylist)", () => {
+      // Archives
+      const zipResult = validateFileType("file.zip", "application/zip", 1000);
+      expect(zipResult.valid).toBe(false);
+      if (!zipResult.valid) {
+        expect(zipResult.error).toContain("Archive");
+      }
+
+      // Media
+      const mp4Result = validateFileType("video.mp4", "video/mp4", 1000);
+      expect(mp4Result.valid).toBe(false);
+      if (!mp4Result.valid) {
+        expect(mp4Result.error).toContain("Media");
+      }
+
+      // Executables
+      const exeResult = validateFileType("app.exe", "application/x-msdownload", 1000);
+      expect(exeResult.valid).toBe(false);
+      if (!exeResult.valid) {
+        expect(exeResult.error).toContain("Executable");
+      }
+
+      // Documents
+      const pdfResult = validateFileType("doc.pdf", "application/pdf", 1000);
+      expect(pdfResult.valid).toBe(false);
+      if (!pdfResult.valid) {
+        expect(pdfResult.error).toContain("Document");
+      }
+    });
+
+    it("should reject files without clear extensions", () => {
+      const result = validateFileType("file", "application/octet-stream", 1000);
       expect(result.valid).toBe(false);
       if (!result.valid) {
-        expect(result.error).toContain("Unsupported file type");
+        expect(result.error).toContain("without clear extensions");
       }
     });
 

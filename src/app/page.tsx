@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import type { DiffSummary } from "@/lib/diff";
 import { FormattedResponse } from "../components/FormattedResponse";
+import { validateFiles, getFileValidationErrorMessage } from "@/lib/file-validation";
 
 /**
  * Map model ID to provider name
@@ -1164,7 +1165,19 @@ export default function Home() {
       return;
     }
 
-    setAttachedFiles([...attachedFiles, ...files]);
+    // Validate files using denylist approach
+    const { validFiles, invalidFiles } = validateFiles(files);
+
+    // Show error for invalid files
+    if (invalidFiles.length > 0) {
+      alert(getFileValidationErrorMessage(invalidFiles));
+    }
+
+    // Add valid files
+    if (validFiles.length > 0) {
+      setAttachedFiles([...attachedFiles, ...validFiles]);
+    }
+
     // Reset input so same file can be selected again if removed
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -1222,24 +1235,12 @@ export default function Home() {
     
     const droppedFiles = Array.from(e.dataTransfer.files);
     
-    // Filter for supported file types
-    const supportedExtensions = ['.txt', '.log', '.json', '.md', '.ts', '.tsx', '.js', '.jsx', '.env', '.yml', '.yaml'];
-    const supportedImageTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    // Validate files using denylist approach
+    const { validFiles, invalidFiles } = validateFiles(droppedFiles);
     
-    const validFiles = droppedFiles.filter(file => {
-      const extension = '.' + file.name.split('.').pop()?.toLowerCase();
-      return supportedExtensions.includes(extension) || supportedImageTypes.includes(file.type);
-    });
-    
-    const invalidFiles = droppedFiles.filter(file => {
-      const extension = '.' + file.name.split('.').pop()?.toLowerCase();
-      return !supportedExtensions.includes(extension) && !supportedImageTypes.includes(file.type);
-    });
-    
-    // Show error for unsupported files
+    // Show error for invalid files
     if (invalidFiles.length > 0) {
-      const fileNames = invalidFiles.map(f => f.name).join(', ');
-      alert(`Unsupported file type(s): ${fileNames}\n\nSupported: .txt, .log, .json, .md, .ts, .tsx, .js, .jsx, .env, .yml, .yaml, PNG, JPEG, WebP`);
+      alert(getFileValidationErrorMessage(invalidFiles));
     }
     
     // Check total file count
@@ -1534,7 +1535,6 @@ export default function Home() {
                   type="file"
                   onChange={handleFileSelect}
                   multiple
-                  accept=".txt,.log,.json,.md,.ts,.tsx,.js,.jsx,.env,.yml,.yaml,image/png,image/jpeg,image/webp"
                   className="hidden"
                   disabled={isStreaming}
                 />

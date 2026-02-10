@@ -119,10 +119,18 @@
 ## File attachments
 
 - The system must allow users to attach up to 3 files per request.
-- The system must support text file attachments:
-  - `.txt`, `.log`, `.json`, `.md`, `.ts`, `.tsx`, `.js`, `.jsx`, `.env`, `.yml`, `.yaml`
-- The system must support image file attachments:
-  - `.png`, `.jpg` (`.jpeg`), `.webp`
+- The system must use a denylist approach for file validation:
+  - Allow all text-based files by default (code, config, markup files)
+  - Allow common image formats (PNG, JPEG, WebP, GIF, SVG)
+  - Block specific non-actionable categories:
+    - Archives (.zip, .tar, .gz, .rar, .7z)
+    - Media files (.mp4, .mov, .mp3, .wav)
+    - Executables (.exe, .dmg, .app, .bin)
+    - Office documents (.pdf, .docx, .xlsx, .pptx)
+- The system must provide clear error messages when files are rejected:
+  - Explain which files were rejected and why
+  - Show examples of supported file types
+  - List blocked categories
 - The system must enforce file size limits:
   - Text files: 2MB maximum per file
   - Images: 5MB maximum per file

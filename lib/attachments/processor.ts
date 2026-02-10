@@ -17,25 +17,26 @@ export const LIMITS = {
   MAX_CHARS_WHEN_SUMMARIZED: 6_000,
 } as const;
 
-export const ALLOWED_TEXT_EXTENSIONS = [
-  ".txt",
-  ".log",
-  ".json",
-  ".md",
-  ".ts",
-  ".tsx",
-  ".js",
-  ".jsx",
-  ".env",
-  ".yml",
-  ".yaml",
-] as const;
+// Blocked file extensions (denylist approach)
+export const BLOCKED_EXTENSIONS = {
+  archives: ['.zip', '.tar', '.gz', '.rar', '.7z', '.bz2', '.xz', '.tgz'],
+  media: ['.mp4', '.mov', '.avi', '.mkv', '.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma'],
+  executables: ['.exe', '.dmg', '.app', '.bin', '.dll', '.so', '.dylib', '.msi', '.deb', '.rpm'],
+  documents: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp'],
+  databases: ['.db', '.sqlite', '.mdb'],
+  other: ['.iso', '.img'],
+} as const;
+
+// Flatten all blocked extensions
+const ALL_BLOCKED_EXTENSIONS = Object.values(BLOCKED_EXTENSIONS).flat();
 
 export const ALLOWED_IMAGE_TYPES = [
   "image/png",
   "image/jpeg",
   "image/jpg",
   "image/webp",
+  "image/gif",
+  "image/svg+xml",
 ] as const;
 
 // ===== Types =====
@@ -109,34 +110,50 @@ export function validateFileType(
   mimeType: string,
   size: number
 ): ValidationResult {
-  const isImage = ALLOWED_IMAGE_TYPES.includes(
-    mimeType as (typeof ALLOWED_IMAGE_TYPES)[number]
-  );
   const extension = filename
     .slice(filename.lastIndexOf("."))
     .toLowerCase() as string;
-  const isText = ALLOWED_TEXT_EXTENSIONS.includes(
-    extension as (typeof ALLOWED_TEXT_EXTENSIONS)[number]
+  
+  // Check if it's an allowed image by MIME type
+  const isImage = ALLOWED_IMAGE_TYPES.includes(
+    mimeType as (typeof ALLOWED_IMAGE_TYPES)[number]
   );
-
-  if (!isImage && !isText) {
+  
+  if (isImage) {
+    if (size > LIMITS.MAX_IMAGE_SIZE_BYTES) {
+      return {
+        valid: false,
+        error: `Image too large: ${filename}. Maximum ${LIMITS.MAX_IMAGE_SIZE_BYTES / 1024 / 1024}MB allowed.`,
+      };
+    }
+    return { valid: true };
+  }
+  
+  // Check if file is in blocked list (denylist approach)
+  if (ALL_BLOCKED_EXTENSIONS.includes(extension)) {
+    const category = Object.entries(BLOCKED_EXTENSIONS).find(([_, exts]) =>
+      exts.includes(extension)
+    )?.[0] || 'binary';
+    
     return {
       valid: false,
-      error: `Unsupported file type: ${filename}. Allowed: text/log/json/md/ts/js files or png/jpg/webp images.`,
+      error: `${category.charAt(0).toUpperCase() + category.slice(0, -1)} files are not supported (${extension}). Supported: code files, text files, config files, and images.`,
     };
   }
-
-  if (isImage && size > LIMITS.MAX_IMAGE_SIZE_BYTES) {
+  
+  // Check for files without clear extensions (likely binary)
+  if (!extension || extension.length <= 2) {
     return {
       valid: false,
-      error: `Image too large: ${filename}. Maximum ${LIMITS.MAX_IMAGE_SIZE_BYTES / 1024 / 1024}MB allowed.`,
+      error: `Files without clear extensions are not supported: ${filename}`,
     };
   }
-
-  if (isText && size > LIMITS.MAX_TEXT_SIZE_BYTES) {
+  
+  // Allow all other text-based files
+  if (size > LIMITS.MAX_TEXT_SIZE_BYTES) {
     return {
       valid: false,
-      error: `Text file too large: ${filename}. Maximum ${LIMITS.MAX_TEXT_SIZE_BYTES / 1024 / 1024}MB allowed.`,
+      error: `File too large: ${filename}. Maximum ${LIMITS.MAX_TEXT_SIZE_BYTES / 1024 / 1024}MB allowed.`,
     };
   }
 
