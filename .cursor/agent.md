@@ -19,11 +19,45 @@ This project is evolving from MVP to a full product with real users. The focus i
 
 ## Implementation Rules
 
+### Before starting major features:
+
+**Silently evaluate these criteria:**
+1. Does this involve user accounts, authentication, or billing/payments?
+2. Is this a major provider integration (new LLM provider, external API)?
+3. Will this change the core routing logic or model selection strategy?
+4. Will this affect the database schema or data persistence layer?
+5. Does this involve security, rate limiting, or cost control mechanisms?
+6. Will this require changes across 5+ files or multiple systems?
+
+**If 2+ criteria match:**
+Suggest using SpecKit before implementing:
+
+"This looks like a strategic feature (auth/billing/routing/etc.) that would benefit from planning. Would you like me to use SpecKit to create specs first? This would help us:
+- Think through edge cases and security implications
+- Document acceptance criteria and requirements
+- Break down the implementation into phases
+
+Takes ~10-15 minutes upfront but ensures we don't miss important details. Or I can implement directly - your call!"
+
+**If user declines or says "just implement":**
+Proceed without SpecKit and document in `docs/` as usual.
+
 ### When implementing features:
-- Implement features directly based on user requests
+- Implement features directly based on user requests (most common path)
 - No need to check or update specs for small/medium features
 - Focus on working code and good documentation
-- For major architectural changes, consider writing specs first
+- Document in `docs/` as you build
+
+### Integration and reuse:
+- **ALWAYS look for existing patterns before adding new code**
+- Reuse existing components, utilities, and handlers when possible
+- Extend existing features rather than creating parallel implementations
+- If you need similar functionality to something that exists, find and reuse it first
+
+### When making changes:
+- **Read before writing** - Always read the file/component before editing
+- Check for existing similar functionality in the codebase
+- Follow established patterns (state management, error handling, naming, styling)
 
 ### Code quality:
 - Keep changes focused and incremental
@@ -37,6 +71,16 @@ This project is evolving from MVP to a full product with real users. The focus i
 - Enforce all hard limits and rate limits
 - All database writes must be gated behind ENABLE_DB_WRITES
 
+### Working with multiple AI assistants:
+- **Be context-aware**: Different AI tools may have worked on this codebase
+- Don't assume you know the full history - read existing code first
+- If you see patterns you don't recognize, follow them (they exist for a reason)
+- When asked "why does X work this way?", investigate before speculating
+
+### Performance and user experience:
+- Show feedback immediately, stream responses, keep animations subtle (300ms transitions)
+- Test with realistic data (3 files, long prompts, large images)
+
 ## Documentation Rules
 
 ### File organization:
@@ -48,10 +92,28 @@ This project is evolving from MVP to a full product with real users. The focus i
 - Implementation details: `docs/feature-name.md`
 - Testing guides: `docs/feature-name-testing.md`
 - Architecture notes: append to `docs/architecture.md`
-- Before writing any .md file, check if it should go in `docs/` (it almost always should)
+- Include code examples, edge cases, and testing checklists
 
 ### Documentation priorities:
 1. Technical accuracy (how it actually works)
 2. Completeness (edge cases, error handling, constraints)
 3. Examples and testing guidance
 4. Keep it current as code changes
+
+## Error Handling and Edge Cases
+
+### Always consider:
+- What happens if the API fails?
+- What if the user has slow internet?
+- What if they try to do two things at once?
+- What if they upload a large file or switch modes while streaming?
+
+### Patterns to follow:
+- Isolate errors (one failure shouldn't break everything)
+- Show user-friendly error messages (no stack traces)
+- Provide recovery actions ("Try again" button)
+- Disable actions during processing (prevent double-submit)
+
+## UI/UX Consistency
+
+Match existing patterns: blue for primary actions, gray for neutral, orange for warnings. Use emoji icons (📎🖼️📄), rounded-lg buttons, 300ms fade animations. Keep interactions subtle and consistent with the codebase style.
