@@ -323,27 +323,20 @@ By default, the application uses `MockProvider` to ensure:
 - ✅ Offline development capability
 - ✅ Fast response times
 
-## Specifications
-
-This project is built strictly according to specifications in `.specify/`:
-- `product.md` - Product definition and scope
-- `conventions.md` - Technical conventions and limits
-- `user-stories.md` - User stories and acceptance criteria
-- `requirements.md` - Functional requirements
-
 ## Documentation
 
-See `docs/` for detailed technical documentation:
+### Technical Documentation
+See `docs/` folder for comprehensive technical documentation:
+- **[Documentation Index](./docs/README.md)** - Complete guide to all documentation
+- **Architecture & System Design** - How the system works
+- **Feature Guides** - Implementation details for all features
+- **Testing Guides** - How to test features
+- **Operations** - Deployment and development workflows
 
-### Core Documentation
-- `architecture.md` - System architecture, folder structure, SSE event contract, and MockProvider rationale
-- `development.md` - Development commands, workflow, and troubleshooting guide
-- `deployment-checklist.md` - Vercel deployment verification and post-deployment testing
+### Product Specifications
+The `.specify/` folder contains product strategy and feature planning:
+- Used for **major feature planning** (auth, billing, APIs)
+- Updated periodically to reflect shipped features
+- See [.specify/README.md](./.specify/README.md) for when to use SpecKit
 
-### Feature Documentation
-- `streaming-api.md` - SSE endpoint reference
-- `comparison-mode.md` - Comparison Mode implementation details
-- `routing.md` - Routing logic and priority rules
-- `persistence.md` - localStorage usage
-- `ui-states.md` - UI states, button behavior, and user actions
-- `execution-correctness.md` - Concurrent run prevention and error isolation
+**Source of truth**: The code and technical docs in `docs/`, not the specs.
