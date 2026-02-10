@@ -318,8 +318,8 @@ export class IntentRouter {
         chosenModel,
         confidence: 0.9,
         reason: isLightweight
-          ? "Best fit for quick code questions and small changes."
-          : "Best fit for TypeScript/JavaScript code changes, debugging, and thorough explanations.",
+          ? "This is a quick code question, and GPT-5 Mini is the best fit because it's fast and accurate for small code tasks and explanations."
+          : "This is a code-related request, and Claude Sonnet 4.5 is the best fit because it excels at thorough code generation, debugging, and detailed explanations.",
       };
     }
 
@@ -387,8 +387,15 @@ Required JSON format:
   "category": "<category_from_above>",
   "chosenModel": "<exact_model_id>",
   "confidence": 0.0-1.0,
-  "reason": "<1 sentence why>"
+  "reason": "<A detailed 1-2 sentence explanation that: (1) describes what the user's request is specifically about, and (2) explains why the chosen model is the best fit for that specific task. Be concrete about both the topic and the model's relevant strength.>"
 }
+
+REASON EXAMPLES (follow this style):
+- "The request is asking about JavaScript array methods, which is best suited for Claude Sonnet 4.5 because it excels at quick, accurate code generation and clear explanations."
+- "This is a complex system design question involving distributed caching, and GPT-5.2 is the best fit because it has strong multi-step reasoning and architectural planning abilities."
+- "The request is asking for a casual blog post summary, which is best suited for Claude Haiku 4.5 because it's fast and effective at lightweight writing tasks."
+- "This is a debugging request involving a React hydration error, and GPT-5.2 is well-suited because it excels at systematic error analysis and tracing complex issues."
+- "The request is asking for a professional marketing email, which is best suited for Claude Sonnet 4.5 because it produces polished, high-quality professional content."
 
 Output ONLY the JSON object, no other text.`;
 
@@ -456,7 +463,7 @@ Output ONLY the JSON object, no other text.`;
   private routeByCategory(
     classification: ClassifierResponse
   ): RoutingDecision {
-    const { intent, category, confidence, chosenModel: classifierModel } = classification;
+    const { intent, category, confidence, chosenModel: classifierModel, reason: classifierReason } = classification;
     let chosenModel: ModelId;
     let reason: string;
 
@@ -471,23 +478,29 @@ Output ONLY the JSON object, no other text.`;
       "gemini-2.5-pro",
     ];
 
-    // User-friendly reason mapping (no internal details)
-    const userFriendlyReasons: Record<string, string> = {
-      coding_quick: "Fast and reliable for quick programming tasks.",
-      coding_review: "Excellent at analyzing and improving code quality.",
-      coding_debug: "Strong at identifying and resolving technical issues.",
-      coding_complex_impl: "Specialized in advanced algorithms and system design.",
-      writing_light: "Efficient for summaries and casual writing.",
-      writing_standard: "Balanced for professional, high-quality content.",
-      writing_high_stakes: "Optimized for important, nuanced communication.",
-      analysis_standard: "Well-suited for research and answering questions.",
-      analysis_complex: "Strong at deep analysis and complex reasoning.",
+    // Fallback reason mapping (used only when classifier reason is missing or too short)
+    const fallbackReasons: Record<string, string> = {
+      coding_quick: "This is a straightforward coding task, well-suited for a fast and accurate code generation model.",
+      coding_review: "This request involves code analysis, best handled by a model that excels at reviewing and improving code quality.",
+      coding_debug: "This is a debugging request, best suited for a model with strong systematic error analysis capabilities.",
+      coding_complex_impl: "This is a complex implementation task requiring a model specialized in advanced algorithms and system design.",
+      writing_light: "This is a lightweight writing task, best suited for a fast model that's efficient at summaries and casual rewrites.",
+      writing_standard: "This is a professional writing task, best handled by a model that produces polished, high-quality content.",
+      writing_high_stakes: "This is a high-stakes communication task, best suited for a model optimized for careful, nuanced writing.",
+      analysis_standard: "This is an analytical question, well-suited for a model with clear reasoning and research capabilities.",
+      analysis_complex: "This is a complex analysis task requiring a model with deep multi-step reasoning abilities.",
     };
+
+    // Check if classifier reason is detailed enough to use directly
+    const isDetailedReason = classifierReason && 
+      classifierReason.length > 40 &&
+      !classifierReason.toLowerCase().includes("best match for this request") &&
+      !classifierReason.toLowerCase().includes("general-purpose");
 
     // Safety: if confidence < 0.5, always default to gpt-5-mini
     if (confidence < 0.5) {
       chosenModel = "gpt-5-mini";
-      reason = "Selected as a reliable default for general-purpose tasks.";
+      reason = "Selected GPT-5 Mini as a reliable default for general-purpose tasks.";
       return { intent, category, chosenModel, confidence, reason };
     }
 
@@ -498,65 +511,71 @@ Output ONLY the JSON object, no other text.`;
       validModels.includes(classifierModel as ModelId)
     ) {
       chosenModel = classifierModel as ModelId;
-      reason = userFriendlyReasons[category] || "Selected as the best match for this request.";
+      // Use the classifier's detailed reason if available, otherwise fall back to category reason
+      reason = isDetailedReason 
+        ? classifierReason 
+        : (fallbackReasons[category] || "Selected as the best match for this request.");
       return { intent, category, chosenModel, confidence, reason };
     }
 
     // Fallback logic for low confidence (0.5 <= confidence < 0.6) or invalid model
     // Use cost-aware alternatives with Gemini included
 
+    // Use classifier reason if detailed, otherwise build a descriptive fallback
+    // These fallback reasons mention the alternative model since confidence was low
+
     // Coding intent routing
     if (intent === "coding") {
       if (category === "coding_quick") {
         chosenModel = "gemini-2.5-flash";
-        reason = userFriendlyReasons.coding_quick;
+        reason = isDetailedReason ? classifierReason : "This coding question is best suited for Gemini 2.5 Flash because it's fast and effective at quick code generation and snippets.";
       } else if (category === "coding_review") {
         chosenModel = "gemini-2.5-pro";
-        reason = userFriendlyReasons.coding_review;
+        reason = isDetailedReason ? classifierReason : "This code review task is best suited for Gemini 2.5 Pro because it has strong capabilities for analyzing and refactoring code.";
       } else if (category === "coding_debug") {
         chosenModel = "gemini-2.5-pro";
-        reason = userFriendlyReasons.coding_debug;
+        reason = isDetailedReason ? classifierReason : "This debugging request is best suited for Gemini 2.5 Pro because it excels at systematic error analysis and tracing issues.";
       } else if (category === "coding_complex_impl") {
         chosenModel = "gemini-2.5-pro";
-        reason = userFriendlyReasons.coding_complex_impl;
+        reason = isDetailedReason ? classifierReason : "This complex implementation task is best suited for Gemini 2.5 Pro because it has strong algorithm design and reasoning capabilities.";
       } else {
         // Unknown coding category
         chosenModel = "gemini-2.5-flash";
-        reason = "Fast and reliable for programming tasks.";
+        reason = isDetailedReason ? classifierReason : "This programming question is best suited for Gemini 2.5 Flash because it's fast and reliable for general code tasks.";
       }
     }
     // Writing intent routing
     else if (intent === "writing") {
       if (category === "writing_light") {
         chosenModel = "gemini-2.5-flash";
-        reason = userFriendlyReasons.writing_light;
+        reason = isDetailedReason ? classifierReason : "This lightweight writing task is best suited for Gemini 2.5 Flash because it's fast and efficient at summaries and casual rewrites.";
       } else if (category === "writing_standard") {
         chosenModel = "gemini-2.5-pro";
-        reason = userFriendlyReasons.writing_standard;
+        reason = isDetailedReason ? classifierReason : "This writing task is best suited for Gemini 2.5 Pro because it produces polished, professional-quality content.";
       } else if (category === "writing_high_stakes") {
         chosenModel = "gemini-2.5-pro";
-        reason = userFriendlyReasons.writing_high_stakes;
+        reason = isDetailedReason ? classifierReason : "This high-stakes communication task is best suited for Gemini 2.5 Pro because it handles nuanced, sensitive writing with care.";
       } else {
         // Unknown writing category
         chosenModel = "gemini-2.5-flash";
-        reason = "Balanced for clear, effective writing.";
+        reason = isDetailedReason ? classifierReason : "This writing request is best suited for Gemini 2.5 Flash because it's balanced and effective for clear, concise content.";
       }
     }
     // Analysis intent routing
     else if (intent === "analysis") {
       if (category === "analysis_complex") {
         chosenModel = "gemini-2.5-pro";
-        reason = userFriendlyReasons.analysis_complex;
+        reason = isDetailedReason ? classifierReason : "This complex analysis task is best suited for Gemini 2.5 Pro because it has strong deep reasoning and multi-step analysis abilities.";
       } else {
         // analysis_standard or unknown
         chosenModel = "gemini-2.5-flash";
-        reason = userFriendlyReasons.analysis_standard;
+        reason = isDetailedReason ? classifierReason : "This analytical question is best suited for Gemini 2.5 Flash because it provides clear, efficient reasoning for standard research tasks.";
       }
     }
     // Unknown intent
     else {
       chosenModel = "gpt-5-mini";
-      reason = "Selected as a reliable default for general-purpose tasks.";
+      reason = "Selected GPT-5 Mini as a reliable default for this general-purpose request.";
     }
 
     return {
@@ -610,45 +629,41 @@ CRITICAL: Only describe specifics if you can confidently infer them from the att
 
 ${attachmentContext}
 
-Write exactly ONE sentence that:
-1. Mentions the attachment if present (image/screenshot OR uploaded file type)
-2. Describes what the attachment contains at a high level IF clearly identifiable from the attachment info
-3. Explains why ${modelDisplayName} is well-suited for this specific task
+Write exactly 1-2 sentences that:
+1. Specifically describe what the user is asking about (the topic, language, framework, or task)
+2. Explain why ${modelDisplayName} is the best fit for that specific task, referencing a concrete model strength
+
+${attachmentGist ? `ATTACHMENT RULES:
+- Mention the attachment type (image/screenshot OR uploaded file type)
+- Describe what the attachment contains if identifiable from the attachment info
+- Explain why the model fits for processing that attachment` : `TEXT REQUEST RULES:
+- Identify the specific topic or task the user is asking about (e.g., "JavaScript closures", "Python web scraping", "React state management", "writing a cover letter")
+- Explain the specific strength of ${modelDisplayName} that makes it ideal for this task (e.g., "excels at quick code generation", "strong at complex multi-step reasoning", "produces polished professional writing")
+- Be specific about BOTH the topic and the model strength — never be vague about either`}
 
 STRICT RULES:
-- Output must be EXACTLY one sentence
-- Always mention the attachment type if present
-- If you can confidently infer language and purpose from attachment info, include it:
-  • "a JavaScript function handling X"
-  • "a TypeScript React component"
-  • "a build log showing a dependency error"
-  • "a config file for tsconfig"
-- If you CANNOT confidently infer specifics, use SAFE fallbacks:
-  • "a screenshot of code"
-  • "an uploaded code file"
-  • "a log file with errors"
-- Always explain why the model fits:
-  • Images: reading/extracting/interpreting code from screenshots
-  • Files: accurate code understanding, refactoring, debugging
+- Output must be 1-2 sentences maximum
+- MUST mention the specific topic/subject of the user's request
+- MUST explain a specific model capability (not just "well-suited" or "good at this")
 - Do NOT mention routing, categories, confidence, or internal mechanics
-- Do NOT use generic filler like "balanced capabilities" or "best match"
-- Do NOT invent details if unclear
+- Do NOT use generic filler like "balanced capabilities" or "best match" or "general-purpose"
+- Do NOT invent details if unclear — describe the request at whatever level of detail you can confidently identify
 
 GOOD EXAMPLES:
-- "This screenshot shows a JavaScript function, and ${modelDisplayName} is well-suited for quickly extracting and interpreting code from images."
-- "The uploaded TypeScript file defines a React component, and ${modelDisplayName} is a strong fit for accurate TypeScript analysis and improvements."
-- "The attached log shows an npm dependency error, and ${modelDisplayName} is well-suited for debugging and identifying root causes."
-
-SAFE FALLBACK EXAMPLE (when details unclear):
-- "This request includes a screenshot of code, and ${modelDisplayName} is well-suited for extracting and interpreting code from images."
+- "The request is asking about JavaScript array methods, which is best suited for ${modelDisplayName} because it excels at quick, accurate code generation and clear explanations."
+- "This is a complex system design question about distributed caching, and ${modelDisplayName} is the best fit because it has strong multi-step reasoning and architectural planning abilities."
+- "The request is about debugging a React hydration error, and ${modelDisplayName} is well-suited because it systematically traces errors and identifies root causes."
+- "This request asks for a professional marketing email, which is best suited for ${modelDisplayName} because it produces polished, brand-appropriate content."
+- "The request is asking how to write unit tests in Python, and ${modelDisplayName} is a strong fit because it generates clean, well-structured test code with good coverage patterns."
 
 BAD EXAMPLES (NEVER USE):
 - "This request is well-suited to ${modelDisplayName}'s balanced capabilities."
 - "Selected as the best match for this request."
+- "${modelDisplayName} is a good choice for this task."
 
 User request: "${prompt.substring(0, 300)}"
 
-Your one-sentence explanation:`;
+Your explanation:`;
 
     console.log("Generating routing reason for:", {
       model: modelDisplayName,
@@ -663,7 +678,7 @@ Your one-sentence explanation:`;
         runOpenAI(
           {
             prompt: explanationPrompt,
-            maxTokens: 100,
+            maxTokens: 150, // Allow room for detailed 1-2 sentence explanations
             temperature: 0.3, // Lower temperature for more consistent output
           },
           this.CLASSIFIER_MODEL
@@ -712,9 +727,9 @@ Your one-sentence explanation:`;
       
       // Check if it references the user's task (for non-attachment requests)
       const hasTaskReference = 
-        /this (question|request|task|prompt|code|debugging|writing|learning|conversion|help)/i.test(reason) ||
-        /the (request|question|task|prompt|code)/i.test(reason) ||
-        /(for|about|regarding|concerning) (help|code|debugging|converting|learning|writing|analyzing)/i.test(reason);
+        /this (is|question|request|task|prompt|code|debugging|writing|learning|conversion|help)/i.test(reason) ||
+        /the (request|question|task|prompt|code|user)/i.test(reason) ||
+        /(for|about|regarding|concerning|asking|involves|involves) /i.test(reason);
       
       if (isGeneric) {
         console.log("❌ Rejecting generic routing reason:", reason);
@@ -759,18 +774,18 @@ Your one-sentence explanation:`;
       // Fallback to a category-specific explanation
       // Note: These are less specific than AI-generated ones but still helpful
       const fallbackReasons: Record<string, string> = {
-        coding_quick: `This code-related request is well-suited to ${modelDisplayName}'s fast and accurate programming capabilities.`,
-        coding_review: `This code review task benefits from ${modelDisplayName}'s strong analysis and refactoring abilities.`,
-        coding_debug: `This debugging request is well-suited to ${modelDisplayName}'s systematic error analysis approach.`,
-        coding_complex_impl: `This complex implementation task benefits from ${modelDisplayName}'s strong algorithm and system design capabilities.`,
-        writing_light: `This content request is well-suited to ${modelDisplayName}'s efficient text generation.`,
-        writing_standard: `This writing task benefits from ${modelDisplayName}'s balanced, professional content quality.`,
-        writing_high_stakes: `This communication request is well-suited to ${modelDisplayName}'s careful, nuanced writing style.`,
-        analysis_standard: `This analytical question benefits from ${modelDisplayName}'s clear reasoning and research capabilities.`,
-        analysis_complex: `This complex analysis task is well-suited to ${modelDisplayName}'s deep reasoning abilities.`,
+        coding_quick: `This is a straightforward coding question, and ${modelDisplayName} is the best fit because it excels at quick, accurate code generation and explanations.`,
+        coding_review: `This is a code review task, and ${modelDisplayName} is the best fit because it has strong capabilities for analyzing code quality and suggesting improvements.`,
+        coding_debug: `This is a debugging request, and ${modelDisplayName} is the best fit because it excels at systematic error analysis and tracing issues to their root cause.`,
+        coding_complex_impl: `This is a complex implementation task, and ${modelDisplayName} is the best fit because it has strong algorithm design and system architecture capabilities.`,
+        writing_light: `This is a lightweight writing task, and ${modelDisplayName} is the best fit because it's fast and efficient at producing summaries and casual content.`,
+        writing_standard: `This is a professional writing task, and ${modelDisplayName} is the best fit because it produces polished, high-quality content with appropriate tone.`,
+        writing_high_stakes: `This is a high-stakes communication task, and ${modelDisplayName} is the best fit because it handles sensitive, nuanced writing with precision and care.`,
+        analysis_standard: `This is an analytical question, and ${modelDisplayName} is the best fit because it provides clear reasoning and well-researched answers.`,
+        analysis_complex: `This is a complex analysis task, and ${modelDisplayName} is the best fit because it has deep multi-step reasoning and can handle nuanced tradeoffs.`,
       };
 
-      const fallbackReason = fallbackReasons[category] || `This request is well-suited to ${modelDisplayName}'s balanced capabilities.`;
+      const fallbackReason = fallbackReasons[category] || `This request is best suited for ${modelDisplayName} because it provides reliable, well-rounded responses across a variety of tasks.`;
       console.log("📝 Using fallback reason:", fallbackReason);
       
       // Return fallback instead of throwing - ensures the reason is always sent via SSE
