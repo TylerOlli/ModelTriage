@@ -27,12 +27,11 @@ This project is evolving from MVP to a full product with real users. Focus on **
 
 ### Code quality:
 - Keep changes focused and incremental
+- Write tests for complex logic
 - Follow existing patterns (state management, error handling, naming, styling)
 - Document non-obvious decisions
 
 ### Cost and safety:
-- Default to MockProvider unless USE_LIVE_PROVIDERS=true
-- Do not call paid providers unless USE_LIVE_PROVIDERS=true
 - Enforce all hard limits and rate limits
 - All database writes must be gated behind ENABLE_DB_WRITES
 
@@ -40,10 +39,11 @@ This project is evolving from MVP to a full product with real users. Focus on **
 
 ### File organization:
 - NEVER create markdown files in the project root directory
-- ALL feature documentation must go in the `docs/` folder
+- ALL feature and technical documentation must go in the `docs/` folder
 - Only `README.md` and `DEPLOYMENT.md` belong in the root
 
 ### When documenting features:
 - Implementation details: `docs/feature-name.md`
 - Testing guides: `docs/feature-name-testing.md`
+- Architecture notes: append to `docs/architecture.md`
 - Include code examples, edge cases, and testing checklists
