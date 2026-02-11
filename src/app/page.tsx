@@ -155,6 +155,8 @@ export default function Home() {
 
   // Conversation session — tracks multi-turn history in memory
   const [session, setSession] = useState<ConversationSession | null>(null);
+  // Which previous turns are expanded (accordion state)
+  const [expandedTurns, setExpandedTurns] = useState<Record<string, boolean>>({});
 
   // File attachment state
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
@@ -589,6 +591,7 @@ export default function Home() {
     // Submitting from the main prompt box starts a fresh session
     setSession(null);
     setFollowUpInput("");
+    setExpandedTurns({});
 
     if (comparisonMode) {
       await handleVerifyModeSubmit();
@@ -1061,6 +1064,7 @@ export default function Home() {
     // Clear conversation session
     setSession(null);
     setFollowUpInput("");
+    setExpandedTurns({});
 
     // Clear attached files
     setAttachedFiles([]);
@@ -1140,6 +1144,7 @@ export default function Home() {
     setDiffError(null);
     setSession(null);
     setFollowUpInput("");
+    setExpandedTurns({});
     setComparisonMode(pendingMode === "compare");
     setShowModeSwitchModal(false);
     setPendingMode(null);
@@ -1158,6 +1163,7 @@ export default function Home() {
     setDiffError(null);
     setSession(null);
     setFollowUpInput("");
+    setExpandedTurns({});
     setComparisonMode(pendingMode === "compare");
     setPrompt(currentPrompt); // Keep the prompt for re-use
     setShowModeSwitchModal(false);
@@ -1821,101 +1827,161 @@ export default function Home() {
           </div>
         )}
 
-        {/* Previous Conversation Turns */}
+        {/* Previous Conversation Turns (Accordion) */}
         {session && session.turns.length > 0 && (
-          <div className="space-y-4 mb-6">
-            {session.turns.map((turn, turnIdx) => (
-              <div key={turn.id} className="animate-in fade-in duration-200">
-                {/* Follow-up prompt label */}
-                {turn.isFollowUp && (
-                  <div className="flex items-start gap-2.5 mb-3">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <svg className="w-3 h-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 17l-4 4m0 0l-4-4m4 4V3" />
-                      </svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Follow-up</span>
-                      <p className="text-sm text-gray-800 leading-relaxed mt-0.5">{turn.prompt}</p>
-                    </div>
-                  </div>
-                )}
+          <div className="space-y-2 mb-6">
+            {session.turns.map((turn, turnIdx) => {
+              const isExpanded = expandedTurns[turn.id] || false;
+              const isAutoTurn = !!(turn.response && !turn.modelPanels);
+              const isCompareTurn = !!(turn.modelPanels && Object.keys(turn.modelPanels).length > 0);
 
-                {/* Auto-select turn */}
-                {turn.response && !turn.modelPanels && (
-                  <div className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative opacity-80"
-                    style={{
-                      backgroundImage: `
-                        repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
-                        repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
-                      `,
-                      backgroundSize: '20px 20px'
-                    }}
+              // Build a concise summary label for the collapsed state
+              const modelLabel = isAutoTurn && turn.routing?.chosenModel
+                ? getFriendlyModelName(turn.routing.chosenModel)
+                : isCompareTurn && turn.modelPanels
+                  ? Object.keys(turn.modelPanels).map(getFriendlyModelName).join(", ")
+                  : "";
+              const promptPreview = turn.prompt.length > 120
+                ? turn.prompt.substring(0, 120) + "…"
+                : turn.prompt;
+
+              return (
+                <div key={turn.id} className="animate-in fade-in duration-200">
+                  {/* Accordion Header — always visible */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedTurns((prev) => ({
+                        ...prev,
+                        [turn.id]: !prev[turn.id],
+                      }))
+                    }
+                    className={`w-full text-left px-4 py-3 rounded-lg border transition-all duration-200 group ${
+                      isExpanded
+                        ? "bg-white border-gray-300 shadow-sm"
+                        : "bg-gray-50/80 border-gray-200/60 hover:bg-gray-100/80 hover:border-gray-300"
+                    }`}
                   >
-                    {/* Routing reason */}
-                    {turn.routing && turn.routing.mode === "auto" && (
-                      <div className="px-6 pt-3 pb-2 bg-white/40 backdrop-blur-sm relative">
-                        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Auto-selected</span>
-                          <span className="text-xs font-bold text-gray-900 font-mono">
-                            {turn.routing.chosenModel ? getFriendlyModelName(turn.routing.chosenModel) : ""}
+                    <div className="flex items-center gap-3">
+                      {/* Expand/collapse chevron */}
+                      <svg
+                        className={`w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform duration-200 ${
+                          isExpanded ? "rotate-90" : ""
+                        }`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                      </svg>
+
+                      {/* Turn indicator */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {turn.isFollowUp ? (
+                          <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                            Follow-up
                           </span>
-                        </div>
-                        {turn.routing.reason && (
-                          <p className="text-xs text-slate-600 leading-relaxed">{turn.routing.reason}</p>
+                        ) : (
+                          <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                            Turn {turnIdx + 1}
+                          </span>
                         )}
                       </div>
-                    )}
-                    {/* Response */}
-                    <div className="m-3 bg-white rounded-lg border border-gray-200/60 shadow-sm">
-                      <div className="px-6 py-4">
-                        <div className="prose prose-sm max-w-none text-[15px] leading-7">
-                          <FormattedResponse response={turn.response} />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
 
-                {/* Compare mode turn */}
-                {turn.modelPanels && Object.keys(turn.modelPanels).length > 0 && (
-                  <div className="opacity-80">
-                    <div className={`grid gap-4 ${Object.keys(turn.modelPanels).length === 2 ? "md:grid-cols-2" : Object.keys(turn.modelPanels).length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
-                      {Object.entries(turn.modelPanels).map(([mId, panel]) => (
-                        <div key={mId} className="bg-slate-900/[0.02] rounded-xl shadow-sm border border-gray-200/50 overflow-hidden"
-                          style={{
-                            backgroundImage: `
-                              repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
-                              repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
-                            `,
-                            backgroundSize: '20px 20px'
-                          }}
-                        >
-                          <div className="px-4 pt-3 pb-2 bg-white/40 relative">
+                      {/* Prompt preview */}
+                      <p className="text-sm text-gray-700 truncate flex-1 min-w-0">
+                        {promptPreview}
+                      </p>
+
+                      {/* Model badge */}
+                      {modelLabel && (
+                        <span className="text-[10px] font-bold text-gray-500 bg-gray-100/80 px-2 py-0.5 rounded-md font-mono flex-shrink-0 hidden sm:inline">
+                          {modelLabel}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Accordion Body — expanded content */}
+                  <div
+                    className={`overflow-hidden transition-all duration-300 ease-out ${
+                      isExpanded ? "max-h-[2000px] opacity-100 mt-2" : "max-h-0 opacity-0"
+                    }`}
+                  >
+                    {/* Auto-select turn */}
+                    {isAutoTurn && (
+                      <div className="bg-slate-900/[0.02] rounded-xl shadow-sm border border-gray-200/50 overflow-hidden relative"
+                        style={{
+                          backgroundImage: `
+                            repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
+                            repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
+                          `,
+                          backgroundSize: '20px 20px'
+                        }}
+                      >
+                        {/* Routing reason */}
+                        {turn.routing && turn.routing.mode === "auto" && (
+                          <div className="px-6 pt-3 pb-2 bg-white/40 backdrop-blur-sm relative">
                             <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
-                            <span className="text-xs font-bold text-gray-900 font-mono">{getFriendlyModelName(mId)}</span>
-                            {panel.routing?.reason && (
-                              <p className="text-xs text-slate-500 leading-relaxed mt-1">{panel.routing.reason}</p>
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Auto-selected</span>
+                              <span className="text-xs font-bold text-gray-900 font-mono">
+                                {turn.routing.chosenModel ? getFriendlyModelName(turn.routing.chosenModel) : ""}
+                              </span>
+                            </div>
+                            {turn.routing.reason && (
+                              <p className="text-xs text-slate-600 leading-relaxed">{turn.routing.reason}</p>
                             )}
                           </div>
-                          <div className="m-2 bg-white rounded-lg border border-gray-200/60 shadow-sm">
-                            <div className="px-4 py-3 max-h-[200px] overflow-hidden relative">
-                              <div className="text-sm leading-relaxed">
-                                <FormattedResponse response={panel.response} mode="compare" />
-                              </div>
-                              {panel.response.length > 300 && (
-                                <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white to-transparent" />
-                              )}
+                        )}
+                        {/* Response */}
+                        <div className="m-3 bg-white rounded-lg border border-gray-200/60 shadow-sm">
+                          <div className="px-6 py-4">
+                            <div className="prose prose-sm max-w-none text-[15px] leading-7">
+                              <FormattedResponse response={turn.response} />
                             </div>
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    )}
+
+                    {/* Compare mode turn */}
+                    {isCompareTurn && turn.modelPanels && (
+                      <div>
+                        <div className={`grid gap-4 ${Object.keys(turn.modelPanels).length === 2 ? "md:grid-cols-2" : Object.keys(turn.modelPanels).length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+                          {Object.entries(turn.modelPanels).map(([mId, panel]) => (
+                            <div key={mId} className="bg-slate-900/[0.02] rounded-xl shadow-sm border border-gray-200/50 overflow-hidden"
+                              style={{
+                                backgroundImage: `
+                                  repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
+                                  repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
+                                `,
+                                backgroundSize: '20px 20px'
+                              }}
+                            >
+                              <div className="px-4 pt-3 pb-2 bg-white/40 relative">
+                                <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
+                                <span className="text-xs font-bold text-gray-900 font-mono">{getFriendlyModelName(mId)}</span>
+                                {panel.routing?.reason && (
+                                  <p className="text-xs text-slate-500 leading-relaxed mt-1">{panel.routing.reason}</p>
+                                )}
+                              </div>
+                              <div className="m-2 bg-white rounded-lg border border-gray-200/60 shadow-sm">
+                                <div className="px-4 py-3">
+                                  <div className="text-sm leading-relaxed">
+                                    <FormattedResponse response={panel.response} mode="compare" />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         )}
 
