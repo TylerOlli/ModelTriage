@@ -2002,6 +2002,21 @@ export default function Home() {
         )}
 
         {/* Unified Loading State - AI Pipeline (Both Modes) */}
+        {/* Active Follow-Up Question Label — rendered above loading skeleton and response */}
+        {activeFollowUpPrompt && (response || isStreaming || Object.keys(modelPanels).length > 0) && (
+          <div className="flex items-start gap-2.5 mb-4 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg className="w-3 h-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Follow-up</span>
+              <p className="text-sm text-gray-800 leading-relaxed mt-0.5">{activeFollowUpPrompt}</p>
+            </div>
+          </div>
+        )}
+
         {/*
           LATENCY OPTIMIZATION: Collapsed loading states.
           Previously showed a 3-step pipeline (Routing → Connecting → Preparing response)
@@ -2088,21 +2103,6 @@ export default function Home() {
                   </div>
                 </div>
               ))}
-            </div>
-          </div>
-        )}
-
-        {/* Active Follow-Up Question Label */}
-        {activeFollowUpPrompt && (response || isStreaming || Object.keys(modelPanels).length > 0) && (
-          <div className="flex items-start gap-2.5 mb-4 animate-in fade-in slide-in-from-top-1 duration-200">
-            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <svg className="w-3 h-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Follow-up</span>
-              <p className="text-sm text-gray-800 leading-relaxed mt-0.5">{activeFollowUpPrompt}</p>
             </div>
           </div>
         )}
