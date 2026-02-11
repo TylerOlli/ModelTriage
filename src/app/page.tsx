@@ -174,8 +174,20 @@ export default function Home() {
   const imageGistUpgradedRef = useRef(false);
 
   // Streaming stage tracking
+  /**
+   * LATENCY OPTIMIZATION: Collapsed loading states.
+   * Previously: "routing" → "connecting" → "contacting" → "streaming" (3-4 visible steps)
+   * Now: "selecting" → "streaming" (1 brief state, then immediate content)
+   *
+   * "selecting" replaces the old routing/connecting/contacting steps with a single
+   * "Selecting model..." indicator. As soon as the first chunk arrives, we transition
+   * directly to "streaming" and show content.
+   *
+   * Legacy values ("routing", "connecting", "contacting") are kept in the type
+   * for backward compatibility with Compare mode, which still uses them.
+   */
   const [streamingStage, setStreamingStage] = useState<
-    "connecting" | "routing" | "contacting" | "streaming" | null
+    "selecting" | "connecting" | "routing" | "contacting" | "streaming" | null
   >(null);
 
   // Model selection state
@@ -549,7 +561,9 @@ export default function Home() {
     setRoutingReasonOverride(null);
     setMetadata(null);
     setIsStreaming(true);
-    setStreamingStage("routing"); // Initial stage: routing
+    // LATENCY OPTIMIZATION: Single "selecting" state replaces multi-step pipeline.
+    // Transitions directly to "streaming" on first chunk — no intermediate states.
+    setStreamingStage("selecting");
     setShowRunDetails(false); // Collapse details on new request
     setIsReasoningExpanded(false); // Collapse reasoning on new request
     
@@ -591,11 +605,9 @@ export default function Home() {
 
       for await (const { event, data } of parseSSE(res)) {
         if (event === "meta") {
-          // First meta event - connection established
-          if (data.status === "connected") {
-            // Move to connecting stage after routing
-            setStreamingStage("connecting");
-          }
+          // Meta events now arrive immediately (routing completed before stream started).
+          // LATENCY OPTIMIZATION: No stage transitions needed here — we stay in "selecting"
+          // until the first chunk arrives, then jump straight to "streaming".
           
           // Store routing metadata
           if (data.routing) {
@@ -607,11 +619,6 @@ export default function Home() {
               console.log("[STREAM] Set routing from meta (IMAGE_GIST not yet parsed)");
             } else {
               console.log("[STREAM] Skipping meta routing update - IMAGE_GIST has already upgraded reason");
-            }
-            
-            // After routing metadata arrives, move to connecting (if not already there)
-            if (streamingStage === "routing") {
-              setStreamingStage("connecting");
             }
           }
           if (data.models) {
@@ -1886,6 +1893,14 @@ export default function Home() {
         )}
 
         {/* Unified Loading State - AI Pipeline (Both Modes) */}
+        {/*
+          LATENCY OPTIMIZATION: Collapsed loading states.
+          Previously showed a 3-step pipeline (Routing → Connecting → Preparing response)
+          which made the wait feel longer than it was. Now shows a single compact
+          "Selecting model..." state that transitions directly to streaming content.
+
+          Compare mode still uses the multi-step pipeline via routing/connecting/contacting stages.
+        */}
         {isStreaming && streamingStage && !response && Object.keys(modelPanels).length === 0 && (
           <div className="space-y-6">
             {/* Loading Pipeline */}
@@ -1899,106 +1914,22 @@ export default function Home() {
               }}
             >
               <div className="p-8">
-                {/* Execution Header */}
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-4">
-                  Executing
-                </div>
-
-                {/* Pipeline Stepper */}
-                <div className="flex items-center gap-2.5 mb-6">
-                  {/* Step 1: Routing */}
-                  <div className="flex items-center gap-2.5">
-                    <div className={`flex items-center justify-center w-7 h-7 rounded-full border-2 transition-all duration-200 ${
-                      streamingStage === "routing" 
-                        ? "border-blue-600 bg-blue-50" 
-                        : streamingStage === "connecting" || streamingStage === "contacting" || streamingStage === "streaming"
-                        ? "border-green-500 bg-green-50"
-                        : "border-gray-300 bg-white"
-                    }`}>
-                      {(streamingStage === "connecting" || streamingStage === "contacting" || streamingStage === "streaming") ? (
-                        <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      ) : streamingStage === "routing" ? (
-                        <div className="animate-spin w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full" />
-                      ) : (
-                        <div className="w-2 h-2 rounded-full bg-gray-300" />
-                      )}
-                    </div>
-                    <span className={`text-sm font-semibold transition-colors duration-200 ${
-                      streamingStage === "routing" ? "text-gray-900" : "text-gray-500"
-                    }`}>Routing</span>
+                {/* Single-line loading indicator (Option C).
+                    One piece of information at a time — updates as state changes:
+                    1. "Selecting model..." (before routing resolves)
+                    2. "Dispatching to [Provider]..." (once model is chosen)
+                    3. "Starting response..." (first chunk arriving) */}
+                <div className="flex items-center gap-3 mb-7">
+                  <div className="flex items-center justify-center w-7 h-7 rounded-full border-2 border-blue-600 bg-blue-50">
+                    <div className="animate-spin w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full" />
                   </div>
-
-                  {/* Connector */}
-                  <div className={`h-0.5 w-10 rounded-full transition-colors duration-200 ${
-                    streamingStage === "connecting" || streamingStage === "contacting" || streamingStage === "streaming"
-                      ? "bg-green-500"
-                      : "bg-gray-300"
-                  }`} />
-
-                  {/* Step 2: Connecting */}
-                  <div className="flex items-center gap-2.5">
-                    <div className={`flex items-center justify-center w-7 h-7 rounded-full border-2 transition-all duration-200 ${
-                      streamingStage === "connecting" || streamingStage === "contacting"
-                        ? "border-blue-600 bg-blue-50"
-                        : streamingStage === "streaming"
-                        ? "border-green-500 bg-green-50"
-                        : "border-gray-300 bg-white"
-                    }`}>
-                      {streamingStage === "streaming" ? (
-                        <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      ) : (streamingStage === "connecting" || streamingStage === "contacting") ? (
-                        <div className="animate-spin w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full" />
-                      ) : (
-                        <div className="w-2 h-2 rounded-full bg-gray-300" />
-                      )}
-                    </div>
-                    <span className={`text-sm font-semibold transition-colors duration-200 ${
-                      streamingStage === "connecting" || streamingStage === "contacting" ? "text-gray-900" : "text-gray-500"
-                    }`}>Connecting</span>
-                  </div>
-
-                  {/* Connector */}
-                  <div className={`h-0.5 w-10 rounded-full transition-colors duration-200 ${
-                    streamingStage === "streaming" ? "bg-green-500" : "bg-gray-300"
-                  }`} />
-
-                  {/* Step 3: Preparing response */}
-                  <div className="flex items-center gap-2.5">
-                    <div className={`flex items-center justify-center w-7 h-7 rounded-full border-2 transition-all duration-200 ${
-                      streamingStage === "streaming"
-                        ? "border-blue-600 bg-blue-50"
-                        : "border-gray-300 bg-white"
-                    }`}>
-                      {streamingStage === "streaming" ? (
-                        <div className="animate-spin w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full" />
-                      ) : (
-                        <div className="w-2 h-2 rounded-full bg-gray-300" />
-                      )}
-                    </div>
-                    <span className={`text-sm font-semibold transition-colors duration-200 ${
-                      streamingStage === "streaming" ? "text-gray-900" : "text-gray-500"
-                    }`}>Preparing response</span>
-                  </div>
-                </div>
-
-                {/* Two-line Status */}
-                <div className="mb-7 space-y-1.5">
-                  <p className="text-lg font-semibold text-gray-900 transition-opacity duration-200">
-                    {streamingStage === "routing" && "Routing request"}
-                    {streamingStage === "connecting" && "Connecting to provider"}
-                    {streamingStage === "contacting" && "Connecting to provider"}
-                    {streamingStage === "streaming" && "Preparing response"}
-                  </p>
-                  <p className="text-sm text-gray-500 transition-opacity duration-200">
-                    {streamingStage === "routing" && (comparisonMode ? "Preparing all models" : "Selecting the best model for your prompt")}
-                    {streamingStage === "connecting" && "Establishing secure connection"}
-                    {streamingStage === "contacting" && "Establishing secure connection"}
-                    {streamingStage === "streaming" && (comparisonMode ? "Responses will appear momentarily" : "Response will appear momentarily")}
-                  </p>
+                  <span className="text-lg font-semibold text-gray-900">
+                    {streamingStage === "streaming"
+                      ? "Starting response\u2026"
+                      : routing?.chosenModel
+                        ? `Dispatching to ${routing.chosenModel.includes("gemini") ? "Gemini" : routing.chosenModel.includes("claude") ? "Claude" : routing.chosenModel.includes("gpt") ? "GPT" : routing.chosenModel}\u2026`
+                        : "Selecting model\u2026"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -2089,6 +2020,12 @@ export default function Home() {
                               </div>
                               
                               {/* Reasoning with expand/collapse */}
+                              {/*
+                                ASYNC HYDRATION: Routing explanation updates asynchronously.
+                                Phase A (model dispatch) starts immediately. Phase B (TEXT_GIST + explanation)
+                                runs in parallel. If the explanation isn't ready yet, we show a placeholder
+                                that gets replaced when the routing_reason SSE event arrives.
+                              */}
                               <div className="flex items-start gap-2">
                                 <button
                                   onClick={() => setIsReasoningExpanded(!isReasoningExpanded)}
@@ -2096,7 +2033,7 @@ export default function Home() {
                                   aria-expanded={isReasoningExpanded}
                                   aria-controls="reasoning-details"
                                 >
-                                  {routing.reason || "Analyzing your request to select the best model..."}
+                                  {routing.reason || (isStreaming ? "Why this model was selected\u2026" : "Analyzing your request to select the best model...")}
                                 </button>
                                 <button
                                   onClick={() => setIsReasoningExpanded(!isReasoningExpanded)}
@@ -2118,7 +2055,7 @@ export default function Home() {
                           >
                             <div className="bg-slate-50/50 rounded-md border border-gray-200/50 px-3 py-2.5 max-h-40 overflow-y-auto">
                               <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
-                                {routing.reason || "Analyzing your request to select the best model..."}
+                                {routing.reason || (isStreaming ? "Why this model was selected\u2026" : "Analyzing your request to select the best model...")}
                               </p>
                             </div>
                           </div>
