@@ -276,8 +276,7 @@ export default function Home() {
   // UI-only override for routing reason (from IMAGE_GIST)
   const [routingReasonOverride, setRoutingReasonOverride] = useState<string | null>(null);
 
-  // Reasoning expand/collapse state
-  const [isReasoningExpanded, setIsReasoningExpanded] = useState(false);
+  // Reasoning expand/collapse state (Compare mode only)
   const [expandedModelReasonings, setExpandedModelReasonings] = useState<Record<string, boolean>>({});
 
   // Conversation continuation state (for follow-up prompts)
@@ -565,7 +564,6 @@ export default function Home() {
     // Transitions directly to "streaming" on first chunk — no intermediate states.
     setStreamingStage("selecting");
     setShowRunDetails(false); // Collapse details on new request
-    setIsReasoningExpanded(false); // Collapse reasoning on new request
     
     // Reset IMAGE_GIST upgrade tracking
     imageGistUpgradedRef.current = false;
@@ -1023,8 +1021,7 @@ export default function Home() {
     setPreviousResponse("");
     setIsFollowUpMode(false);
     
-    // Reset reasoning expand/collapse state
-    setIsReasoningExpanded(false);
+    // Reset reasoning expand/collapse state (Compare mode only)
     setExpandedModelReasonings({});
 
     // Clear attached files
@@ -2019,47 +2016,21 @@ export default function Home() {
                                 </span>
                               </div>
                               
-                              {/* Reasoning with expand/collapse */}
+                              {/* Full routing reason - always visible */}
                               {/*
                                 ASYNC HYDRATION: Routing explanation updates asynchronously.
                                 Phase A (model dispatch) starts immediately. Phase B (TEXT_GIST + explanation)
                                 runs in parallel. If the explanation isn't ready yet, we show a placeholder
                                 that gets replaced when the routing_reason SSE event arrives.
                               */}
-                              <div className="flex items-start gap-2">
-                                <button
-                                  onClick={() => setIsReasoningExpanded(!isReasoningExpanded)}
-                                  className="text-xs text-gray-500 leading-relaxed line-clamp-1 flex-1 text-left hover:text-gray-700 transition-colors cursor-pointer"
-                                  aria-expanded={isReasoningExpanded}
-                                  aria-controls="reasoning-details"
-                                >
-                                  {routing.reason || (isStreaming ? "Why this model was selected\u2026" : "Analyzing your request to select the best model...")}
-                                </button>
-                                <button
-                                  onClick={() => setIsReasoningExpanded(!isReasoningExpanded)}
-                                  className="text-[10px] font-medium text-blue-600 hover:text-blue-700 uppercase tracking-wide flex-shrink-0 transition-colors"
-                                  aria-label={isReasoningExpanded ? "Hide reasoning details" : "Show reasoning details"}
-                                >
-                                  {isReasoningExpanded ? "Hide" : "Show"}
-                                </button>
+                              <div className="mt-2 rounded-lg border border-gray-200/60 bg-white/70 p-3 max-w-[900px]">
+                                <p className="text-xs text-slate-600 leading-relaxed">
+                                  {routing.reason || (isStreaming ? "Why this model was selected…" : "Analyzing your request to select the best model...")}
+                                </p>
                               </div>
                             </div>
                           </div>
                         </div>
-                        
-                        {/* Expanded reasoning details */}
-                        {isReasoningExpanded && (
-                          <div 
-                            id="reasoning-details"
-                            className="px-6 pb-4 pt-2"
-                          >
-                            <div className="bg-slate-50/50 rounded-md border border-gray-200/50 px-3 py-2.5 max-h-40 overflow-y-auto">
-                              <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
-                                {routing.reason || (isStreaming ? "Why this model was selected\u2026" : "Analyzing your request to select the best model...")}
-                              </p>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     )}
                     
