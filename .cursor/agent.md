@@ -7,7 +7,8 @@ This project is evolving from MVP to a full product with real users. Focus on **
 ## Documentation Strategy
 
 ### Technical Documentation (`docs/` folder)
-- ALWAYS create feature documentation in `docs/` as you implement
+- Create documentation only for significant features (new capabilities, complex systems, non-obvious behavior)
+- Skip docs for minor UI changes, bug fixes, simple refactors, and self-explanatory code
 - Document implementation details, architecture decisions, and testing approaches
 - Keep technical docs current as the source of truth
 
