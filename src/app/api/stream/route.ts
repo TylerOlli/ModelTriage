@@ -215,6 +215,10 @@ export async function POST(request: Request) {
     
     // Construct contextual prompt if this is a follow-up
     let contextualPrompt = prompt;
+    // Compact routing prompt: includes original prompt for context so the router
+    // can correctly classify follow-ups (e.g. "Rewrite it in TypeScript" → coding, not writing).
+    // This is separate from contextualPrompt which includes the full previous response for the model.
+    let routingPrompt = prompt;
     if (previousPrompt && previousResponse) {
       contextualPrompt = `Previous conversation:
 User: ${previousPrompt}
@@ -222,6 +226,8 @@ Assistant: ${previousResponse}
 
 Follow-up question:
 ${prompt}`;
+      // Give the router the original prompt + follow-up so it understands the task domain
+      routingPrompt = `Original request: ${previousPrompt}\nFollow-up: ${prompt}`;
       console.log("Follow-up prompt detected, adding context");
     }
 
@@ -420,7 +426,7 @@ ${prompt}`;
 
       try {
         const decision = await intentRouter.route(
-          prompt,
+          routingPrompt,
           false,
           attachmentContext
         );
@@ -620,14 +626,23 @@ ${prompt}`;
               console.log('[ROUTING] Skipping OpenAI async reason generation - will use IMAGE_GIST from Gemini vision model');
             }
 
-            // PHASE B: Fire-and-forget routing reason generation.
-            // This runs in parallel with model streaming (Phase A) below.
+            // PHASE B: Async routing reason generation (runs in parallel with Phase A).
             // For image requests, skip — IMAGE_GIST from vision model replaces the reason during streaming.
-            if (isAutoMode && routingMetadataStream.mode === "auto" && !isDescriptiveReason && !hasImages) {
+            // For follow-ups, ALWAYS run Phase B to generate contextual "Continuing conversation..." reason,
+            // even if the initial fast-path reason looks descriptive enough.
+            //
+            // IMPORTANT: We capture the Phase B promise so we can await it before closing the stream.
+            // Previously this was fire-and-forget, causing a race condition where short model responses
+            // (Phase A) would close the stream before the Phase B LLM call completed, silently losing
+            // the follow-up routing reason.
+            let phaseBPromise: Promise<void> | null = null;
+
+            if (isAutoMode && routingMetadataStream.mode === "auto" && (!isDescriptiveReason || isFollowUp) && !hasImages) {
               console.log("Starting async routing reason generation (Phase B, parallel with model dispatch):", {
                 model: routingMetadataStream.chosenModel,
                 promptPreview: prompt.substring(0, 100),
                 currentReason: routingMetadataStream.reason,
+                isFollowUp,
               });
               
               // TEXT_GIST: Synchronous, deterministic gist from attachment metadata.
@@ -642,10 +657,10 @@ ${prompt}`;
                   })), prompt)
                 : null;
               
-              // Non-blocking: routing explanation generated in parallel with model streaming.
-              // The frontend displays the initial reason immediately and replaces it
+              // Phase B runs in parallel with model streaming (Phase A).
+              // The frontend displays the initial fast-path reason immediately and replaces it
               // when this async result arrives via the routing_reason SSE event.
-              intentRouter
+              phaseBPromise = intentRouter
                 .generateRoutingReason({
                   prompt,
                   chosenModel: routingMetadataStream.chosenModel as any,
@@ -663,20 +678,22 @@ ${prompt}`;
                     customReason.includes("best match for") ||
                     (customReason.includes("well-suited to") && customReason.length < 80);
                   
-                  if (!isGenericReason && customReason.length > (routingMetadataStream.reason?.length || 0)) {
-                    try {
-                      controller.enqueue(
-                        encoder.encode(
-                          formatSSE("routing_reason", {
-                            reason: customReason,
-                          })
-                        )
-                      );
-                      console.log("Sent improved routing_reason SSE event");
-                    } catch (enqueueErr) {
-                      // Stream may have closed before reason was ready — safe to ignore
-                      console.error("Failed to enqueue routing_reason event:", enqueueErr);
-                    }
+                  // For follow-ups, always use the Phase B reason (it contains "Continuing conversation..." context).
+                  // For initial prompts, only upgrade if the new reason is more descriptive.
+                  const shouldUpgrade = isFollowUp
+                    ? !isGenericReason
+                    : !isGenericReason && customReason.length > (routingMetadataStream.reason?.length || 0);
+                  
+                  if (shouldUpgrade) {
+                    controller.enqueue(
+                      encoder.encode(
+                        formatSSE("routing_reason", {
+                          reason: customReason,
+                          forceUpdate: isFollowUp, // Follow-up reasons always replace — frontend must not length-gate them
+                        })
+                      )
+                    );
+                    console.log("Sent improved routing_reason SSE event", isFollowUp ? "(follow-up, forceUpdate)" : "");
                   } else {
                     console.log("Skipping generic custom reason, keeping original:", routingMetadataStream.reason);
                   }
@@ -916,6 +933,19 @@ ${prompt}`;
                 }
               })
             );
+
+            // Wait for Phase B (routing reason) if it's still running.
+            // Use a timeout so a slow/stuck Phase B doesn't block the stream indefinitely.
+            if (phaseBPromise) {
+              try {
+                await Promise.race([
+                  phaseBPromise,
+                  new Promise<void>((resolve) => setTimeout(resolve, 8000)), // 8s max wait
+                ]);
+              } catch {
+                // Phase B errors are non-fatal — already handled in the .catch() above
+              }
+            }
 
             // Send completion event
             controller.enqueue(

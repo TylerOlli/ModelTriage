@@ -275,13 +275,31 @@ export class IntentRouter {
     }
 
     // --- Lightweight writing (short, casual) ---
+    // GUARD: If the prompt mentions a programming language or code-related terms,
+    // this is a code rewrite, not a writing task. Route to code model instead.
+    const codeLanguageSignals =
+      /\b(typescript|javascript|python|java|rust|golang|go|ruby|swift|kotlin|c\+\+|csharp|c#|php|sql|html|css|react|vue|angular|node\.?js|express|django|flask|rails|spring|function|class|method|api|endpoint|component|module|interface|struct|enum)\b/i;
+    const hasCodeSignal = codeLanguageSignals.test(prompt);
+
     const lightWritingPatterns = [
       /\b(summarize|shorten|rewrite|rephrase|simplify|paraphrase)\b/i,
       /\b(tldr|tl;dr|brief|concise|shorter\s+version)\b/i,
       /\b(make\s+(this|it)\s+(shorter|simpler|clearer|more\s+concise))\b/i,
     ];
     const isLightWriting = lightWritingPatterns.some((p) => p.test(prompt));
-    if (isLightWriting && promptLength < 500) {
+
+    // If it looks like light writing but mentions code/languages, route as quick code instead
+    if (isLightWriting && hasCodeSignal && promptLength < 500) {
+      return {
+        intent: "coding",
+        category: "coding_quick",
+        chosenModel: "claude-sonnet-4-5-20250929",
+        confidence: 0.88,
+        reason: "This is a code rewriting task, and Claude Sonnet 4.5 excels at fast, clean code transformations.",
+      };
+    }
+
+    if (isLightWriting && !hasCodeSignal && promptLength < 500) {
       return {
         intent: "writing",
         category: "writing_light",
@@ -1093,6 +1111,14 @@ Your explanation:`;
         /the (request|question|task|prompt|code|user)/i.test(reason) ||
         /(for|about|regarding|concerning|asking|involves|involves) /i.test(reason);
       
+      // Follow-up reasons have different phrasing ("Continuing conversation...", "User now asks...")
+      // so they get a separate check that accepts follow-up-specific patterns.
+      const hasFollowUpReference = 
+        /continuing conversation/i.test(reason) ||
+        /user (now |wants |asks |asked )/i.test(reason) ||
+        /follow.?up/i.test(reason) ||
+        /rewrite|convert|transform|refactor|modify|update|change|add|extend|improve/i.test(reason);
+      
       if (isGeneric) {
         console.log("❌ Rejecting generic routing reason:", reason);
         throw new Error("Generated explanation uses forbidden generic phrases");
@@ -1103,8 +1129,8 @@ Your explanation:`;
         throw new Error("Generated explanation doesn't reference the attachment");
       }
       
-      if (!attachmentGist && !hasTaskReference) {
-        console.log("❌ Rejecting non-specific reason:", { reason, hasTaskReference });
+      if (!attachmentGist && !hasTaskReference && !(isFollowUp && hasFollowUpReference)) {
+        console.log("❌ Rejecting non-specific reason:", { reason, hasTaskReference, isFollowUp, hasFollowUpReference });
         throw new Error("Generated explanation doesn't reference the specific task");
       }
       
@@ -1131,8 +1157,20 @@ Your explanation:`;
         error: err instanceof Error ? err.message : err,
         category,
         modelDisplayName,
+        isFollowUp: !!isFollowUp,
       });
       
+      // For follow-ups, build a deterministic reason from the available context.
+      // This avoids the generic category-based fallback that has no conversation awareness.
+      if (isFollowUp && previousPrompt) {
+        // Truncate prompts for readability
+        const prevSummary = previousPrompt.length > 80 ? previousPrompt.substring(0, 77) + "..." : previousPrompt;
+        const followUpSummary = prompt.length > 80 ? prompt.substring(0, 77) + "..." : prompt;
+        const fallbackFollowUp = `Continuing conversation. The user originally asked "${prevSummary}" and now requests "${followUpSummary}". ${modelDisplayName} is selected for its strength in fast, accurate code and content generation.`;
+        console.log("📝 Using follow-up fallback reason:", fallbackFollowUp);
+        return fallbackFollowUp;
+      }
+
       // Fallback to a category-specific explanation
       // Note: These are less specific than AI-generated ones but still helpful
       const fallbackReasons: Record<string, string> = {

@@ -157,6 +157,8 @@ export default function Home() {
   const [session, setSession] = useState<ConversationSession | null>(null);
   // Which previous turns are expanded (accordion state)
   const [expandedTurns, setExpandedTurns] = useState<Record<string, boolean>>({});
+  // The active follow-up prompt text (shown above response when in follow-up)
+  const [activeFollowUpPrompt, setActiveFollowUpPrompt] = useState<string | null>(null);
 
   // File attachment state
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
@@ -592,6 +594,7 @@ export default function Home() {
     setSession(null);
     setFollowUpInput("");
     setExpandedTurns({});
+    setActiveFollowUpPrompt(null);
 
     if (comparisonMode) {
       await handleVerifyModeSubmit();
@@ -690,12 +693,19 @@ export default function Home() {
             setRouting(data.routing);
           }
         } else if (event === "routing_reason") {
-          // Legacy handler for routing_reason events (non-IMAGE_GIST updates)
+          // Handler for routing_reason events (non-IMAGE_GIST updates)
           console.log("Received routing_reason event:", data);
           if (data.reason) {
-            console.log("Evaluating routing reason update:", data.reason);
+            console.log("Evaluating routing reason update:", data.reason, data.forceUpdate ? "(forceUpdate)" : "");
             setRouting((prev) => {
               if (prev) {
+                // Follow-up reasons carry forceUpdate — always accept them
+                // (they contain conversation-aware context the fast-path reason lacks)
+                if (data.forceUpdate) {
+                  console.log("✓ Force-updating routing reason (follow-up):", data.reason);
+                  return { ...prev, reason: data.reason };
+                }
+
                 const existingReason = prev.reason;
                 console.log("Previous routing reason:", existingReason);
                 
@@ -1065,6 +1075,7 @@ export default function Home() {
     setSession(null);
     setFollowUpInput("");
     setExpandedTurns({});
+    setActiveFollowUpPrompt(null);
 
     // Clear attached files
     setAttachedFiles([]);
@@ -1145,6 +1156,7 @@ export default function Home() {
     setSession(null);
     setFollowUpInput("");
     setExpandedTurns({});
+    setActiveFollowUpPrompt(null);
     setComparisonMode(pendingMode === "compare");
     setShowModeSwitchModal(false);
     setPendingMode(null);
@@ -1164,6 +1176,7 @@ export default function Home() {
     setSession(null);
     setFollowUpInput("");
     setExpandedTurns({});
+    setActiveFollowUpPrompt(null);
     setComparisonMode(pendingMode === "compare");
     setPrompt(currentPrompt); // Keep the prompt for re-use
     setShowModeSwitchModal(false);
@@ -1183,6 +1196,9 @@ export default function Home() {
 
     // Push current active state into session as a completed turn
     pushCurrentTurnToSession(prompt);
+
+    // Track what the user asked so we can display it above the response
+    setActiveFollowUpPrompt(followUpText);
 
     // Clear active state for the new turn
     setResponse("");
@@ -1883,7 +1899,7 @@ export default function Home() {
                           </span>
                         ) : (
                           <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                            Turn {turnIdx + 1}
+                            Previous
                           </span>
                         )}
                       </div>
@@ -2072,6 +2088,21 @@ export default function Home() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Active Follow-Up Question Label */}
+        {activeFollowUpPrompt && (response || isStreaming || Object.keys(modelPanels).length > 0) && (
+          <div className="flex items-start gap-2.5 mb-4 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg className="w-3 h-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Follow-up</span>
+              <p className="text-sm text-gray-800 leading-relaxed mt-0.5">{activeFollowUpPrompt}</p>
             </div>
           </div>
         )}
