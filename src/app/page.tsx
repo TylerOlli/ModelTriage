@@ -1396,12 +1396,13 @@ export default function Home() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            ModelTriage
+        <header className="mb-2 text-center">
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3">
+            <span className="text-slate-900">Model</span>
+            <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">Triage</span>
           </h1>
-          <p className="text-gray-600">
-            LLM decision and verification layer
+          <p className="text-lg md:text-xl font-medium text-slate-700">
+            Right LLM. Every time.
           </p>
         </header>
 
@@ -1437,7 +1438,7 @@ export default function Home() {
           {/* Mode Switch Modal — rendered via portal-style at bottom of JSX */}
           
           {/* Helper text */}
-          <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+          <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
             {!comparisonMode 
               ? "We automatically choose the best model for your prompt."
               : "Select multiple models to compare responses side-by-side."}
@@ -1448,7 +1449,7 @@ export default function Home() {
         <div
           className={`transition-all duration-300 origin-top ${
             comparisonMode
-              ? "max-h-[600px] opacity-100 mb-6"
+              ? "max-h-[600px] opacity-100 mb-4"
               : "max-h-0 opacity-0 overflow-hidden"
           }`}
         >
@@ -1507,9 +1508,9 @@ export default function Home() {
         </div>
 
         {/* Prompt Input Form - Tier 1 (Primary) */}
-        <form onSubmit={handleSubmit} className="mb-8">
+        <form onSubmit={handleSubmit} className="mb-6">
           <div 
-            className="relative bg-slate-50 rounded-lg shadow-md border border-gray-300 p-8"
+            className="relative bg-slate-50 rounded-lg shadow-md border border-gray-300 p-6"
             onDragEnter={handleDragEnter}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
