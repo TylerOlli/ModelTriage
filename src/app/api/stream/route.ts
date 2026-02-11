@@ -56,6 +56,7 @@ interface InferenceRequest {
   stream?: boolean; // Optional - if true, use SSE streaming
   previousPrompt?: string; // Optional - for follow-up prompts
   previousResponse?: string; // Optional - for follow-up prompts
+  isFollowUp?: boolean; // Optional - signals this is a follow-up turn
 }
 
 /**
@@ -209,6 +210,7 @@ export async function POST(request: Request) {
     // Parse request (supports both JSON and multipart/form-data)
     const parsedRequest = await parseInferenceRequest(request);
     const { prompt, models, temperature, previousPrompt, previousResponse, files, stream } = parsedRequest;
+    const isFollowUp = (parsedRequest as any).isFollowUp === true || (parsedRequest as any).isFollowUp === "true";
     let { maxTokens } = parsedRequest;
     
     // Construct contextual prompt if this is a follow-up
@@ -650,6 +652,8 @@ ${prompt}`;
                   intent: routingMetadataStream.intent || "unknown",
                   category: routingMetadataStream.category || "",
                   attachmentGist,
+                  isFollowUp,
+                  previousPrompt: previousPrompt || undefined,
                 })
                 .then((customReason) => {
                   console.log("Generated custom routing reason (Phase B complete):", customReason);

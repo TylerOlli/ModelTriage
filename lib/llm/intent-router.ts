@@ -911,7 +911,9 @@ Output ONLY the JSON object, no other text.`;
   }
 
   /**
-   * Generate a prompt-aware routing explanation using LLM
+   * Generate a prompt-aware routing explanation using LLM.
+   * For follow-up turns, generates a contextual reason that references
+   * the conversation continuation rather than treating it as a fresh request.
    */
   async generateRoutingReason(params: {
     prompt: string;
@@ -919,8 +921,10 @@ Output ONLY the JSON object, no other text.`;
     intent: string;
     category: string;
     attachmentGist?: AttachmentGist | null;
+    isFollowUp?: boolean;
+    previousPrompt?: string;
   }): Promise<string> {
-    const { prompt, chosenModel, intent, category, attachmentGist } = params;
+    const { prompt, chosenModel, intent, category, attachmentGist, isFollowUp, previousPrompt } = params;
 
     // Map model IDs to display names
     const modelDisplayNames: Record<ModelId, string> = {
@@ -948,7 +952,40 @@ ATTACHMENT INFORMATION:
 CRITICAL: Only describe specifics if you can confidently infer them from the attachment info above. If uncertain, use safe generic descriptions.`;
     }
 
-    const explanationPrompt = `You are explaining why ${modelDisplayName} was selected to answer a user's request.
+    // Build the explanation prompt — different template for follow-ups vs initial requests
+    let explanationPrompt: string;
+
+    if (isFollowUp && previousPrompt) {
+      // Follow-up turn: generate a contextual continuation reason
+      explanationPrompt = `You are explaining why ${modelDisplayName} was selected to answer a follow-up question in an ongoing conversation.
+
+CONVERSATION CONTEXT:
+- Original request: "${previousPrompt.substring(0, 200)}"
+- Follow-up question: "${prompt.substring(0, 300)}"
+
+Write exactly 1-2 sentences that:
+1. Start with "Continuing conversation." to signal this is a follow-up
+2. Describe what the user is now asking (how it differs from or extends the original request)
+3. Explain why ${modelDisplayName} is the best fit for this follow-up task
+
+STRICT RULES:
+- Output must be 1-2 sentences maximum
+- MUST start with "Continuing conversation."
+- MUST describe what the follow-up asks for specifically
+- MUST reference a concrete model strength
+- Do NOT reuse the original routing reason verbatim
+- Do NOT be generic (no "balanced capabilities", "best match", "good choice")
+- Do NOT mention routing, categories, or internal mechanics
+
+GOOD EXAMPLES:
+- "Continuing conversation. User now asks to rewrite the JavaScript function in jQuery. This is still a concise code transformation task; ${modelDisplayName} is selected for fast, clean refactoring."
+- "Continuing conversation. The user wants to add error handling to the previous implementation. ${modelDisplayName} excels at iterative code improvements and defensive programming patterns."
+- "Continuing conversation. User asks for a more formal tone in the email. ${modelDisplayName} is well-suited for nuanced writing adjustments and style refinement."
+
+Your explanation:`;
+    } else {
+      // Initial request: standard routing reason
+      explanationPrompt = `You are explaining why ${modelDisplayName} was selected to answer a user's request.
 
 ${attachmentContext}
 
@@ -987,6 +1024,7 @@ BAD EXAMPLES (NEVER USE):
 User request: "${prompt.substring(0, 300)}"
 
 Your explanation:`;
+    }
 
     console.log("Generating routing reason for:", {
       model: modelDisplayName,
@@ -994,6 +1032,7 @@ Your explanation:`;
       category,
       hasAttachment: !!attachmentGist,
       attachmentKind: attachmentGist?.kind,
+      isFollowUp: !!isFollowUp,
     });
 
     try {

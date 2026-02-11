@@ -10,6 +10,7 @@ export interface ParsedRequest {
   stream?: boolean;
   previousPrompt?: string;
   previousResponse?: string;
+  isFollowUp?: boolean;
   files: File[];
 }
 
@@ -32,12 +33,14 @@ export async function parseInferenceRequest(
     const streamRaw = formData.get("stream") as string | null;
     const previousPromptRaw = formData.get("previousPrompt") as string | null;
     const previousResponseRaw = formData.get("previousResponse") as string | null;
+    const isFollowUpRaw = formData.get("isFollowUp") as string | null;
 
     // Parse JSON fields
     const models = modelsRaw ? JSON.parse(modelsRaw) : undefined;
     const temperature = temperatureRaw ? parseFloat(temperatureRaw) : undefined;
     const maxTokens = maxTokensRaw ? parseInt(maxTokensRaw, 10) : undefined;
     const stream = streamRaw === "true";
+    const isFollowUp = isFollowUpRaw === "true";
 
     // Collect files
     const files: File[] = [];
@@ -55,6 +58,7 @@ export async function parseInferenceRequest(
       stream,
       previousPrompt: previousPromptRaw || undefined,
       previousResponse: previousResponseRaw || undefined,
+      isFollowUp: isFollowUp || undefined,
       files,
     };
   } else {
@@ -68,6 +72,7 @@ export async function parseInferenceRequest(
       stream: body.stream,
       previousPrompt: body.previousPrompt,
       previousResponse: body.previousResponse,
+      isFollowUp: body.isFollowUp || undefined,
       files: [],
     };
   }

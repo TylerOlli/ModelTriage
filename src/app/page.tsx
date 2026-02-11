@@ -1,10 +1,17 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import type { DiffSummary } from "@/lib/diff";
 import { FormattedResponse } from "../components/FormattedResponse";
 import { FollowUpComposer } from "../components/FollowUpComposer";
+import { ModeSwitchModal } from "../components/ModeSwitchModal";
 import { validateFiles, getFileValidationErrorMessage } from "@/lib/file-validation";
+import type {
+  ConversationSession,
+  ConversationTurn,
+  ModelPanelData,
+} from "@/lib/session-types";
+import { createTurnId, createSessionId } from "@/lib/session-types";
 
 /**
  * Map model ID to provider name
@@ -83,25 +90,8 @@ function getUserFriendlyError(error: string | null): string {
   return "Unexpected error. Please try again.";
 }
 
-interface ModelPanel {
-  modelId: string;
-  routing: {
-    model: string;
-    reason: string;
-    confidence: string;
-  } | null;
-  response: string;
-  metadata: {
-    model: string;
-    provider: string;
-    latency: number;
-    tokenUsage?: { total: number };
-    finishReason?: string;
-  } | null;
-  error: string | null;
-  showRunDetails?: boolean;
-  isExpanded?: boolean;
-}
+// ModelPanel type alias — canonical definition lives in lib/session-types.ts
+type ModelPanel = ModelPanelData;
 
 /**
  * Helper to detect if a routing reason is generic/fallback text
@@ -160,9 +150,11 @@ export default function Home() {
   // Comparison summary accordion state
   const [showFullAnalysis, setShowFullAnalysis] = useState(false);
   
-  // Follow-up input state (shared between both modes)
-  const [comparisonFollowUp, setComparisonFollowUp] = useState("");
-  const [autoSelectFollowUp, setAutoSelectFollowUp] = useState("");
+  // Unified follow-up input (shared between both modes)
+  const [followUpInput, setFollowUpInput] = useState("");
+
+  // Conversation session — tracks multi-turn history in memory
+  const [session, setSession] = useState<ConversationSession | null>(null);
 
   // File attachment state
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
@@ -241,18 +233,8 @@ export default function Home() {
   const [rememberDrafts, setRememberDrafts] = useState(false);
   
   // Mode switching safety
-  const [showModeSwitchConfirm, setShowModeSwitchConfirm] = useState(false);
-  const [pendingMode, setPendingMode] = useState<boolean | null>(null);
-  const [lastAutoSelectResult, setLastAutoSelectResult] = useState<{
-    response: string;
-    metadata: any;
-    routing: any;
-    error: string | null;
-  } | null>(null);
-  const [lastCompareResult, setLastCompareResult] = useState<{
-    modelPanels: Record<string, ModelPanel>;
-    diffSummary: any;
-  } | null>(null);
+  const [showModeSwitchModal, setShowModeSwitchModal] = useState(false);
+  const [pendingMode, setPendingMode] = useState<"auto" | "compare" | null>(null);
 
   // Single-answer mode state
   const [response, setResponse] = useState("");
@@ -276,13 +258,6 @@ export default function Home() {
   // UI-only override for routing reason (from IMAGE_GIST)
   const [routingReasonOverride, setRoutingReasonOverride] = useState<string | null>(null);
 
-  // Reasoning expand/collapse state (Compare mode only)
-  const [expandedModelReasonings, setExpandedModelReasonings] = useState<Record<string, boolean>>({});
-
-  // Conversation continuation state (for follow-up prompts)
-  const [previousPrompt, setPreviousPrompt] = useState<string>("");
-  const [previousResponse, setPreviousResponse] = useState<string>("");
-  const [isFollowUpMode, setIsFollowUpMode] = useState(false);
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Comparison Mode state
@@ -472,6 +447,72 @@ export default function Home() {
   };
 
   /**
+   * Get the previous turn's context for follow-up requests.
+   * Returns { previousPrompt, previousResponse } from the last completed turn
+   * in the current session, or from the active (current) turn state.
+   */
+  const getFollowUpContext = useCallback((): {
+    previousPrompt: string;
+    previousResponse: string;
+  } => {
+    // If session has completed turns, use the last one
+    if (session && session.turns.length > 0) {
+      const lastTurn = session.turns[session.turns.length - 1];
+      const prevResponse = lastTurn.response ||
+        (lastTurn.modelPanels
+          ? Object.values(lastTurn.modelPanels).find((p) => p.response)?.response || ""
+          : "");
+      return {
+        previousPrompt: lastTurn.prompt,
+        previousResponse: prevResponse,
+      };
+    }
+    // Fallback: use current active state (first turn, not yet pushed to session)
+    if (response) {
+      return { previousPrompt: prompt, previousResponse: response };
+    }
+    if (Object.keys(modelPanels).length > 0) {
+      const firstResponse = Object.values(modelPanels).find((p) => p.response)?.response || "";
+      return { previousPrompt: prompt, previousResponse: firstResponse };
+    }
+    return { previousPrompt: "", previousResponse: "" };
+  }, [session, response, prompt, modelPanels]);
+
+  /**
+   * Push the current active turn into the session history.
+   * Called before starting a new follow-up turn.
+   */
+  const pushCurrentTurnToSession = useCallback(
+    (turnPrompt: string) => {
+      const completedTurn: ConversationTurn = {
+        id: createTurnId(),
+        prompt: turnPrompt,
+        isFollowUp: session !== null && session.turns.length > 0,
+        timestamp: Date.now(),
+        response: comparisonMode ? "" : response,
+        routing: comparisonMode ? null : routing,
+        metadata: comparisonMode ? null : metadata,
+        error: comparisonMode ? null : error,
+        modelPanels: comparisonMode ? { ...modelPanels } : null,
+        diffSummary: comparisonMode ? diffSummary : null,
+      };
+
+      setSession((prev) => {
+        if (!prev) {
+          return {
+            id: createSessionId(),
+            mode: comparisonMode ? "compare" : "auto",
+            turns: [completedTurn],
+            createdAt: Date.now(),
+          };
+        }
+        return { ...prev, turns: [...prev.turns, completedTurn] };
+      });
+    },
+    [session, comparisonMode, response, routing, metadata, error, modelPanels, diffSummary]
+  );
+
+  /**
    * Parse SSE stream from fetch response
    */
   async function* parseSSE(response: Response): AsyncGenerator<{
@@ -545,6 +586,10 @@ export default function Home() {
       return;
     }
 
+    // Submitting from the main prompt box starts a fresh session
+    setSession(null);
+    setFollowUpInput("");
+
     if (comparisonMode) {
       await handleVerifyModeSubmit();
     } else {
@@ -552,7 +597,9 @@ export default function Home() {
     }
   };
 
-  const handleSingleAnswerSubmit = async () => {
+  const handleSingleAnswerSubmit = async (overridePrompt?: string) => {
+    const submittedPrompt = overridePrompt || prompt;
+
     // Reset state
     setResponse("");
     setError(null);
@@ -571,12 +618,17 @@ export default function Home() {
     // Create abort controller for cancellation
     abortControllerRef.current = new AbortController();
 
+    // Derive follow-up context from session
+    const followUpCtx = getFollowUpContext();
+    const isFollowUp = !!(followUpCtx.previousPrompt && followUpCtx.previousResponse);
+
     try {
       const { body, headers } = buildRequest({
-        prompt,
+        prompt: submittedPrompt,
         stream: true,
-        previousPrompt,
-        previousResponse,
+        previousPrompt: isFollowUp ? followUpCtx.previousPrompt : undefined,
+        previousResponse: isFollowUp ? followUpCtx.previousResponse : undefined,
+        isFollowUp,
       });
 
       const res = await fetch("/api/stream", {
@@ -796,13 +848,7 @@ export default function Home() {
         throw new Error("No response received");
       }
 
-      // Save conversation context for potential follow-up
-      setPreviousPrompt(prompt);
-      setPreviousResponse(textBuffer);
-      
-      // Reset follow-up mode after successful submission
-      // User needs to explicitly click "Ask a follow-up" again
-      setIsFollowUpMode(false);
+      // Conversation context is now derived from session turns — no separate state needed
     } catch (err) {
       if (err instanceof Error) {
         if (err.name === "AbortError") {
@@ -820,7 +866,9 @@ export default function Home() {
     }
   };
 
-  const handleVerifyModeSubmit = async () => {
+  const handleVerifyModeSubmit = async (overridePrompt?: string) => {
+    const submittedPrompt = overridePrompt || prompt;
+
     // Reset state
     const models = selectedModels;
     const initialPanels: Record<string, ModelPanel> = {};
@@ -841,7 +889,6 @@ export default function Home() {
     setDiffError(null);
     setIsStreaming(true);
     setStreamingStage("routing"); // Initial stage: routing
-    setExpandedModelReasonings({}); // Collapse all model reasonings on new request
 
     // Create abort controller
     abortControllerRef.current = new AbortController();
@@ -854,13 +901,18 @@ export default function Home() {
 
     let hasReceivedAnyChunk = false;
 
+    // Derive follow-up context from session
+    const followUpCtx = getFollowUpContext();
+    const isFollowUp = !!(followUpCtx.previousPrompt && followUpCtx.previousResponse);
+
     try {
       const { body, headers } = buildRequest({
-        prompt,
+        prompt: submittedPrompt,
         stream: true,
         models,
-        previousPrompt,
-        previousResponse,
+        previousPrompt: isFollowUp ? followUpCtx.previousPrompt : undefined,
+        previousResponse: isFollowUp ? followUpCtx.previousResponse : undefined,
+        isFollowUp,
       });
 
       const res = await fetch("/api/stream", {
@@ -936,17 +988,7 @@ export default function Home() {
       }
 
       // Diff summary will be generated by useEffect after state updates complete
-      
-      // Save conversation context for potential follow-up (use first successful response)
-      const firstSuccessfulResponse = Object.values(textBuffers).find(text => text.length > 0);
-      if (firstSuccessfulResponse) {
-        setPreviousPrompt(prompt);
-        setPreviousResponse(firstSuccessfulResponse);
-      }
-      
-      // Reset follow-up mode after successful submission
-      // User needs to explicitly click "Ask a follow-up" again
-      setIsFollowUpMode(false);
+      // Conversation context is now derived from session turns — no separate state needed
     } catch (err) {
       if (err instanceof Error) {
         if (err.name === "AbortError") {
@@ -1016,13 +1058,9 @@ export default function Home() {
     setDiffSummary(null);
     setDiffError(null);
 
-    // Clear conversation context
-    setPreviousPrompt("");
-    setPreviousResponse("");
-    setIsFollowUpMode(false);
-    
-    // Reset reasoning expand/collapse state (Compare mode only)
-    setExpandedModelReasonings({});
+    // Clear conversation session
+    setSession(null);
+    setFollowUpInput("");
 
     // Clear attached files
     setAttachedFiles([]);
@@ -1069,138 +1107,99 @@ export default function Home() {
     setShowUndoToast(false);
   };
   
+  // ─── Mode Switching ──────────────────────────────────────────
+
   const handleModeSwitch = (newMode: boolean) => {
+    const targetMode = newMode ? "compare" : "auto";
+    const currentMode = comparisonMode ? "compare" : "auto";
+    if (targetMode === currentMode) return;
+
     // Check if there are existing results
     const hasAutoSelectResults = !comparisonMode && (response || metadata || error);
     const hasCompareResults = comparisonMode && Object.keys(modelPanels).length > 0;
-    
+
     if (hasAutoSelectResults || hasCompareResults) {
-      // Show confirmation
-      setPendingMode(newMode);
-      setShowModeSwitchConfirm(true);
+      // Show confirmation modal
+      setPendingMode(targetMode);
+      setShowModeSwitchModal(true);
     } else {
       // No results, switch immediately
       setComparisonMode(newMode);
-      // Reset follow-up mode on mode switch
-      setIsFollowUpMode(false);
     }
-  };
-  
-  const confirmModeSwitch = () => {
-    if (pendingMode === null) return;
-    
-    // Store current results before clearing
-    if (!comparisonMode) {
-      // Switching from Auto-select to Compare
-      setLastAutoSelectResult({
-        response,
-        metadata,
-        routing,
-        error,
-      });
-      // Clear auto-select results
-      setResponse("");
-      setMetadata(null);
-      setRouting(null);
-      setError(null);
-    } else {
-      // Switching from Compare to Auto-select
-      setLastCompareResult({
-        modelPanels,
-        diffSummary,
-      });
-      // Clear compare results
-      setModelPanels({});
-      setDiffSummary(null);
-      setDiffError(null);
-    }
-    
-    // Perform switch
-    setComparisonMode(pendingMode);
-    setShowModeSwitchConfirm(false);
-    setPendingMode(null);
-    
-    // Reset follow-up mode on mode switch
-    setIsFollowUpMode(false);
-  };
-  
-  const cancelModeSwitch = () => {
-    setShowModeSwitchConfirm(false);
-    setPendingMode(null);
-  };
-  
-  const restoreLastResults = () => {
-    if (!comparisonMode && lastAutoSelectResult) {
-      // Restore auto-select results
-      setResponse(lastAutoSelectResult.response);
-      setMetadata(lastAutoSelectResult.metadata);
-      setRouting(lastAutoSelectResult.routing);
-      setError(lastAutoSelectResult.error);
-      setLastAutoSelectResult(null);
-    } else if (comparisonMode && lastCompareResult) {
-      // Restore compare results
-      setModelPanels(lastCompareResult.modelPanels);
-      setDiffSummary(lastCompareResult.diffSummary);
-      setLastCompareResult(null);
-    }
-  };
-  
-  const handleAutoSelectFollowUpSubmit = () => {
-    const followUpText = autoSelectFollowUp.trim();
-    if (!followUpText || isStreaming) return;
-    
-    // Enable follow-up mode since user is explicitly submitting a follow-up
-    setIsFollowUpMode(true);
-    
-    // Build context from previous prompt and response
-    let contextPrompt = `Original prompt: ${prompt}\n\n`;
-    
-    if (response) {
-      contextPrompt += `Previous response:\n${response}\n\n`;
-    }
-    
-    contextPrompt += `Follow-up question: ${followUpText}`;
-    
-    // Set as new prompt and trigger submission
-    setPrompt(contextPrompt);
-    setAutoSelectFollowUp("");
-    
-    // Trigger auto-select mode submission
-    setTimeout(() => {
-      handleSingleAnswerSubmit();
-    }, 100);
   };
 
-  const handleComparisonFollowUpSubmit = () => {
-    const followUpText = comparisonFollowUp.trim();
+  const handleModeSwitchStartNew = () => {
+    if (!pendingMode) return;
+    // Clear everything and switch
+    setResponse("");
+    setError(null);
+    setRouting(null);
+    setMetadata(null);
+    setModelPanels({});
+    setDiffSummary(null);
+    setDiffError(null);
+    setSession(null);
+    setFollowUpInput("");
+    setComparisonMode(pendingMode === "compare");
+    setShowModeSwitchModal(false);
+    setPendingMode(null);
+  };
+
+  const handleModeSwitchDuplicate = () => {
+    if (!pendingMode) return;
+    // Keep the prompt, clear results, switch mode
+    const currentPrompt = prompt;
+    setResponse("");
+    setError(null);
+    setRouting(null);
+    setMetadata(null);
+    setModelPanels({});
+    setDiffSummary(null);
+    setDiffError(null);
+    setSession(null);
+    setFollowUpInput("");
+    setComparisonMode(pendingMode === "compare");
+    setPrompt(currentPrompt); // Keep the prompt for re-use
+    setShowModeSwitchModal(false);
+    setPendingMode(null);
+  };
+
+  const handleModeSwitchCancel = () => {
+    setShowModeSwitchModal(false);
+    setPendingMode(null);
+  };
+
+  // ─── Unified Follow-Up Handler ────────────────────────────────
+
+  const handleFollowUpSubmit = () => {
+    const followUpText = followUpInput.trim();
     if (!followUpText || isStreaming) return;
-    
-    // Enable follow-up mode since user is explicitly submitting a follow-up
-    setIsFollowUpMode(true);
-    
-    // Build context from comparison summary
-    let contextPrompt = `Original prompt: ${prompt}\n\n`;
-    
-    if (diffSummary) {
-      contextPrompt += `Previous comparison summary:\n`;
-      if (diffSummary.commonGround.length > 0) {
-        contextPrompt += `Common Ground: ${diffSummary.commonGround.join("; ")}\n`;
-      }
-      if (diffSummary.keyDifferences.length > 0) {
-        contextPrompt += `Key Differences: ${diffSummary.keyDifferences.map(d => `${d.model}: ${d.points.join(", ")}`).join("; ")}\n`;
-      }
+
+    // Push current active state into session as a completed turn
+    pushCurrentTurnToSession(prompt);
+
+    // Clear active state for the new turn
+    setResponse("");
+    setError(null);
+    setRouting(null);
+    setRoutingReasonOverride(null);
+    setMetadata(null);
+    setModelPanels({});
+    setDiffSummary(null);
+    setDiffError(null);
+
+    // Add follow-up to history
+    addToHistory(followUpText);
+
+    // Clear the input
+    setFollowUpInput("");
+
+    // Submit the follow-up — the handlers derive context from the session
+    if (comparisonMode) {
+      handleVerifyModeSubmit(followUpText);
+    } else {
+      handleSingleAnswerSubmit(followUpText);
     }
-    
-    contextPrompt += `\nFollow-up question: ${followUpText}`;
-    
-    // Set as new prompt and trigger submission
-    setPrompt(contextPrompt);
-    setComparisonFollowUp("");
-    
-    // Trigger comparison mode submission
-    setTimeout(() => {
-      handleVerifyModeSubmit();
-    }, 100);
   };
 
   // File attachment handlers
@@ -1316,6 +1315,7 @@ export default function Home() {
     models?: string[];
     previousPrompt?: string;
     previousResponse?: string;
+    isFollowUp?: boolean;
   }): { body: string | FormData; headers: Record<string, string> } => {
     const hasFiles = attachedFiles.length > 0;
 
@@ -1332,6 +1332,9 @@ export default function Home() {
       }
       if (params.previousResponse) {
         formData.append("previousResponse", params.previousResponse);
+      }
+      if (params.isFollowUp) {
+        formData.append("isFollowUp", "true");
       }
       
       // Attach files
@@ -1352,6 +1355,7 @@ export default function Home() {
           ...(params.models && { models: params.models }),
           ...(params.previousPrompt && { previousPrompt: params.previousPrompt }),
           ...(params.previousResponse && { previousResponse: params.previousResponse }),
+          ...(params.isFollowUp && { isFollowUp: true }),
         }),
         headers: {
           "Content-Type": "application/json",
@@ -1408,40 +1412,7 @@ export default function Home() {
             </button>
           </div>
           
-          {/* Mode Switch Confirmation Bar */}
-          {showModeSwitchConfirm && (
-            <div className="mt-3 bg-orange-50 border border-orange-200 rounded-lg p-3 animate-in fade-in slide-in-from-top-1 duration-200">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-start gap-2 flex-1">
-                  <span className="text-orange-600 text-sm mt-0.5">⚠️</span>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-orange-900">
-                      Switching modes will clear the current results
-                    </p>
-                    <p className="text-xs text-orange-700 mt-0.5">
-                      You can restore them after switching if needed
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={cancelModeSwitch}
-                    className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:border-gray-400 transition-all duration-150"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={confirmModeSwitch}
-                    className="px-3 py-1.5 text-xs font-medium text-orange-700 bg-orange-100 border border-orange-300 rounded-md hover:bg-orange-200 active:translate-y-[0.5px] transition-all duration-150"
-                  >
-                    Switch mode
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Mode Switch Modal — rendered via portal-style at bottom of JSX */}
           
           {/* Helper text */}
           <p className="text-xs text-gray-500 mt-2 leading-relaxed">
@@ -1529,10 +1500,10 @@ export default function Home() {
               >
                 Prompt
               </label>
-              {isFollowUpMode && (
+              {session && session.turns.length > 0 && (
                 <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-md border border-green-200 flex items-center gap-1">
                   <span>🔗</span>
-                  Continuing conversation
+                  Conversation active ({session.turns.length} turn{session.turns.length !== 1 ? "s" : ""})
                 </span>
               )}
             </div>
@@ -1555,11 +1526,7 @@ export default function Home() {
               id="prompt"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder={
-                isFollowUpMode
-                  ? "Ask a follow-up question..." 
-                  : "Enter your prompt here..."
-              }
+              placeholder="Enter your prompt here..."
               className={`w-full px-5 py-4 border-2 rounded-lg outline-none resize-vertical bg-white text-lg leading-7 text-gray-900 placeholder:text-gray-400/70 transition-all duration-300 ease-out ${
                 isDraggingOver
                   ? "border-blue-400 ring-4 ring-blue-500/20 bg-blue-50/30"
@@ -1854,39 +1821,102 @@ export default function Home() {
           </div>
         )}
 
-        {/* Restore Last Results Action */}
-        {!isStreaming && (
-          <>
-            {!comparisonMode && lastAutoSelectResult && !response && !error && (
-              <div className="mb-6 animate-in fade-in slide-in-from-top-1 duration-200">
-                <button
-                  type="button"
-                  onClick={restoreLastResults}
-                  className="w-full px-4 py-3 text-sm font-medium text-blue-700 bg-blue-50/50 border border-blue-200/50 rounded-lg hover:bg-blue-50 hover:border-blue-300 active:translate-y-[0.5px] transition-all duration-150 flex items-center justify-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Restore last auto-select result
-                </button>
+        {/* Previous Conversation Turns */}
+        {session && session.turns.length > 0 && (
+          <div className="space-y-4 mb-6">
+            {session.turns.map((turn, turnIdx) => (
+              <div key={turn.id} className="animate-in fade-in duration-200">
+                {/* Follow-up prompt label */}
+                {turn.isFollowUp && (
+                  <div className="flex items-start gap-2.5 mb-3">
+                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg className="w-3 h-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 17l-4 4m0 0l-4-4m4 4V3" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Follow-up</span>
+                      <p className="text-sm text-gray-800 leading-relaxed mt-0.5">{turn.prompt}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Auto-select turn */}
+                {turn.response && !turn.modelPanels && (
+                  <div className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative opacity-80"
+                    style={{
+                      backgroundImage: `
+                        repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
+                        repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
+                      `,
+                      backgroundSize: '20px 20px'
+                    }}
+                  >
+                    {/* Routing reason */}
+                    {turn.routing && turn.routing.mode === "auto" && (
+                      <div className="px-6 pt-3 pb-2 bg-white/40 backdrop-blur-sm relative">
+                        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Auto-selected</span>
+                          <span className="text-xs font-bold text-gray-900 font-mono">
+                            {turn.routing.chosenModel ? getFriendlyModelName(turn.routing.chosenModel) : ""}
+                          </span>
+                        </div>
+                        {turn.routing.reason && (
+                          <p className="text-xs text-slate-600 leading-relaxed">{turn.routing.reason}</p>
+                        )}
+                      </div>
+                    )}
+                    {/* Response */}
+                    <div className="m-3 bg-white rounded-lg border border-gray-200/60 shadow-sm">
+                      <div className="px-6 py-4">
+                        <div className="prose prose-sm max-w-none text-[15px] leading-7">
+                          <FormattedResponse response={turn.response} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Compare mode turn */}
+                {turn.modelPanels && Object.keys(turn.modelPanels).length > 0 && (
+                  <div className="opacity-80">
+                    <div className={`grid gap-4 ${Object.keys(turn.modelPanels).length === 2 ? "md:grid-cols-2" : Object.keys(turn.modelPanels).length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+                      {Object.entries(turn.modelPanels).map(([mId, panel]) => (
+                        <div key={mId} className="bg-slate-900/[0.02] rounded-xl shadow-sm border border-gray-200/50 overflow-hidden"
+                          style={{
+                            backgroundImage: `
+                              repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
+                              repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
+                            `,
+                            backgroundSize: '20px 20px'
+                          }}
+                        >
+                          <div className="px-4 pt-3 pb-2 bg-white/40 relative">
+                            <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
+                            <span className="text-xs font-bold text-gray-900 font-mono">{getFriendlyModelName(mId)}</span>
+                            {panel.routing?.reason && (
+                              <p className="text-xs text-slate-500 leading-relaxed mt-1">{panel.routing.reason}</p>
+                            )}
+                          </div>
+                          <div className="m-2 bg-white rounded-lg border border-gray-200/60 shadow-sm">
+                            <div className="px-4 py-3 max-h-[200px] overflow-hidden relative">
+                              <div className="text-sm leading-relaxed">
+                                <FormattedResponse response={panel.response} mode="compare" />
+                              </div>
+                              {panel.response.length > 300 && (
+                                <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white to-transparent" />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-            
-            {comparisonMode && lastCompareResult && Object.keys(modelPanels).length === 0 && (
-              <div className="mb-6 animate-in fade-in slide-in-from-top-1 duration-200">
-                <button
-                  type="button"
-                  onClick={restoreLastResults}
-                  className="w-full px-4 py-3 text-sm font-medium text-blue-700 bg-blue-50/50 border border-blue-200/50 rounded-lg hover:bg-blue-50 hover:border-blue-300 active:translate-y-[0.5px] transition-all duration-150 flex items-center justify-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Restore last comparison results
-                </button>
-              </div>
-            )}
-          </>
+            ))}
+          </div>
         )}
 
         {/* Unified Loading State - AI Pipeline (Both Modes) */}
@@ -2114,9 +2144,9 @@ export default function Home() {
                     {/* Follow-up Composer */}
                     {!isStreaming && !error && response && (
                       <FollowUpComposer
-                        value={autoSelectFollowUp}
-                        onChange={setAutoSelectFollowUp}
-                        onSubmit={handleAutoSelectFollowUpSubmit}
+                        value={followUpInput}
+                        onChange={setFollowUpInput}
+                        onSubmit={handleFollowUpSubmit}
                         isLoading={isStreaming}
                         placeholder="Ask a follow-up question…"
                       />
@@ -2288,62 +2318,28 @@ export default function Home() {
                       backgroundSize: '20px 20px'
                     }}
                   >
-                    {/* Execution Header */}
+                    {/* Execution Header — always show full routing reason */}
                     <div className="px-6 pt-4 pb-3 bg-white/40 backdrop-blur-sm relative">
                       <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
                       
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                          <span className="text-gray-400 text-sm flex-shrink-0 mt-0.5">⚡</span>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Model</span>
-                              <span className="text-sm font-bold text-gray-900 font-mono">
-                                {getFriendlyModelName(modelId)}
-                              </span>
-                            </div>
-                            {panel.routing && (
-                              <div className="flex items-start gap-2">
-                                <button
-                                  onClick={() => setExpandedModelReasonings(prev => ({
-                                    ...prev,
-                                    [modelId]: !prev[modelId]
-                                  }))}
-                                  className="text-xs text-gray-500 leading-relaxed line-clamp-1 flex-1 text-left hover:text-gray-700 transition-colors cursor-pointer"
-                                  aria-expanded={expandedModelReasonings[modelId] || false}
-                                  aria-controls={`reasoning-details-${modelId}`}
-                                >
-                                  {panel.routing.reason}
-                                </button>
-                                <button
-                                  onClick={() => setExpandedModelReasonings(prev => ({
-                                    ...prev,
-                                    [modelId]: !prev[modelId]
-                                  }))}
-                                  className="text-[10px] font-medium text-blue-600 hover:text-blue-700 uppercase tracking-wide flex-shrink-0 transition-colors"
-                                  aria-label={expandedModelReasonings[modelId] ? "Hide reasoning details" : "Show reasoning details"}
-                                >
-                                  {expandedModelReasonings[modelId] ? "Hide" : "Show"}
-                                </button>
-                              </div>
-                            )}
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <span className="text-gray-400 text-sm flex-shrink-0 mt-0.5">⚡</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Model</span>
+                            <span className="text-sm font-bold text-gray-900 font-mono">
+                              {getFriendlyModelName(modelId)}
+                            </span>
                           </div>
+                          {panel.routing?.reason && (
+                            <div className="mt-1.5 rounded-lg border border-gray-200/60 bg-white/70 p-2.5">
+                              <p className="text-xs text-slate-600 leading-relaxed">
+                                {panel.routing.reason}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </div>
-                      
-                      {/* Expanded reasoning details */}
-                      {panel.routing && expandedModelReasonings[modelId] && (
-                        <div 
-                          id={`reasoning-details-${modelId}`}
-                          className="px-6 pb-4 pt-2"
-                        >
-                          <div className="bg-slate-50/50 rounded-md border border-gray-200/50 px-3 py-2.5 max-h-40 overflow-y-auto">
-                            <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
-                              {panel.routing.reason}
-                            </p>
-                          </div>
-                        </div>
-                      )}
                     </div>
                     
                     {/* Response Content Panel */}
@@ -2744,13 +2740,15 @@ export default function Home() {
                 </div>
                 
                 {/* Follow-up Composer */}
-                <FollowUpComposer
-                  value={comparisonFollowUp}
-                  onChange={setComparisonFollowUp}
-                  onSubmit={handleComparisonFollowUpSubmit}
-                  isLoading={isStreaming}
-                  placeholder="Ask a follow-up about this comparison…"
-                />
+                {!isStreaming && (
+                  <FollowUpComposer
+                    value={followUpInput}
+                    onChange={setFollowUpInput}
+                    onSubmit={handleFollowUpSubmit}
+                    isLoading={isStreaming}
+                    placeholder="Ask a follow-up about this comparison…"
+                  />
+                )}
               </div>
             )}
 
@@ -2921,6 +2919,16 @@ export default function Home() {
           </>
         )}
       </div>
+
+      {/* Mode Switch Confirmation Modal */}
+      <ModeSwitchModal
+        isOpen={showModeSwitchModal}
+        currentMode={comparisonMode ? "compare" : "auto"}
+        targetMode={pendingMode || "auto"}
+        onStartNew={handleModeSwitchStartNew}
+        onDuplicate={handleModeSwitchDuplicate}
+        onCancel={handleModeSwitchCancel}
+      />
     </div>
   );
 }
