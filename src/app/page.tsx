@@ -144,9 +144,6 @@ export default function Home() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [comparisonMode, setComparisonMode] = useState(false);
   
-  // Run details disclosure state
-  const [showRunDetails, setShowRunDetails] = useState(false);
-  
   // Comparison summary accordion state
   const [showFullAnalysis, setShowFullAnalysis] = useState(false);
   
@@ -240,36 +237,29 @@ export default function Home() {
   const [showModeSwitchModal, setShowModeSwitchModal] = useState(false);
   const [pendingMode, setPendingMode] = useState<"auto" | "compare" | null>(null);
 
-  // Single-answer mode state
-  const [response, setResponse] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [routing, setRouting] = useState<{
-    mode: "auto" | "manual";
-    intent?: string;
-    category?: string;
-    chosenModel?: string;
-    confidence?: number;
-    reason?: string;
-  } | null>(null);
-  const [metadata, setMetadata] = useState<{
-    model: string;
-    provider: string;
-    latency: number;
-    tokenUsage?: { total: number };
-    finishReason?: string;
-  } | null>(null);
-  
-  // UI-only override for routing reason (from IMAGE_GIST)
-  const [routingReasonOverride, setRoutingReasonOverride] = useState<string | null>(null);
-
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Comparison Mode state
+  // ─── Unified Response State ──────────────────────────────────
+  // Both modes store results in modelPanels. Auto-select mode has
+  // a single panel entry; Compare mode has N panels. This replaces
+  // the previously separate response/error/routing/metadata states.
   const [modelPanels, setModelPanels] = useState<Record<string, ModelPanel>>({});
   const [diffSummary, setDiffSummary] = useState<DiffSummary | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // ─── Derived Values ──────────────────────────────────────────
+  // For auto mode: convenient access to the single panel's data
+  const autoPanel = !comparisonMode ? Object.values(modelPanels)[0] ?? null : null;
+
+  /** Update a single field on a panel (works for both modes). */
+  const updatePanel = useCallback((modelId: string, updates: Partial<ModelPanel>) => {
+    setModelPanels(prev => ({
+      ...prev,
+      [modelId]: { ...prev[modelId], ...updates },
+    }));
+  }, []);
 
   // Load persisted state on mount
   useEffect(() => {
@@ -472,15 +462,12 @@ export default function Home() {
       };
     }
     // Fallback: use current active state (first turn, not yet pushed to session)
-    if (response) {
-      return { previousPrompt: prompt, previousResponse: response };
-    }
     if (Object.keys(modelPanels).length > 0) {
       const firstResponse = Object.values(modelPanels).find((p) => p.response)?.response || "";
       return { previousPrompt: prompt, previousResponse: firstResponse };
     }
     return { previousPrompt: "", previousResponse: "" };
-  }, [session, response, prompt, modelPanels]);
+  }, [session, prompt, modelPanels]);
 
   /**
    * Push the current active turn into the session history.
@@ -488,15 +475,32 @@ export default function Home() {
    */
   const pushCurrentTurnToSession = useCallback(
     (turnPrompt: string) => {
+      // Derive legacy per-field values from the unified panel state
+      // so that ConversationTurn / accordion rendering keeps working.
+      const firstPanel = Object.values(modelPanels)[0] ?? null;
+
       const completedTurn: ConversationTurn = {
         id: createTurnId(),
         prompt: turnPrompt,
         isFollowUp: session !== null && session.turns.length > 0,
         timestamp: Date.now(),
-        response: comparisonMode ? "" : response,
-        routing: comparisonMode ? null : routing,
-        metadata: comparisonMode ? null : metadata,
-        error: comparisonMode ? null : error,
+        // Auto mode: populate legacy flat fields from the single panel
+        response: !comparisonMode && firstPanel ? firstPanel.response : "",
+        routing: !comparisonMode && firstPanel?.routing
+          ? {
+              mode: (firstPanel.routing.mode as "auto" | "manual") || "auto",
+              intent: firstPanel.routing.intent,
+              category: firstPanel.routing.category,
+              chosenModel: firstPanel.routing.chosenModel,
+              confidence: typeof firstPanel.routing.confidence === "number"
+                ? firstPanel.routing.confidence
+                : undefined,
+              reason: firstPanel.routing.reason,
+            }
+          : null,
+        metadata: !comparisonMode && firstPanel ? firstPanel.metadata : null,
+        error: !comparisonMode && firstPanel ? firstPanel.error : null,
+        // Compare mode: store full panel map
         modelPanels: comparisonMode ? { ...modelPanels } : null,
         diffSummary: comparisonMode ? diffSummary : null,
       };
@@ -513,7 +517,7 @@ export default function Home() {
         return { ...prev, turns: [...prev.turns, completedTurn] };
       });
     },
-    [session, comparisonMode, response, routing, metadata, error, modelPanels, diffSummary]
+    [session, comparisonMode, modelPanels, diffSummary]
   );
 
   /**
@@ -586,7 +590,17 @@ export default function Home() {
 
     // Validate prompt length (4,000 character limit per spec)
     if (prompt.length > 4000) {
-      setError("Prompt exceeds maximum length of 4,000 characters");
+      setModelPanels({
+        _validation: {
+          modelId: "_validation",
+          routing: null,
+          response: "",
+          metadata: null,
+          error: "Prompt exceeds maximum length of 4,000 characters",
+          showRunDetails: false,
+          isExpanded: false,
+        },
+      });
       return;
     }
 
@@ -596,35 +610,49 @@ export default function Home() {
     setExpandedTurns({});
     setActiveFollowUpPrompt(null);
 
-    if (comparisonMode) {
-      await handleVerifyModeSubmit();
-    } else {
-      await handleSingleAnswerSubmit();
-    }
+    await handleStreamSubmit();
   };
 
-  const handleSingleAnswerSubmit = async (overridePrompt?: string) => {
+  /**
+   * Unified stream handler — drives both Auto-select and Compare modes.
+   *
+   * Auto-select: single-model SSE with IMAGE_GIST parsing, one panel.
+   * Compare:     multi-model SSE, N panels, diff summary via useEffect.
+   */
+  const handleStreamSubmit = async (overridePrompt?: string) => {
     const submittedPrompt = overridePrompt || prompt;
+    const isCompare = comparisonMode;
 
-    // Reset state
-    setResponse("");
-    setError(null);
-    setRouting(null);
-    setRoutingReasonOverride(null);
-    setMetadata(null);
+    // ── Reset state & initialise panels ──────────────────────────
+    if (isCompare) {
+      const initialPanels: Record<string, ModelPanel> = {};
+      selectedModels.forEach((modelId) => {
+        initialPanels[modelId] = {
+          modelId,
+          routing: null,
+          response: "",
+          metadata: null,
+          error: null,
+          showRunDetails: false,
+          isExpanded: false,
+        };
+      });
+      setModelPanels(initialPanels);
+    } else {
+      // Auto mode: panel created once model is known (meta event)
+      setModelPanels({});
+    }
+
+    setDiffSummary(null);
+    setDiffError(null);
     setIsStreaming(true);
-    // LATENCY OPTIMIZATION: Single "selecting" state replaces multi-step pipeline.
-    // Transitions directly to "streaming" on first chunk — no intermediate states.
-    setStreamingStage("selecting");
-    setShowRunDetails(false); // Collapse details on new request
-    
-    // Reset IMAGE_GIST upgrade tracking
+    // Auto: single "selecting" state. Compare: multi-step pipeline.
+    setStreamingStage(isCompare ? "routing" : "selecting");
     imageGistUpgradedRef.current = false;
 
-    // Create abort controller for cancellation
     abortControllerRef.current = new AbortController();
 
-    // Derive follow-up context from session
+    // Follow-up context
     const followUpCtx = getFollowUpContext();
     const isFollowUp = !!(followUpCtx.previousPrompt && followUpCtx.previousResponse);
 
@@ -632,6 +660,7 @@ export default function Home() {
       const { body, headers } = buildRequest({
         prompt: submittedPrompt,
         stream: true,
+        ...(isCompare && { models: selectedModels }),
         previousPrompt: isFollowUp ? followUpCtx.previousPrompt : undefined,
         previousResponse: isFollowUp ? followUpCtx.previousResponse : undefined,
         isFollowUp,
@@ -649,326 +678,249 @@ export default function Home() {
         throw new Error(errorData.error || "Request failed");
       }
 
-      // Parse SSE stream
-      let currentModel: string | null = null;
-      let textBuffer = "";
+      // ── Per-model text buffers ───────────────────────────────
+      const textBuffers: Record<string, string> = {};
+      if (isCompare) {
+        selectedModels.forEach((m) => { textBuffers[m] = ""; });
+      }
+
       let hasReceivedChunk = false;
-      
-      // IMAGE_GIST parsing state (frontend-only)
+      let currentAutoModel: string | null = null;
+
+      // IMAGE_GIST parsing state (auto mode only)
       let gistBuffer = "";
-      let gistParsed = false;
+      let gistParsed = isCompare; // skip in compare mode
       let gistLineFullyConsumed = false;
 
+      // ── SSE loop ─────────────────────────────────────────────
       for await (const { event, data } of parseSSE(res)) {
         if (event === "meta") {
-          // Meta events now arrive immediately (routing completed before stream started).
-          // LATENCY OPTIMIZATION: No stage transitions needed here — we stay in "selecting"
-          // until the first chunk arrives, then jump straight to "streaming".
-          
-          // Store routing metadata
-          if (data.routing) {
-            console.log("[STREAM] meta routing reason:", data.routing.reason);
-            
-            // Only set routing from meta if IMAGE_GIST hasn't upgraded it yet
-            if (!imageGistUpgradedRef.current) {
-              setRouting(data.routing);
-              console.log("[STREAM] Set routing from meta (IMAGE_GIST not yet parsed)");
-            } else {
-              console.log("[STREAM] Skipping meta routing update - IMAGE_GIST has already upgraded reason");
+          if (isCompare) {
+            setStreamingStage("connecting");
+          } else {
+            // Auto mode: identify model & store routing
+            if (data.models?.[0]) {
+              currentAutoModel = data.models[0];
+              textBuffers[currentAutoModel!] = "";
+            }
+
+            if (data.routing && currentAutoModel) {
+              console.log("[STREAM] meta routing reason:", data.routing.reason);
+              if (!imageGistUpgradedRef.current) {
+                setModelPanels({
+                  [currentAutoModel]: {
+                    modelId: currentAutoModel,
+                    routing: {
+                      mode: data.routing.mode || "auto",
+                      model: currentAutoModel,
+                      reason: data.routing.reason || "",
+                      confidence: data.routing.confidence,
+                      chosenModel: data.routing.chosenModel || currentAutoModel,
+                      intent: data.routing.intent,
+                      category: data.routing.category,
+                    },
+                    response: "",
+                    metadata: null,
+                    error: null,
+                    showRunDetails: false,
+                    isExpanded: false,
+                  },
+                });
+                console.log("[STREAM] Set routing from meta (IMAGE_GIST not yet parsed)");
+              } else {
+                console.log("[STREAM] Skipping meta routing update - IMAGE_GIST has already upgraded reason");
+              }
+            } else if (currentAutoModel) {
+              // No routing yet — create skeleton panel
+              setModelPanels((prev) => {
+                if (Object.keys(prev).length === 0) {
+                  return {
+                    [currentAutoModel!]: {
+                      modelId: currentAutoModel!,
+                      routing: null,
+                      response: "",
+                      metadata: null,
+                      error: null,
+                      showRunDetails: false,
+                      isExpanded: false,
+                    },
+                  };
+                }
+                return prev;
+              });
             }
           }
-          if (data.models) {
-            currentModel = data.models[0]; // Single answer mode has one model
-          }
         } else if (event === "model_start") {
-          // Model is starting - stay on connecting, will move to streaming on first chunk
-        } else if (event === "routing_update") {
-          // Update routing with IMAGE_GIST-derived information
+          // Model starting — no action needed
+        } else if (event === "routing_update" && !isCompare) {
+          // Auto only: IMAGE_GIST-derived routing update
           console.log("Received routing_update event:", data);
           if (data.routing) {
             console.log("Updating routing with IMAGE_GIST-derived reason:", data.routing.reason);
             if (data.imageGist) {
               console.log("IMAGE_GIST metadata:", data.imageGist);
             }
-            setRouting(data.routing);
+            setModelPanels((prev) => {
+              const key = Object.keys(prev)[0];
+              if (!key || !prev[key]) return prev;
+              return {
+                ...prev,
+                [key]: {
+                  ...prev[key],
+                  routing: { ...prev[key].routing, ...data.routing, model: prev[key].routing?.model || key } as ModelPanel["routing"],
+                },
+              };
+            });
           }
-        } else if (event === "routing_reason") {
-          // Handler for routing_reason events (non-IMAGE_GIST updates)
+        } else if (event === "routing_reason" && !isCompare) {
+          // Auto only: routing reason update (non-IMAGE_GIST)
           console.log("Received routing_reason event:", data);
           if (data.reason) {
             console.log("Evaluating routing reason update:", data.reason, data.forceUpdate ? "(forceUpdate)" : "");
-            setRouting((prev) => {
-              if (prev) {
-                // Follow-up reasons carry forceUpdate — always accept them
-                // (they contain conversation-aware context the fast-path reason lacks)
-                if (data.forceUpdate) {
-                  console.log("✓ Force-updating routing reason (follow-up):", data.reason);
-                  return { ...prev, reason: data.reason };
-                }
+            setModelPanels((prev) => {
+              const key = Object.keys(prev)[0];
+              if (!key || !prev[key]?.routing) return prev;
+              const panel = prev[key];
 
-                const existingReason = prev.reason;
-                console.log("Previous routing reason:", existingReason);
-                
-                // Check if new reason is more descriptive
-                if (isMoreDescriptive(data.reason, existingReason)) {
-                  console.log("✓ Updating to more descriptive reason:", data.reason);
-                  return { ...prev, reason: data.reason };
-                } else {
-                  console.log("✗ Keeping existing reason (new one is generic or less descriptive)");
-                  return prev;
-                }
+              if (data.forceUpdate) {
+                console.log("✓ Force-updating routing reason (follow-up):", data.reason);
+                return { ...prev, [key]: { ...panel, routing: { ...panel.routing!, reason: data.reason } } };
               }
+
+              const existingReason = panel.routing!.reason;
+              console.log("Previous routing reason:", existingReason);
+
+              if (isMoreDescriptive(data.reason, existingReason)) {
+                console.log("✓ Updating to more descriptive reason:", data.reason);
+                return { ...prev, [key]: { ...panel, routing: { ...panel.routing!, reason: data.reason } } };
+              }
+              console.log("✗ Keeping existing reason (new one is generic or less descriptive)");
               return prev;
             });
           }
         } else if (event === "ping") {
-          // Keep-alive ping, ignore
+          // Keep-alive, ignore
         } else if (event === "chunk") {
-          // First chunk arrived - switch to streaming stage
           if (!hasReceivedChunk) {
             setStreamingStage("streaming");
             hasReceivedChunk = true;
           }
-          
-          // Log chunk delta (first 80 chars)
-          console.log("[STREAM] chunk delta head:", data.delta.slice(0, 80));
-          
-          // IMAGE_GIST parsing (frontend-only, ONLY for image requests)
-          // Check if this might be an image response by looking for IMAGE_GIST in early chunks
-          if (!gistParsed) {
-            if (gistBuffer.length < 800) {
-              gistBuffer += data.delta;
-              
-              // Check if IMAGE_GIST line is complete (has newline after it)
-              if (gistBuffer.includes("IMAGE_GIST:") && gistBuffer.includes("\n")) {
-                const gistLineStart = gistBuffer.indexOf("IMAGE_GIST:");
-                const gistLineEnd = gistBuffer.indexOf("\n", gistLineStart);
-                
-                if (gistLineEnd !== -1) {
-                  // Extract and parse IMAGE_GIST
-                  const gistLine = gistBuffer.substring(gistLineStart, gistLineEnd);
-                  const jsonPart = gistLine.substring("IMAGE_GIST:".length).trim();
-                  
-                  try {
-                    const gist = JSON.parse(jsonPart);
-                    console.log("[STREAM] parsed IMAGE_GIST:", gist);
-                    
-                    // Infer user intent from prompt
-                    const promptLower = prompt.toLowerCase();
-                    let userIntent = "analyze the code";
-                    if (promptLower.match(/improve|optimize|refactor|enhance|better/)) {
-                      userIntent = "suggest improvements";
-                    } else if (promptLower.match(/explain|describe|what does|how does|understand/)) {
-                      userIntent = "explain what it does";
-                    } else if (promptLower.match(/fix|debug|error|issue|problem|bug|wrong/)) {
-                      userIntent = "identify issues and fixes";
-                    }
-                    
-                    // Build prompt-aware routing reason from gist
-                    const modelDisplayName = "Gemini 2.5 Flash";
-                    let newReason = "";
-                    
-                    if (gist.certainty === "high" && gist.language && gist.language !== "unknown" && gist.purpose && gist.purpose !== "unknown") {
-                      newReason = `This screenshot shows ${gist.language} code that ${gist.purpose}, so ${modelDisplayName} is a strong fit to accurately read code from images and ${userIntent}.`;
-                    } else if (gist.language && gist.language !== "unknown") {
-                      newReason = `This screenshot shows ${gist.language} code, so ${modelDisplayName} is a strong fit to accurately read code from images and ${userIntent}.`;
-                    } else {
-                      newReason = `This screenshot contains code, so ${modelDisplayName} is a strong fit to accurately read code from images and ${userIntent}.`;
-                    }
-                    
-                    console.log("[STREAM] updated routing.reason:", newReason);
-                    
-                    // Set UI-only override (persists through stream completion)
-                    setRoutingReasonOverride(newReason);
-                    
-                    // Mark that IMAGE_GIST has upgraded the routing reason
-                    imageGistUpgradedRef.current = true;
-                    console.log("[STREAM] IMAGE_GIST upgrade flag set - preventing future meta overwrites");
-                    
-                    setRouting((prev) => {
-                      if (prev) {
-                        return { ...prev, reason: newReason };
+
+          if (isCompare) {
+            // ── Compare mode: route chunk to the correct model panel
+            const modelId = data.model;
+            textBuffers[modelId] = (textBuffers[modelId] || "") + data.delta;
+            setModelPanels((prev) => ({
+              ...prev,
+              [modelId]: { ...prev[modelId], response: textBuffers[modelId] },
+            }));
+          } else {
+            // ── Auto mode: single buffer with IMAGE_GIST parsing
+            const modelId = currentAutoModel || Object.keys(textBuffers)[0];
+            console.log("[STREAM] chunk delta head:", data.delta.slice(0, 80));
+
+            if (!gistParsed) {
+              if (gistBuffer.length < 800) {
+                gistBuffer += data.delta;
+
+                if (gistBuffer.includes("IMAGE_GIST:") && gistBuffer.includes("\n")) {
+                  const gistLineStart = gistBuffer.indexOf("IMAGE_GIST:");
+                  const gistLineEnd = gistBuffer.indexOf("\n", gistLineStart);
+
+                  if (gistLineEnd !== -1) {
+                    const gistLine = gistBuffer.substring(gistLineStart, gistLineEnd);
+                    const jsonPart = gistLine.substring("IMAGE_GIST:".length).trim();
+
+                    try {
+                      const gist = JSON.parse(jsonPart);
+                      console.log("[STREAM] parsed IMAGE_GIST:", gist);
+
+                      const promptLower = submittedPrompt.toLowerCase();
+                      let userIntent = "analyze the code";
+                      if (promptLower.match(/improve|optimize|refactor|enhance|better/)) {
+                        userIntent = "suggest improvements";
+                      } else if (promptLower.match(/explain|describe|what does|how does|understand/)) {
+                        userIntent = "explain what it does";
+                      } else if (promptLower.match(/fix|debug|error|issue|problem|bug|wrong/)) {
+                        userIntent = "identify issues and fixes";
                       }
-                      return prev;
-                    });
-                    
-                    gistParsed = true;
-                    
-                    // Strip IMAGE_GIST line from buffer
-                    const textAfterGist = gistBuffer.substring(gistLineEnd + 1);
-                    gistBuffer = "";
-                    gistLineFullyConsumed = true;
-                    
-                    // Start displaying text after the gist line
-                    textBuffer = textAfterGist;
-                    setResponse(textBuffer);
-                  } catch (e) {
-                    console.warn("[UI] Failed to parse IMAGE_GIST:", e);
-                    gistParsed = true;
-                    gistLineFullyConsumed = true;
-                    // Show all text if parsing fails
-                    textBuffer += gistBuffer;
-                    gistBuffer = "";
-                    setResponse(textBuffer);
+
+                      const modelDisplayName = "Gemini 2.5 Flash";
+                      let newReason = "";
+                      if (gist.certainty === "high" && gist.language && gist.language !== "unknown" && gist.purpose && gist.purpose !== "unknown") {
+                        newReason = `This screenshot shows ${gist.language} code that ${gist.purpose}, so ${modelDisplayName} is a strong fit to accurately read code from images and ${userIntent}.`;
+                      } else if (gist.language && gist.language !== "unknown") {
+                        newReason = `This screenshot shows ${gist.language} code, so ${modelDisplayName} is a strong fit to accurately read code from images and ${userIntent}.`;
+                      } else {
+                        newReason = `This screenshot contains code, so ${modelDisplayName} is a strong fit to accurately read code from images and ${userIntent}.`;
+                      }
+
+                      console.log("[STREAM] updated routing.reason:", newReason);
+                      imageGistUpgradedRef.current = true;
+                      console.log("[STREAM] IMAGE_GIST upgrade flag set - preventing future meta overwrites");
+
+                      setModelPanels((prev) => {
+                        const key = Object.keys(prev)[0];
+                        if (!key || !prev[key]) return prev;
+                        return {
+                          ...prev,
+                          [key]: {
+                            ...prev[key],
+                            routing: prev[key].routing ? { ...prev[key].routing!, reason: newReason } : prev[key].routing,
+                          },
+                        };
+                      });
+
+                      gistParsed = true;
+                      const textAfterGist = gistBuffer.substring(gistLineEnd + 1);
+                      gistBuffer = "";
+                      gistLineFullyConsumed = true;
+
+                      textBuffers[modelId] = textAfterGist;
+                      setModelPanels((prev) => {
+                        const key = Object.keys(prev)[0];
+                        if (!key) return prev;
+                        return { ...prev, [key]: { ...prev[key], response: textBuffers[modelId] } };
+                      });
+                    } catch (e) {
+                      console.warn("[UI] Failed to parse IMAGE_GIST:", e);
+                      gistParsed = true;
+                      gistLineFullyConsumed = true;
+                      textBuffers[modelId] = (textBuffers[modelId] || "") + gistBuffer;
+                      gistBuffer = "";
+                      setModelPanels((prev) => {
+                        const key = Object.keys(prev)[0];
+                        if (!key) return prev;
+                        return { ...prev, [key]: { ...prev[key], response: textBuffers[modelId] } };
+                      });
+                    }
                   }
                 }
+              } else {
+                // No IMAGE_GIST in first 800 chars — flush buffer
+                console.log("[STREAM] No IMAGE_GIST found in first 800 chars - treating as normal response");
+                gistParsed = true;
+                textBuffers[modelId] = (textBuffers[modelId] || "") + gistBuffer;
+                gistBuffer = "";
+                textBuffers[modelId] += data.delta;
+                setModelPanels((prev) => {
+                  const key = Object.keys(prev)[0];
+                  if (!key) return prev;
+                  return { ...prev, [key]: { ...prev[key], response: textBuffers[modelId] } };
+                });
               }
             } else {
-              // Buffer reached 800 chars without finding IMAGE_GIST - this is NOT an image response
-              // Flush the buffer to textBuffer and stop buffering
-              console.log("[STREAM] No IMAGE_GIST found in first 800 chars - treating as normal response");
-              gistParsed = true; // Stop buffering
-              textBuffer += gistBuffer;
-              gistBuffer = "";
-              setResponse(textBuffer);
-              // Also add current delta
-              textBuffer += data.delta;
-              setResponse(textBuffer);
+              // Normal chunk (gist already parsed)
+              textBuffers[modelId] = (textBuffers[modelId] || "") + data.delta;
+              setModelPanels((prev) => {
+                const key = Object.keys(prev)[0];
+                if (!key) return prev;
+                return { ...prev, [key]: { ...prev[key], response: textBuffers[modelId] } };
+              });
             }
-          } else {
-            // Normal chunk processing (after gist is parsed or buffer is full)
-            textBuffer += data.delta;
-            setResponse(textBuffer);
           }
         } else if (event === "done") {
-          // Update metadata when done
-          setMetadata({
-            model: data.model,
-            provider: getProviderName(data.model),
-            latency: data.latencyMs || 0,
-            tokenUsage: data.tokenUsage
-              ? { total: data.tokenUsage.totalTokens }
-              : undefined,
-            finishReason: data.finishReason,
-          });
-        } else if (event === "error") {
-          // Handle error
-          throw new Error(data.message || "Stream error");
-        } else if (event === "complete") {
-          // Stream complete - flush any remaining gistBuffer content
-          if (gistBuffer.length > 0 && !gistParsed) {
-            console.log("[STREAM] Stream complete - flushing remaining buffer:", gistBuffer.length, "chars");
-            textBuffer += gistBuffer;
-            gistBuffer = "";
-            setResponse(textBuffer);
-          }
-          break;
-        }
-      }
-
-      // If no text was received, show error
-      if (!textBuffer) {
-        throw new Error("No response received");
-      }
-
-      // Conversation context is now derived from session turns — no separate state needed
-    } catch (err) {
-      if (err instanceof Error) {
-        if (err.name === "AbortError") {
-          setError("Stream cancelled");
-        } else {
-          setError(err.message);
-        }
-      } else {
-        setError("An unknown error occurred");
-      }
-    } finally {
-      setIsStreaming(false);
-      setStreamingStage(null);
-      abortControllerRef.current = null;
-    }
-  };
-
-  const handleVerifyModeSubmit = async (overridePrompt?: string) => {
-    const submittedPrompt = overridePrompt || prompt;
-
-    // Reset state
-    const models = selectedModels;
-    const initialPanels: Record<string, ModelPanel> = {};
-    models.forEach((modelId) => {
-      initialPanels[modelId] = {
-        modelId: modelId,
-        routing: null,
-        response: "",
-        metadata: null,
-        error: null,
-        showRunDetails: false,
-        isExpanded: false,
-      };
-    });
-
-    setModelPanels(initialPanels);
-    setDiffSummary(null);
-    setDiffError(null);
-    setIsStreaming(true);
-    setStreamingStage("routing"); // Initial stage: routing
-
-    // Create abort controller
-    abortControllerRef.current = new AbortController();
-
-    // Track text buffers for each model
-    const textBuffers: Record<string, string> = {};
-    models.forEach((modelId) => {
-      textBuffers[modelId] = "";
-    });
-
-    let hasReceivedAnyChunk = false;
-
-    // Derive follow-up context from session
-    const followUpCtx = getFollowUpContext();
-    const isFollowUp = !!(followUpCtx.previousPrompt && followUpCtx.previousResponse);
-
-    try {
-      const { body, headers } = buildRequest({
-        prompt: submittedPrompt,
-        stream: true,
-        models,
-        previousPrompt: isFollowUp ? followUpCtx.previousPrompt : undefined,
-        previousResponse: isFollowUp ? followUpCtx.previousResponse : undefined,
-        isFollowUp,
-      });
-
-      const res = await fetch("/api/stream", {
-        method: "POST",
-        headers,
-        body,
-        signal: abortControllerRef.current.signal,
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Request failed");
-      }
-
-      // Parse SSE stream
-      for await (const { event, data } of parseSSE(res)) {
-        if (event === "meta") {
-          // Connection established - move to connecting stage
-          setStreamingStage("connecting");
-        } else if (event === "model_start") {
-          // Models are starting - stay on connecting
-        } else if (event === "ping") {
-          // Keep-alive ping, ignore
-        } else if (event === "chunk") {
-          // First chunk arrived - switch to streaming stage
-          if (!hasReceivedAnyChunk) {
-            setStreamingStage("streaming");
-            hasReceivedAnyChunk = true;
-          }
-          // Append delta to the specific model's response
-          const modelId = data.model;
-          textBuffers[modelId] += data.delta;
-          
-          setModelPanels((prev) => ({
-            ...prev,
-            [modelId]: {
-              ...prev[modelId],
-              response: textBuffers[modelId],
-            },
-          }));
-        } else if (event === "done") {
-          // Update metadata when model completes
-          const modelId = data.model;
+          const modelId = isCompare ? data.model : (currentAutoModel || Object.keys(textBuffers)[0]);
           setModelPanels((prev) => ({
             ...prev,
             [modelId]: {
@@ -985,40 +937,80 @@ export default function Home() {
             },
           }));
         } else if (event === "error") {
-          // Handle error for specific model
-          const modelId = data.model;
-          setModelPanels((prev) => ({
-            ...prev,
-            [modelId]: {
-              ...prev[modelId],
-              error: data.message || "Stream error",
-            },
-          }));
+          if (isCompare) {
+            const modelId = data.model;
+            setModelPanels((prev) => ({
+              ...prev,
+              [modelId]: { ...prev[modelId], error: data.message || "Stream error" },
+            }));
+          } else {
+            throw new Error(data.message || "Stream error");
+          }
         } else if (event === "complete") {
-          // Stream complete
+          // Flush remaining gist buffer (auto mode)
+          if (!isCompare && gistBuffer.length > 0 && !gistParsed) {
+            const modelId = currentAutoModel || Object.keys(textBuffers)[0];
+            console.log("[STREAM] Stream complete - flushing remaining buffer:", gistBuffer.length, "chars");
+            textBuffers[modelId] = (textBuffers[modelId] || "") + gistBuffer;
+            gistBuffer = "";
+            setModelPanels((prev) => {
+              const key = Object.keys(prev)[0];
+              if (!key) return prev;
+              return { ...prev, [key]: { ...prev[key], response: textBuffers[modelId] } };
+            });
+          }
           break;
         }
       }
 
-      // Diff summary will be generated by useEffect after state updates complete
-      // Conversation context is now derived from session turns — no separate state needed
+      // Auto mode: verify we received content
+      if (!isCompare) {
+        const modelId = currentAutoModel || Object.keys(textBuffers)[0];
+        if (modelId && !textBuffers[modelId]) {
+          throw new Error("No response received");
+        }
+      }
     } catch (err) {
       if (err instanceof Error) {
         if (err.name === "AbortError") {
-          // Stream was cancelled - panels already marked in handleCancel
-          // Do nothing here, let the finally block clean up
+          // Handled by handleCancel — do nothing
         } else {
-          // Set error for all panels
-          Object.keys(initialPanels).forEach((modelId) => {
-            setModelPanels((prev) => ({
-              ...prev,
-              [modelId]: {
-                ...prev[modelId],
-                error: err.message,
-              },
-            }));
+          // Set error on all panels (or create a placeholder if none exist)
+          setModelPanels((prev) => {
+            if (Object.keys(prev).length === 0) {
+              return {
+                _error: {
+                  modelId: "_error",
+                  routing: null,
+                  response: "",
+                  metadata: null,
+                  error: (err as Error).message,
+                  showRunDetails: false,
+                  isExpanded: false,
+                },
+              };
+            }
+            const updated = { ...prev };
+            Object.keys(updated).forEach((id) => {
+              updated[id] = { ...updated[id], error: (err as Error).message };
+            });
+            return updated;
           });
         }
+      } else {
+        setModelPanels((prev) => {
+          const errMsg = "An unknown error occurred";
+          if (Object.keys(prev).length === 0) {
+            return {
+              _error: { modelId: "_error", routing: null, response: "", metadata: null, error: errMsg, showRunDetails: false, isExpanded: false },
+            };
+          }
+          const updated = { ...prev };
+          Object.keys(updated).forEach((id) => {
+            updated[id] = { ...updated[id], error: errMsg };
+          });
+          return updated;
+        });
       }
     } finally {
       setIsStreaming(false);
@@ -1031,28 +1023,22 @@ export default function Home() {
     try {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
-        
-        // Mark all active panels as cancelled in Comparison Mode
-        if (comparisonMode && Object.keys(modelPanels).length > 0) {
-          setModelPanels((prevPanels) => {
-            const updatedPanels = { ...prevPanels };
-            Object.keys(updatedPanels).forEach((modelId) => {
-              // Only mark as cancelled if not already completed (no metadata yet)
-              if (!updatedPanels[modelId].metadata) {
-                updatedPanels[modelId] = {
-                  ...updatedPanels[modelId],
-                  error: "Cancelled by user",
-                };
-              }
-            });
-            return updatedPanels;
+
+        // Mark all unfinished panels as cancelled (both modes)
+        const cancelMessage = comparisonMode ? "Cancelled by user" : "Stream cancelled";
+        setModelPanels((prev) => {
+          const updated = { ...prev };
+          Object.keys(updated).forEach((id) => {
+            if (!updated[id].metadata) {
+              updated[id] = { ...updated[id], error: cancelMessage };
+            }
           });
-        }
+          return updated;
+        });
       }
     } catch (err) {
       console.error("Error during cancel:", err);
     } finally {
-      // Always reset streaming state to prevent stuck UI
       setIsStreaming(false);
       setStreamingStage(null);
       abortControllerRef.current = null;
@@ -1060,13 +1046,7 @@ export default function Home() {
   };
 
   const handleClear = () => {
-    // Reset single-answer mode state
-    setResponse("");
-    setError(null);
-    setRouting(null);
-    setMetadata(null);
-
-    // Reset Comparison Mode state
+    // Reset unified response state
     setModelPanels({});
     setDiffSummary(null);
     setDiffError(null);
@@ -1129,27 +1109,15 @@ export default function Home() {
     const currentMode = comparisonMode ? "compare" : "auto";
     if (targetMode === currentMode) return;
 
-    // Check if there are existing results
-    const hasAutoSelectResults = !comparisonMode && (response || metadata || error);
-    const hasCompareResults = comparisonMode && Object.keys(modelPanels).length > 0;
-
-    if (hasAutoSelectResults || hasCompareResults) {
-      // Show confirmation modal
+    if (Object.keys(modelPanels).length > 0) {
       setPendingMode(targetMode);
       setShowModeSwitchModal(true);
     } else {
-      // No results, switch immediately
       setComparisonMode(newMode);
     }
   };
 
-  const handleModeSwitchStartNew = () => {
-    if (!pendingMode) return;
-    // Clear everything and switch
-    setResponse("");
-    setError(null);
-    setRouting(null);
-    setMetadata(null);
+  const clearResultsState = () => {
     setModelPanels({});
     setDiffSummary(null);
     setDiffError(null);
@@ -1157,6 +1125,11 @@ export default function Home() {
     setFollowUpInput("");
     setExpandedTurns({});
     setActiveFollowUpPrompt(null);
+  };
+
+  const handleModeSwitchStartNew = () => {
+    if (!pendingMode) return;
+    clearResultsState();
     setComparisonMode(pendingMode === "compare");
     setShowModeSwitchModal(false);
     setPendingMode(null);
@@ -1164,21 +1137,10 @@ export default function Home() {
 
   const handleModeSwitchDuplicate = () => {
     if (!pendingMode) return;
-    // Keep the prompt, clear results, switch mode
     const currentPrompt = prompt;
-    setResponse("");
-    setError(null);
-    setRouting(null);
-    setMetadata(null);
-    setModelPanels({});
-    setDiffSummary(null);
-    setDiffError(null);
-    setSession(null);
-    setFollowUpInput("");
-    setExpandedTurns({});
-    setActiveFollowUpPrompt(null);
+    clearResultsState();
     setComparisonMode(pendingMode === "compare");
-    setPrompt(currentPrompt); // Keep the prompt for re-use
+    setPrompt(currentPrompt);
     setShowModeSwitchModal(false);
     setPendingMode(null);
   };
@@ -1201,11 +1163,6 @@ export default function Home() {
     setActiveFollowUpPrompt(followUpText);
 
     // Clear active state for the new turn
-    setResponse("");
-    setError(null);
-    setRouting(null);
-    setRoutingReasonOverride(null);
-    setMetadata(null);
     setModelPanels({});
     setDiffSummary(null);
     setDiffError(null);
@@ -1216,12 +1173,8 @@ export default function Home() {
     // Clear the input
     setFollowUpInput("");
 
-    // Submit the follow-up — the handlers derive context from the session
-    if (comparisonMode) {
-      handleVerifyModeSubmit(followUpText);
-    } else {
-      handleSingleAnswerSubmit(followUpText);
-    }
+    // Submit the follow-up via the unified handler
+    handleStreamSubmit(followUpText);
   };
 
   // File attachment handlers
@@ -1390,7 +1343,7 @@ export default function Home() {
   const isOverLimit = characterCount > 4000;
   
   // Check if we have any results to show
-  const hasResults = response || error || Object.keys(modelPanels).length > 0;
+  const hasResults = Object.keys(modelPanels).length > 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -2004,7 +1957,7 @@ export default function Home() {
 
         {/* Unified Loading State - AI Pipeline (Both Modes) */}
         {/* Active Follow-Up Question Label — rendered above loading skeleton and response */}
-        {activeFollowUpPrompt && (response || isStreaming || Object.keys(modelPanels).length > 0) && (
+        {activeFollowUpPrompt && (isStreaming || Object.keys(modelPanels).length > 0) && (
           <div className="flex items-start gap-2.5 mb-4 animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
               <svg className="w-3 h-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2026,7 +1979,7 @@ export default function Home() {
 
           Compare mode still uses the multi-step pipeline via routing/connecting/contacting stages.
         */}
-        {isStreaming && streamingStage && !response && Object.keys(modelPanels).length === 0 && (
+        {isStreaming && streamingStage && !comparisonMode && !Object.values(modelPanels).some(p => p.response) && (
           <div className="space-y-6">
             {/* Loading Pipeline */}
             <div className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative"
@@ -2049,11 +2002,15 @@ export default function Home() {
                     <div className="animate-spin w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full" />
                   </div>
                   <span className="text-lg font-semibold text-gray-900">
-                    {streamingStage === "streaming"
-                      ? "Starting response\u2026"
-                      : routing?.chosenModel
-                        ? `Dispatching to ${routing.chosenModel.includes("gemini") ? "Gemini" : routing.chosenModel.includes("claude") ? "Claude" : routing.chosenModel.includes("gpt") ? "GPT" : routing.chosenModel}\u2026`
-                        : "Selecting model\u2026"}
+                    {(() => {
+                      if (streamingStage === "streaming") return "Starting response\u2026";
+                      const chosen = autoPanel?.routing?.chosenModel;
+                      if (chosen) {
+                        const label = chosen.includes("gemini") ? "Gemini" : chosen.includes("claude") ? "Claude" : chosen.includes("gpt") ? "GPT" : chosen;
+                        return `Dispatching to ${label}\u2026`;
+                      }
+                      return "Selecting model\u2026";
+                    })()}
                   </span>
                 </div>
               </div>
@@ -2109,12 +2066,12 @@ export default function Home() {
         )}
 
         {/* Single-Answer Mode Display */}
-        {!comparisonMode && Object.keys(modelPanels).length === 0 && (
+        {!comparisonMode && (
           <>
             {/* Response Display */}
-            {(response || error || metadata) && (
+            {(autoPanel?.response || autoPanel?.error || autoPanel?.metadata) && (
               <div className="space-y-4 animate-in fade-in duration-300">
-                {response && (
+                {autoPanel?.response && (
                   <div className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative"
                     style={{
                       backgroundImage: `
@@ -2125,7 +2082,7 @@ export default function Home() {
                     }}
                   >
                     {/* Execution Header */}
-                    {routing && routing.mode === "auto" && (
+                    {autoPanel.routing && autoPanel.routing.mode === "auto" && (
                       <div className="px-6 pt-4 pb-3 bg-white/40 backdrop-blur-sm relative">
                         {/* Hairline gradient divider */}
                         <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
@@ -2137,7 +2094,7 @@ export default function Home() {
                               <div className="flex items-center gap-2 flex-wrap mb-1.5">
                                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Auto-selected</span>
                                 <span className="text-sm font-bold text-gray-900 font-mono">
-                                  {routing.chosenModel ? getFriendlyModelName(routing.chosenModel) : routing.chosenModel}
+                                  {autoPanel.routing.chosenModel ? getFriendlyModelName(autoPanel.routing.chosenModel) : ""}
                                 </span>
                                 <span className="px-1.5 py-0.5 text-[10px] font-bold text-gray-600 bg-gray-100/80 border border-gray-300/50 rounded uppercase tracking-wider">
                                   Routed
@@ -2153,7 +2110,7 @@ export default function Home() {
                               */}
                               <div className="mt-2 rounded-lg border border-gray-200/60 bg-white/70 p-3 max-w-[900px]">
                                 <p className="text-xs text-slate-600 leading-relaxed">
-                                  {routing.reason || (isStreaming ? "Why this model was selected…" : "Analyzing your request to select the best model...")}
+                                  {autoPanel.routing.reason || (isStreaming ? "Why this model was selected…" : "Analyzing your request to select the best model...")}
                                 </p>
                               </div>
                             </div>
@@ -2176,36 +2133,36 @@ export default function Home() {
                           )}
                         </div>
                         <div className="prose prose-sm max-w-none text-[15px] leading-7">
-                          <FormattedResponse response={response} />
+                          <FormattedResponse response={autoPanel.response} />
                         </div>
                       </div>
                     </div>
 
                     {/* Run Metadata Chips */}
-                    {metadata && (
+                    {autoPanel.metadata && (
                       <div className="px-6 pb-4 pt-3">
                         <div className="flex items-center justify-between gap-4 mb-2">
                           <div className="flex flex-wrap gap-2">
                             {/* Always visible chips */}
                             <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
                               <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Model</span>
-                              <span className="text-xs font-bold text-gray-900 font-mono">{getFriendlyModelName(metadata.model)}</span>
+                              <span className="text-xs font-bold text-gray-900 font-mono">{getFriendlyModelName(autoPanel.metadata.model)}</span>
                             </div>
                             <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
                               <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Provider</span>
-                              <span className="text-xs font-bold text-gray-900">{metadata.provider}</span>
+                              <span className="text-xs font-bold text-gray-900">{autoPanel.metadata.provider}</span>
                             </div>
                           </div>
                           
                           {/* Run details disclosure toggle */}
                           <button
                             type="button"
-                            onClick={() => setShowRunDetails(!showRunDetails)}
+                            onClick={() => autoPanel && updatePanel(autoPanel.modelId, { showRunDetails: !autoPanel.showRunDetails })}
                             className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors duration-150 rounded-md hover:bg-gray-100/50"
                           >
                             <span>Run details</span>
                             <svg
-                              className={`w-3 h-3 transition-transform duration-200 ${showRunDetails ? 'rotate-180' : ''}`}
+                              className={`w-3 h-3 transition-transform duration-200 ${autoPanel.showRunDetails ? 'rotate-180' : ''}`}
                               fill="none"
                               viewBox="0 0 24 24"
                               stroke="currentColor"
@@ -2218,20 +2175,20 @@ export default function Home() {
                         {/* Collapsible detail chips */}
                         <div
                           className={`overflow-hidden transition-all duration-200 ease-out ${
-                            showRunDetails ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'
+                            autoPanel.showRunDetails ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'
                           }`}
                         >
                           <div className="flex flex-wrap gap-2 pt-2">
                             <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
                               <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Latency</span>
                               <span className="text-xs font-bold text-gray-900 font-mono tabular-nums">
-                                {(metadata.latency / 1000).toFixed(1)}s
+                                {(autoPanel.metadata.latency / 1000).toFixed(1)}s
                               </span>
                             </div>
                             <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
                               <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Tokens</span>
                               <span className="text-xs font-bold text-gray-900 font-mono tabular-nums">
-                                {metadata.tokenUsage?.total || "N/A"}
+                                {autoPanel.metadata.tokenUsage?.total || "N/A"}
                               </span>
                             </div>
                           </div>
@@ -2240,7 +2197,7 @@ export default function Home() {
                     )}
 
                     {/* Follow-up Composer */}
-                    {!isStreaming && !error && response && (
+                    {!isStreaming && !autoPanel.error && autoPanel.response && (
                       <FollowUpComposer
                         value={followUpInput}
                         onChange={setFollowUpInput}
@@ -2253,7 +2210,7 @@ export default function Home() {
                 )}
 
                 {/* Empty Response Warning */}
-                {!response && !error && metadata && (
+                {!autoPanel?.response && !autoPanel?.error && autoPanel?.metadata && (
                   <div className="bg-yellow-50 rounded-lg border border-yellow-200 p-4">
                     <div className="flex items-start gap-3">
                       <span className="text-yellow-600 text-lg">⚠️</span>
@@ -2270,7 +2227,7 @@ export default function Home() {
                 )}
 
                 {/* Token Limit Warning */}
-                {metadata?.finishReason === "length" && (
+                {autoPanel?.metadata?.finishReason === "length" && (
                   <div className="bg-yellow-50 rounded-lg border border-yellow-200 p-4">
                     <div className="flex items-start gap-3">
                       <span className="text-yellow-600 text-lg">⚠️</span>
@@ -2290,7 +2247,7 @@ export default function Home() {
                 )}
 
                 {/* Error Display */}
-                {error && (
+                {autoPanel?.error && (
                   <div className="bg-red-50 rounded-lg border border-red-200 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
@@ -2299,7 +2256,7 @@ export default function Home() {
                           <h3 className="text-sm font-semibold text-red-900 mb-1">
                             Error
                           </h3>
-                          <p className="text-sm text-red-700">{getUserFriendlyError(error)}</p>
+                          <p className="text-sm text-red-700">{getUserFriendlyError(autoPanel.error)}</p>
                         </div>
                       </div>
                       <button
@@ -2316,7 +2273,7 @@ export default function Home() {
             )}
 
             {/* Instructions - Tier 3 (Supporting) */}
-            {!response && !isStreaming && !error && (
+            {!autoPanel?.response && !isStreaming && !autoPanel?.error && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-8">
                 <h3 className="text-sm font-bold text-gray-900 mb-5 tracking-tight">
                   How it works
@@ -2396,8 +2353,8 @@ export default function Home() {
           </>
         )}
 
-        {/* Unified Response Display (Both Modes) */}
-        {Object.keys(modelPanels).length > 0 && (
+        {/* Compare Mode Response Display */}
+        {comparisonMode && Object.keys(modelPanels).length > 0 && (
           <>
             {/* Response Cards Grid */}
             <div className={`grid gap-6 mb-6 ${selectedModels.length === 2 ? "md:grid-cols-2" : selectedModels.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
@@ -2499,15 +2456,7 @@ export default function Home() {
                             {panel.response.length > 400 && (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setModelPanels(prev => ({
-                                    ...prev,
-                                    [modelId]: {
-                                      ...prev[modelId],
-                                      isExpanded: !prev[modelId].isExpanded
-                                    }
-                                  }));
-                                }}
+                                onClick={() => updatePanel(modelId, { isExpanded: !panel.isExpanded })}
                                 className="mt-3 text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors duration-150 text-left"
                               >
                                 {panel.isExpanded ? '↑ Show less' : '↓ Expand full response'}
@@ -2554,15 +2503,7 @@ export default function Home() {
                           {/* Run details disclosure toggle */}
                           <button
                             type="button"
-                            onClick={() => {
-                              setModelPanels(prev => ({
-                                ...prev,
-                                [modelId]: {
-                                  ...prev[modelId],
-                                  showRunDetails: !prev[modelId].showRunDetails
-                                }
-                              }));
-                            }}
+                            onClick={() => updatePanel(modelId, { showRunDetails: !panel.showRunDetails })}
                             className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors duration-150 rounded-md hover:bg-gray-100/50"
                           >
                             <span>Run details</span>

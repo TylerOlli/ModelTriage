@@ -27,14 +27,21 @@ export interface ResponseMetadata {
   finishReason?: string;
 }
 
-// ─── Model Panel (Compare mode) ─────────────────────────────────
+// ─── Model Panel (Both modes) ───────────────────────────────────
+//
+// Unified panel data used for BOTH Auto-select and Compare modes.
+// Auto-select stores a single panel; Compare stores N panels.
 
 export interface ModelPanelData {
   modelId: string;
   routing: {
+    mode?: "auto" | "manual";
     model: string;
     reason: string;
-    confidence: string;
+    confidence?: number | string;
+    chosenModel?: string;
+    intent?: string;
+    category?: string;
   } | null;
   response: string;
   metadata: ResponseMetadata | null;
