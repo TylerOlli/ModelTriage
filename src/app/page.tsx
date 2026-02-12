@@ -143,9 +143,6 @@ export default function Home() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [comparisonMode, setComparisonMode] = useState(false);
   
-  // Comparison summary accordion state
-  const [showFullAnalysis, setShowFullAnalysis] = useState(false);
-  
   // Unified follow-up input (shared between both modes)
   const [followUpInput, setFollowUpInput] = useState("");
 
@@ -2525,8 +2522,8 @@ export default function Home() {
                           </h4>
                           <p className="text-sm text-blue-900 leading-relaxed">
                             {diffSummary.commonGround.length > 0 && diffSummary.commonGround[0]}
-                            {diffSummary.keyDifferences.length > 0 && diffSummary.commonGround.length > 0 && ` However, ${diffSummary.keyDifferences[0].points[0]?.toLowerCase()}`}
-                            {diffSummary.keyDifferences.length > 0 && diffSummary.commonGround.length === 0 && diffSummary.keyDifferences[0].points[0]}
+                            {diffSummary.keyDifferences.length > 0 && diffSummary.commonGround.length > 0 && ` However, ${diffSummary.keyDifferences[0].model} ${diffSummary.keyDifferences[0].points[0]?.toLowerCase()}`}
+                            {diffSummary.keyDifferences.length > 0 && diffSummary.commonGround.length === 0 && `${diffSummary.keyDifferences[0].model} ${diffSummary.keyDifferences[0].points[0]?.toLowerCase()}`}
                           </p>
                         </div>
                       </div>
@@ -2548,18 +2545,13 @@ export default function Home() {
                           </span>
                         </div>
                         <ul className="space-y-2">
-                          {diffSummary.commonGround.slice(0, 3).map((item, idx) => (
+                          {diffSummary.commonGround.map((item, idx) => (
                             <li key={idx} className="text-xs text-gray-700 leading-relaxed flex items-start gap-2">
                               <span className="text-gray-400 text-[10px] mt-0.5 flex-shrink-0">•</span>
                               <span className="flex-1 min-w-0">{item}</span>
                             </li>
                           ))}
                         </ul>
-                        {diffSummary.commonGround.length > 3 && (
-                          <p className="text-[10px] text-gray-400 mt-2 font-medium">
-                            +{diffSummary.commonGround.length - 3} more in full analysis
-                          </p>
-                        )}
                       </div>
                     )}
 
@@ -2576,28 +2568,22 @@ export default function Home() {
                           </span>
                         </div>
                         <div className="space-y-3">
-                          {diffSummary.keyDifferences.slice(0, 2).map((diff, idx) => (
+                          {diffSummary.keyDifferences.map((diff, idx) => (
                             <div key={idx} className="space-y-1">
                               <p className="text-xs font-semibold text-gray-800">
                                 {diff.model}
                               </p>
                               <ul className="space-y-1">
-                                {diff.points.slice(0, 2).map((point, pIdx) => (
+                                {diff.points.map((point, pIdx) => (
                                   <li key={pIdx} className="text-xs text-gray-600 leading-relaxed flex items-start gap-2">
                                     <span className="text-gray-400 text-[10px] mt-0.5 flex-shrink-0">•</span>
-                                    <span className="flex-1 min-w-0 line-clamp-2">{point}</span>
+                                    <span className="flex-1 min-w-0">{point}</span>
                                   </li>
                                 ))}
                               </ul>
                             </div>
                           ))}
                         </div>
-                        {(diffSummary.keyDifferences.length > 2 || 
-                          diffSummary.keyDifferences.some(d => d.points.length > 2)) && (
-                          <p className="text-[10px] text-gray-400 mt-2 font-medium">
-                            More details in full analysis
-                          </p>
-                        )}
                       </div>
                     )}
 
@@ -2614,113 +2600,16 @@ export default function Home() {
                           </span>
                         </div>
                         <ul className="space-y-2">
-                          {diffSummary.notableGaps.slice(0, 2).map((item, idx) => (
+                          {diffSummary.notableGaps.map((item, idx) => (
                             <li key={idx} className="text-xs text-gray-700 leading-relaxed flex items-start gap-2">
                               <span className="text-gray-400 text-[10px] mt-0.5 flex-shrink-0">•</span>
                               <span className="flex-1 min-w-0">{item}</span>
                             </li>
                           ))}
                         </ul>
-                        {diffSummary.notableGaps.length > 2 && (
-                          <p className="text-[10px] text-gray-400 mt-2 font-medium">
-                            +{diffSummary.notableGaps.length - 2} more in full analysis
-                          </p>
-                        )}
                       </div>
                     )}
                   </div>
-
-                  {/* Show Full Analysis Accordion */}
-                  {(diffSummary.commonGround.length > 3 || 
-                    diffSummary.keyDifferences.length > 2 || 
-                    diffSummary.notableGaps.length > 2 ||
-                    diffSummary.keyDifferences.some(d => d.points.length > 2)) && (
-                    <div className="border-t border-gray-200 pt-4">
-                      <button
-                        type="button"
-                        onClick={() => setShowFullAnalysis(!showFullAnalysis)}
-                        className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors duration-150"
-                      >
-                        <svg
-                          className={`w-4 h-4 transition-transform duration-200 ${showFullAnalysis ? 'rotate-180' : ''}`}
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                        </svg>
-                        <span>{showFullAnalysis ? 'Hide full analysis' : 'Show full analysis'}</span>
-                      </button>
-
-                      {/* Full Analysis Content */}
-                      <div className={`overflow-hidden transition-all duration-300 ease-out ${showFullAnalysis ? 'max-h-[2000px] opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
-                        <div className="space-y-6 bg-gray-50/50 rounded-lg p-4 border border-gray-200/60">
-                          {/* Full Common Ground */}
-                          {diffSummary.commonGround.length > 0 && (
-                            <div>
-                              <h4 className="text-sm font-bold text-green-900 mb-3 flex items-center gap-2">
-                                <span>✓</span>
-                                <span>Common Ground</span>
-                              </h4>
-                              <ul className="space-y-2">
-                                {diffSummary.commonGround.map((item, idx) => (
-                                  <li key={idx} className="text-sm text-gray-700 leading-relaxed flex items-start gap-2">
-                                    <span className="text-gray-400 mt-0.5">•</span>
-                                    <span>{item}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-
-                          {/* Full Key Differences */}
-                          {diffSummary.keyDifferences.length > 0 && (
-                            <div>
-                              <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
-                                <span>⚡</span>
-                                <span>Key Differences</span>
-                              </h4>
-                              <div className="space-y-4">
-                                {diffSummary.keyDifferences.map((diff, idx) => (
-                                  <div key={idx}>
-                                    <h5 className="text-sm font-semibold text-gray-800 mb-2">
-                                      {diff.model}
-                                    </h5>
-                                    <ul className="space-y-1.5 ml-3">
-                                      {diff.points.map((point, pIdx) => (
-                                        <li key={pIdx} className="text-sm text-gray-700 leading-relaxed flex items-start gap-2">
-                                          <span className="text-gray-400 mt-0.5">•</span>
-                                          <span>{point}</span>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Full Notable Gaps */}
-                          {diffSummary.notableGaps.length > 0 && (
-                            <div>
-                              <h4 className="text-sm font-bold text-purple-900 mb-3 flex items-center gap-2">
-                                <span>◐</span>
-                                <span>Notable Gaps</span>
-                              </h4>
-                              <ul className="space-y-2">
-                                {diffSummary.notableGaps.map((item, idx) => (
-                                  <li key={idx} className="text-sm text-gray-700 leading-relaxed flex items-start gap-2">
-                                    <span className="text-gray-400 mt-0.5">•</span>
-                                    <span>{item}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
                 
                 {/* Follow-up Composer */}
