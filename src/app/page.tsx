@@ -4,7 +4,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import type { DiffSummary } from "@/lib/diff";
 import { FormattedResponse } from "../components/FormattedResponse";
 import { FollowUpComposer } from "../components/FollowUpComposer";
-import { ModeSwitchModal } from "../components/ModeSwitchModal";
 import { validateFiles, getFileValidationErrorMessage } from "@/lib/file-validation";
 import type {
   ConversationSession,
@@ -233,9 +232,6 @@ export default function Home() {
   // Draft prompt persistence toggle (default OFF for production)
   const [rememberDrafts, setRememberDrafts] = useState(false);
   
-  // Mode switching safety
-  const [showModeSwitchModal, setShowModeSwitchModal] = useState(false);
-  const [pendingMode, setPendingMode] = useState<"auto" | "compare" | null>(null);
 
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -1109,15 +1105,7 @@ export default function Home() {
     const currentMode = comparisonMode ? "compare" : "auto";
     if (targetMode === currentMode) return;
 
-    if (Object.keys(modelPanels).length > 0) {
-      setPendingMode(targetMode);
-      setShowModeSwitchModal(true);
-    } else {
-      setComparisonMode(newMode);
-    }
-  };
-
-  const clearResultsState = () => {
+    // Clear results but preserve the prompt — it's shared between modes
     setModelPanels({});
     setDiffSummary(null);
     setDiffError(null);
@@ -1125,30 +1113,9 @@ export default function Home() {
     setFollowUpInput("");
     setExpandedTurns({});
     setActiveFollowUpPrompt(null);
+    setComparisonMode(newMode);
   };
 
-  const handleModeSwitchStartNew = () => {
-    if (!pendingMode) return;
-    clearResultsState();
-    setComparisonMode(pendingMode === "compare");
-    setShowModeSwitchModal(false);
-    setPendingMode(null);
-  };
-
-  const handleModeSwitchDuplicate = () => {
-    if (!pendingMode) return;
-    const currentPrompt = prompt;
-    clearResultsState();
-    setComparisonMode(pendingMode === "compare");
-    setPrompt(currentPrompt);
-    setShowModeSwitchModal(false);
-    setPendingMode(null);
-  };
-
-  const handleModeSwitchCancel = () => {
-    setShowModeSwitchModal(false);
-    setPendingMode(null);
-  };
 
   // ─── Unified Follow-Up Handler ────────────────────────────────
 
@@ -2959,15 +2926,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* Mode Switch Confirmation Modal */}
-      <ModeSwitchModal
-        isOpen={showModeSwitchModal}
-        currentMode={comparisonMode ? "compare" : "auto"}
-        targetMode={pendingMode || "auto"}
-        onStartNew={handleModeSwitchStartNew}
-        onDuplicate={handleModeSwitchDuplicate}
-        onCancel={handleModeSwitchCancel}
-      />
     </div>
   );
 }
