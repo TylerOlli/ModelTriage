@@ -448,10 +448,7 @@ export default function Home() {
     // If session has completed turns, use the last one
     if (session && session.turns.length > 0) {
       const lastTurn = session.turns[session.turns.length - 1];
-      const prevResponse = lastTurn.response ||
-        (lastTurn.modelPanels
-          ? Object.values(lastTurn.modelPanels).find((p) => p.response)?.response || ""
-          : "");
+      const prevResponse = Object.values(lastTurn.modelPanels).find((p) => p.response)?.response || "";
       return {
         previousPrompt: lastTurn.prompt,
         previousResponse: prevResponse,
@@ -471,33 +468,12 @@ export default function Home() {
    */
   const pushCurrentTurnToSession = useCallback(
     (turnPrompt: string) => {
-      // Derive legacy per-field values from the unified panel state
-      // so that ConversationTurn / accordion rendering keeps working.
-      const firstPanel = Object.values(modelPanels)[0] ?? null;
-
       const completedTurn: ConversationTurn = {
         id: createTurnId(),
         prompt: turnPrompt,
         isFollowUp: session !== null && session.turns.length > 0,
         timestamp: Date.now(),
-        // Auto mode: populate legacy flat fields from the single panel
-        response: !comparisonMode && firstPanel ? firstPanel.response : "",
-        routing: !comparisonMode && firstPanel?.routing
-          ? {
-              mode: (firstPanel.routing.mode as "auto" | "manual") || "auto",
-              intent: firstPanel.routing.intent,
-              category: firstPanel.routing.category,
-              chosenModel: firstPanel.routing.chosenModel,
-              confidence: typeof firstPanel.routing.confidence === "number"
-                ? firstPanel.routing.confidence
-                : undefined,
-              reason: firstPanel.routing.reason,
-            }
-          : null,
-        metadata: !comparisonMode && firstPanel ? firstPanel.metadata : null,
-        error: !comparisonMode && firstPanel ? firstPanel.error : null,
-        // Compare mode: store full panel map
-        modelPanels: comparisonMode ? { ...modelPanels } : null,
+        modelPanels: { ...modelPanels },
         diffSummary: comparisonMode ? diffSummary : null,
       };
 
@@ -1769,13 +1745,15 @@ export default function Home() {
           <div className="space-y-2 mb-6">
             {session.turns.map((turn, turnIdx) => {
               const isExpanded = expandedTurns[turn.id] || false;
-              const isAutoTurn = !!(turn.response && !turn.modelPanels);
-              const isCompareTurn = !!(turn.modelPanels && Object.keys(turn.modelPanels).length > 0);
+              const panelEntries = Object.entries(turn.modelPanels);
+              const isAutoTurn = panelEntries.length === 1 && panelEntries[0][1]?.routing?.mode === "auto";
+              const isCompareTurn = panelEntries.length > 1;
+              const autoTurnPanel = isAutoTurn ? panelEntries[0][1] : null;
 
               // Build a concise summary label for the collapsed state
-              const modelLabel = isAutoTurn && turn.routing?.chosenModel
-                ? getFriendlyModelName(turn.routing.chosenModel)
-                : isCompareTurn && turn.modelPanels
+              const modelLabel = isAutoTurn && autoTurnPanel?.routing?.chosenModel
+                ? getFriendlyModelName(autoTurnPanel.routing.chosenModel)
+                : isCompareTurn
                   ? Object.keys(turn.modelPanels).map(getFriendlyModelName).join(", ")
                   : "";
               const promptPreview = turn.prompt.length > 120
@@ -1846,7 +1824,7 @@ export default function Home() {
                     }`}
                   >
                     {/* Auto-select turn */}
-                    {isAutoTurn && (
+                    {isAutoTurn && autoTurnPanel && (
                       <div className="bg-slate-900/[0.02] rounded-xl shadow-sm border border-gray-200/50 overflow-hidden relative"
                         style={{
                           backgroundImage: `
@@ -1857,17 +1835,17 @@ export default function Home() {
                         }}
                       >
                         {/* Routing reason */}
-                        {turn.routing && turn.routing.mode === "auto" && (
+                        {autoTurnPanel.routing && autoTurnPanel.routing.mode === "auto" && (
                           <div className="px-6 pt-3 pb-2 bg-white/40 backdrop-blur-sm relative">
                             <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
                             <div className="flex items-center gap-2 flex-wrap mb-1">
                               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Auto-selected</span>
                               <span className="text-xs font-bold text-gray-900 font-mono">
-                                {turn.routing.chosenModel ? getFriendlyModelName(turn.routing.chosenModel) : ""}
+                                {autoTurnPanel.routing.chosenModel ? getFriendlyModelName(autoTurnPanel.routing.chosenModel) : ""}
                               </span>
                             </div>
-                            {turn.routing.reason && (
-                              <p className="text-xs text-slate-600 leading-relaxed">{turn.routing.reason}</p>
+                            {autoTurnPanel.routing.reason && (
+                              <p className="text-xs text-slate-600 leading-relaxed">{autoTurnPanel.routing.reason}</p>
                             )}
                           </div>
                         )}
@@ -1875,7 +1853,7 @@ export default function Home() {
                         <div className="m-3 bg-white rounded-lg border border-gray-200/60 shadow-sm">
                           <div className="px-6 py-4">
                             <div className="prose prose-sm max-w-none text-[15px] leading-7">
-                              <FormattedResponse response={turn.response} />
+                              <FormattedResponse response={autoTurnPanel.response} />
                             </div>
                           </div>
                         </div>
@@ -1883,7 +1861,7 @@ export default function Home() {
                     )}
 
                     {/* Compare mode turn */}
-                    {isCompareTurn && turn.modelPanels && (
+                    {isCompareTurn && (
                       <div>
                         <div className={`grid gap-4 ${Object.keys(turn.modelPanels).length === 2 ? "md:grid-cols-2" : Object.keys(turn.modelPanels).length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
                           {Object.entries(turn.modelPanels).map(([mId, panel]) => (

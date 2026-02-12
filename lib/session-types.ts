@@ -8,16 +8,7 @@
 
 import type { DiffSummary } from "@/lib/diff";
 
-// ─── Routing & Metadata ─────────────────────────────────────────
-
-export interface RoutingInfo {
-  mode: "auto" | "manual";
-  intent?: string;
-  category?: string;
-  chosenModel?: string;
-  confidence?: number;
-  reason?: string;
-}
+// ─── Metadata ───────────────────────────────────────────────────
 
 export interface ResponseMetadata {
   model: string;
@@ -51,6 +42,9 @@ export interface ModelPanelData {
 }
 
 // ─── Conversation Turn ──────────────────────────────────────────
+//
+// Unified: every turn stores its results in `modelPanels`.
+// Auto-select turns have 1 panel; Compare turns have N panels.
 
 export interface ConversationTurn {
   id: string;
@@ -58,14 +52,7 @@ export interface ConversationTurn {
   isFollowUp: boolean;
   timestamp: number;
 
-  // Auto-select mode results
-  response: string;
-  routing: RoutingInfo | null;
-  metadata: ResponseMetadata | null;
-  error: string | null;
-
-  // Compare mode results
-  modelPanels: Record<string, ModelPanelData> | null;
+  modelPanels: Record<string, ModelPanelData>;
   diffSummary: DiffSummary | null;
 }
 
