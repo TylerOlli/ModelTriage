@@ -1860,7 +1860,7 @@ export default function Home() {
                     {/* Compare mode turn */}
                     {isCompareTurn && (
                       <div>
-                        <div className={`grid gap-4 ${Object.keys(turn.modelPanels).length === 2 ? "md:grid-cols-2" : Object.keys(turn.modelPanels).length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+                        <div className={`grid gap-4 items-start ${Object.keys(turn.modelPanels).length === 2 ? "md:grid-cols-2" : Object.keys(turn.modelPanels).length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
                           {Object.entries(turn.modelPanels).map(([mId, panel]) => (
                             <div key={mId} className="bg-slate-900/[0.02] rounded-xl shadow-sm border border-gray-200/50 overflow-hidden"
                               style={{
@@ -2299,14 +2299,14 @@ export default function Home() {
         {comparisonMode && Object.keys(modelPanels).length > 0 && (
           <>
             {/* Response Cards Grid */}
-            <div className={`grid gap-6 mb-6 ${selectedModels.length === 2 ? "md:grid-cols-2" : selectedModels.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+            <div className={`grid gap-6 mb-6 items-start ${selectedModels.length === 2 ? "md:grid-cols-2" : selectedModels.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
               {Object.entries(modelPanels).map(([modelId, panel], idx) => (
                 <div
                   key={modelId}
-                  className="animate-in fade-in duration-300 h-full"
+                  className="animate-in fade-in duration-300"
                   style={{ animationDelay: `${idx * 60}ms` }}
                 >
-                  <div className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative flex flex-col h-full"
+                  <div className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative flex flex-col"
                     style={{
                       backgroundImage: `
                         repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
@@ -2382,28 +2382,10 @@ export default function Home() {
                           </div>
                         ) : panel.response ? (
                           <div className="flex-1 flex flex-col min-h-0">
-                            {/* Constrained content container */}
-                            <div className={`relative transition-all duration-200 ease-out ${panel.isExpanded ? '' : 'max-h-[280px]'} ${!panel.isExpanded ? 'overflow-hidden' : ''}`}>
-                              <div className="compare-response-content">
-                                <FormattedResponse response={panel.response} mode="compare" />
-                              </div>
-                              
-                              {/* Gradient fade for collapsed state */}
-                              {!panel.isExpanded && panel.response.length > 400 && (
-                                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white to-transparent pointer-events-none" />
-                              )}
+                            {/* Response content */}
+                            <div className="compare-response-content">
+                              <FormattedResponse response={panel.response} mode="compare" />
                             </div>
-                            
-                            {/* Expand/Collapse control */}
-                            {panel.response.length > 400 && (
-                              <button
-                                type="button"
-                                onClick={() => updatePanel(modelId, { isExpanded: !panel.isExpanded })}
-                                className="mt-3 text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors duration-150 text-left"
-                              >
-                                {panel.isExpanded ? '↑ Show less' : '↓ Expand full response'}
-                              </button>
-                            )}
                           </div>
                         ) : (
                           <div className="text-sm text-gray-400">
