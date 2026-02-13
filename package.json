@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
+    "postinstall": "prisma generate",
     "test:diff": "tsx __tests__/diff/analyzer.test.ts",
     "test:intent-router": "tsx __tests__/llm/intent-router.test.ts",
     "test:parser": "tsx __tests__/response-parser.test.ts",

@@ -15,7 +15,6 @@ import { supportsVision, anyModelSupportsVision, getDefaultVisionModel } from "@
 import type { ProcessedImageAttachment } from "@/lib/attachments/processor";
 import { getAttachmentsGist } from "@/lib/attachments/gist-generator";
 import { parseImageGist, generateRoutingReasonFromGist, type ImageGist } from "@/lib/attachments/image-gist-schema";
-import { persistAutoSelect } from "@/lib/db/persist-routing";
 import { classifyPrompt } from "@/lib/llm/prompt-classifier";
 
 /**
@@ -984,24 +983,29 @@ ${prompt}`;
             const responseTimeMs = Date.now() - modelDispatchStart;
             if (anonymousId && routingMetadata.mode === "auto") {
               const classification = classifyPrompt(prompt);
-              persistAutoSelect({
-                prompt,
-                anonymousId,
-                routing: {
-                  intent: routingMetadata.intent,
-                  category: routingMetadata.category,
-                  chosenModel: routingMetadata.chosenModel,
-                  confidence: routingMetadata.confidence,
-                },
-                scoring: routingMetadata.scoring ?? null,
-                classification: {
-                  taskType: classification.taskType,
-                  stakes: classification.stakes,
-                  inputSignals: classification.inputSignals as unknown as Record<string, boolean>,
-                },
-                responseTimeMs,
+              // Dynamic import to avoid loading Prisma during build
+              import("@/lib/db/persist-routing").then(({ persistAutoSelect }) => {
+                persistAutoSelect({
+                  prompt,
+                  anonymousId,
+                  routing: {
+                    intent: routingMetadata.intent,
+                    category: routingMetadata.category,
+                    chosenModel: routingMetadata.chosenModel,
+                    confidence: routingMetadata.confidence,
+                  },
+                  scoring: routingMetadata.scoring ?? null,
+                  classification: {
+                    taskType: classification.taskType,
+                    stakes: classification.stakes,
+                    inputSignals: classification.inputSignals as unknown as Record<string, boolean>,
+                  },
+                  responseTimeMs,
+                }).catch((err) => {
+                  console.error("[DB] Fire-and-forget persistence failed:", err);
+                });
               }).catch((err) => {
-                console.error("[DB] Fire-and-forget persistence failed:", err);
+                console.error("[DB] Failed to load persistence module:", err);
               });
             }
             controller.close();

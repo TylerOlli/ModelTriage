@@ -14,7 +14,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { diffAnalyzer } from "@/lib/diff";
 import type { ModelResponse } from "@/lib/diff/types";
-import { persistCompare } from "@/lib/db/persist-routing";
 import { classifyPrompt } from "@/lib/llm/prompt-classifier";
 import { intentRouter } from "@/lib/llm/intent-router";
 import { scoreForModel } from "@/lib/llm/scoring-engine";
@@ -70,9 +69,9 @@ export async function POST(request: NextRequest) {
       const modelsCompared = responses.map((r) => r.model);
 
       (async () => {
-        let classification;
-        let shadowRouting;
-        let shadowScoring;
+        let classification: ReturnType<typeof classifyPrompt> | undefined;
+        let shadowRouting: { intent: string; category: string; chosenModel: string; confidence: number } | undefined;
+        let shadowScoring: ReturnType<typeof scoreForModel> | undefined;
 
         try {
           // 1. Classify the prompt (deterministic, microseconds)
@@ -97,25 +96,30 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        await persistCompare({
-          prompt,
-          anonymousId,
-          modelsCompared,
-          diffSummary: summary,
-          classification: classification
-            ? {
-                taskType: classification.taskType,
-                stakes: classification.stakes,
-                inputSignals: classification.inputSignals as unknown as Record<string, boolean>,
-              }
-            : null,
-          shadowRouting: shadowRouting ?? null,
-          shadowScoring: shadowScoring ?? null,
-          responseTimeMs: responseTimeMs ?? null,
+        // Dynamic import to avoid loading Prisma during build
+        import("@/lib/db/persist-routing").then(({ persistCompare }) => {
+          persistCompare({
+            prompt,
+            anonymousId,
+            modelsCompared,
+            diffSummary: summary,
+            classification: classification
+              ? {
+                  taskType: classification.taskType,
+                  stakes: classification.stakes,
+                  inputSignals: classification.inputSignals as unknown as Record<string, boolean>,
+                }
+              : null,
+            shadowRouting: shadowRouting ?? null,
+            shadowScoring: shadowScoring ?? null,
+            responseTimeMs: responseTimeMs ?? null,
+          }).catch((err) => {
+            console.error("[DB] Fire-and-forget compare persistence failed:", err);
+          });
+        }).catch((err) => {
+          console.error("[DB] Failed to load persistence module:", err);
         });
-      })().catch((err) => {
-        console.error("[DB] Fire-and-forget compare persistence failed:", err);
-      });
+      })();
     }
 
     return NextResponse.json({
