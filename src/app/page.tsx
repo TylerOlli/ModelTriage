@@ -185,32 +185,32 @@ export default function Home() {
   ]);
 
   const availableModels = [
-    { id: "gpt-5-mini", label: "GPT-5 Mini", description: "Fast reasoning" },
-    { id: "gpt-5.2", label: "GPT-5.2", description: "Advanced reasoning" },
+    { id: "gpt-5-mini", label: "GPT-5 Mini", description: "Quick answers, lightweight tasks, low cost" },
+    { id: "gpt-5.2", label: "GPT-5.2", description: "Deep reasoning, complex multi-step problems" },
     {
-      id: "claude-opus-4-6",
-      label: "Claude Opus 4.6",
-      description: "Best / Highest reasoning",
+      id: "claude-haiku-4-5-20251001",
+      label: "Claude Haiku 4.5",
+      description: "Fastest Anthropic model, ideal for simple tasks",
     },
     {
       id: "claude-sonnet-4-5-20250929",
       label: "Claude Sonnet 4.5",
-      description: "Balanced",
+      description: "Strong all-rounder, good balance of speed and depth",
     },
     {
-      id: "claude-haiku-4-5-20251001",
-      label: "Claude Haiku 4.5",
-      description: "Fast / Low cost",
+      id: "claude-opus-4-6",
+      label: "Claude Opus 4.6",
+      description: "Highest capability, nuanced analysis, long context",
     },
     {
       id: "gemini-3-flash-preview",
       label: "Gemini 3 Flash",
-      description: "Fast and efficient",
+      description: "Low latency, strong at summarization and extraction",
     },
     {
       id: "gemini-3-pro-preview",
       label: "Gemini 3 Pro",
-      description: "Advanced capabilities",
+      description: "Multimodal strength, large context window",
     },
   ];
 
@@ -1517,39 +1517,45 @@ export default function Home() {
             </div>
 
             {/* Model Selection Chips (Compare mode) — slides in below action bar */}
-            <div className={`overflow-hidden transition-all duration-200 ease-out ${
-              comparisonMode ? "max-h-[200px] opacity-100" : "max-h-0 opacity-0"
+            <div className={`transition-all duration-200 ease-out ${
+              comparisonMode ? "opacity-100" : "max-h-0 opacity-0 overflow-hidden"
             }`}>
               {comparisonMode && (
-                <div className="px-5 pb-4 pt-2 border-t border-neutral-100">
+                <div className="px-5 pb-4 pt-2 border-t border-neutral-100 overflow-visible">
                   <div className="flex flex-wrap gap-2">
                     {availableModels.map((model) => {
                       const isSelected = selectedModels.includes(model.id);
                       return (
-                        <button
-                          key={model.id}
-                          type="button"
-                          onClick={() => {
-                            if (isSelected) {
-                              if (selectedModels.length > 1) {
-                                setSelectedModels(selectedModels.filter((id) => id !== model.id));
+                        <div key={model.id} className="relative group/chip">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                if (selectedModels.length > 1) {
+                                  setSelectedModels(selectedModels.filter((id) => id !== model.id));
+                                }
+                              } else {
+                                setSelectedModels([...selectedModels, model.id]);
                               }
-                            } else {
-                              setSelectedModels([...selectedModels, model.id]);
-                            }
-                          }}
-                          disabled={isStreaming}
-                          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-150 ${
-                            isSelected
-                              ? "bg-blue-50 text-blue-700 border border-blue-200"
-                              : "bg-white text-neutral-500 border border-neutral-200 hover:border-neutral-300 hover:text-neutral-700"
-                          } ${isStreaming ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-                        >
-                          {isSelected && (
-                            <svg className="w-3 h-3 inline mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-                          )}
-                          {model.label}
-                        </button>
+                            }}
+                            disabled={isStreaming}
+                            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-150 ${
+                              isSelected
+                                ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                : "bg-white text-neutral-500 border border-neutral-200 hover:border-neutral-300 hover:text-neutral-700"
+                            } ${isStreaming ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                          >
+                            {isSelected && (
+                              <svg className="w-3 h-3 inline mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                            )}
+                            {model.label}
+                          </button>
+                          {/* Tooltip */}
+                          <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-2.5 py-1 bg-neutral-700 text-white text-xs rounded-md whitespace-nowrap opacity-0 pointer-events-none group-hover/chip:opacity-90 transition-opacity duration-300 delay-300 z-10">
+                            {model.description}
+                            <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-neutral-700" />
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
@@ -1566,7 +1572,7 @@ export default function Home() {
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowHistory(false)} />
               <div className="relative z-20 mt-2 animate-enter">
-                <div className="bg-white rounded-xl border border-neutral-200 shadow-lg overflow-hidden">
+                <div className="bg-white rounded-xl border border-neutral-200 shadow-lg overflow-visible">
                   <div className="px-4 py-3 border-b border-neutral-100">
                     <div className="flex items-center justify-between">
                       <h4 className="text-sm font-semibold text-neutral-900">Recent prompts</h4>
