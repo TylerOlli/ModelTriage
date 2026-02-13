@@ -45,7 +45,7 @@ All attachments are processed server-side with automatic truncation, compression
 **Vision Model Requirements:**
 - Images are only sent to vision-capable models:
   - `gpt-5.2`
-  - `claude-opus-4-5-20251101`
+  - `claude-opus-4-6`
   - `claude-sonnet-4-5-20250929`
   - `gemini-2.5-flash`
   - `gemini-2.5-pro`
@@ -150,7 +150,7 @@ const fileInputRef = useRef<HTMLInputElement>(null);
 - "Too many files. Maximum 3 files allowed."
 - "Unsupported file type: video.mp4. Allowed: text/log/json/md/ts/js files or png/jpg/webp images."
 - "Image too large: photo.jpg. Maximum 5MB allowed."
-- "Images require a vision-capable model. Please select: gpt-5.2, claude-opus-4-5-20251101, ..."
+- "Images require a vision-capable model. Please select: gpt-5.2, claude-opus-4-6, ..."
 
 **Server-Side Validation:**
 - File count, type, and size validated before processing
@@ -277,7 +277,7 @@ export const LIMITS = {
 ```typescript
 export const VISION_CAPABLE_MODELS: ModelId[] = [
   "gpt-5.2",
-  "claude-opus-4-5-20251101",
+  "claude-opus-4-6",
   "claude-sonnet-4-5-20250929",
   "gemini-2.5-flash",
   "gemini-2.5-pro",

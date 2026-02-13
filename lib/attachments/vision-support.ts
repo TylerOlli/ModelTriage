@@ -42,7 +42,7 @@ export const MODEL_CAPABILITIES: Record<ModelId, ModelCapability> = {
     strengths: ["coding", "writing", "vision"],
     costTier: "medium",
   },
-  "claude-opus-4-5-20251101": {
+  "claude-opus-4-6": {
     vision: true,
     tier: "deep",
     strengths: ["reasoning", "writing", "vision", "coding"],
@@ -71,7 +71,7 @@ export const MODEL_DEFAULTS = {
   codePrimary: "claude-sonnet-4-5-20250929" as ModelId, // Best for code/text
   codeFast: "gpt-5-mini" as ModelId, // Quick code questions
   deepReasoningA: "gpt-5.2" as ModelId, // Deep reasoning primary
-  deepReasoningB: "claude-opus-4-5-20251101" as ModelId, // Deep reasoning secondary
+  deepReasoningB: "claude-opus-4-6" as ModelId, // Deep reasoning secondary
 };
 
 /**

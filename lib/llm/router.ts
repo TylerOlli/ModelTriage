@@ -16,7 +16,7 @@ export async function routeToProvider(
     case "gpt-5.2":
       return runOpenAI(request, modelId);
 
-    case "claude-opus-4-5-20251101":
+    case "claude-opus-4-6":
     case "claude-sonnet-4-5-20250929":
     case "claude-haiku-4-5-20251001":
       return runAnthropic(request, modelId);
@@ -27,7 +27,7 @@ export async function routeToProvider(
 
     default:
       throw new Error(
-        `Unsupported model: ${modelId}. Supported models: gpt-5-mini, gpt-5.2, claude-opus-4-5-20251101, claude-sonnet-4-5-20250929, claude-haiku-4-5-20251001, gemini-2.5-flash, gemini-2.5-pro`
+        `Unsupported model: ${modelId}. Supported models: gpt-5-mini, gpt-5.2, claude-opus-4-6, claude-sonnet-4-5-20250929, claude-haiku-4-5-20251001, gemini-2.5-flash, gemini-2.5-pro`
       );
   }
 }

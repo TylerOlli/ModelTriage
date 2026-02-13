@@ -152,7 +152,7 @@ async function* streamProvider(
   if (modelId === "gpt-5-mini" || modelId === "gpt-5.2") {
     streamFn = streamOpenAI(llmRequest, modelId);
   } else if (
-    modelId === "claude-opus-4-5-20251101" ||
+    modelId === "claude-opus-4-6" ||
     modelId === "claude-sonnet-4-5-20250929" ||
     modelId === "claude-haiku-4-5-20251001"
   ) {

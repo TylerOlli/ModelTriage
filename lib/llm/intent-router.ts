@@ -309,9 +309,9 @@ export class IntentRouter {
       return {
         intent: "coding",
         category: "coding_review",
-        chosenModel: "claude-opus-4-5-20251101",
+        chosenModel: "claude-opus-4-6",
         confidence: 0.88,
-        reason: "This is a code review task, and Claude Opus 4.5 excels at thorough code analysis, identifying quality issues, and suggesting structural improvements.",
+        reason: "This is a code review task, and Claude Opus 4.6 excels at thorough code analysis, identifying quality issues, and suggesting structural improvements.",
       };
     }
 
@@ -346,9 +346,9 @@ export class IntentRouter {
       return {
         intent: "writing",
         category: "writing_high_stakes",
-        chosenModel: "claude-opus-4-5-20251101",
+        chosenModel: "claude-opus-4-6",
         confidence: 0.88,
-        reason: "This is a high-stakes communication task, and Claude Opus 4.5 handles sensitive, nuanced writing with precision and appropriate tone.",
+        reason: "This is a high-stakes communication task, and Claude Opus 4.6 handles sensitive, nuanced writing with precision and appropriate tone.",
       };
     }
 
@@ -527,7 +527,7 @@ export class IntentRouter {
       : chosenModel.includes("gpt-5.2")
       ? "GPT-5.2"
       : chosenModel.includes("claude-opus")
-      ? "Claude Opus 4.5"
+      ? "Claude Opus 4.6"
       : chosenModel.includes("gpt-5-mini")
       ? "GPT-5 Mini"
       : chosenModel.includes("gemini-2.5-pro")
@@ -784,7 +784,7 @@ CODING:
   Alternative: gemini-2.5-flash (confidence < 0.6)
 
 - coding_review (refactor, PR review, explain code)
-  Primary: claude-opus-4-5-20251101 (confidence ≥ 0.6)
+  Primary: claude-opus-4-6 (confidence ≥ 0.6)
   Alternative: gemini-2.5-pro (confidence < 0.6)
 
 - coding_debug (stack traces, errors, logs)
@@ -805,7 +805,7 @@ WRITING:
   Alternative: gemini-2.5-pro (confidence < 0.6)
 
 - writing_high_stakes (executive, public statements, sensitive)
-  Primary: claude-opus-4-5-20251101 (confidence ≥ 0.6)
+  Primary: claude-opus-4-6 (confidence ≥ 0.6)
   Alternative: gemini-2.5-pro (confidence < 0.6, fallback only)
 
 ANALYSIS:
@@ -912,7 +912,7 @@ Output ONLY the JSON object, no other text.`;
     const validModels: ModelId[] = [
       "gpt-5-mini",
       "gpt-5.2",
-      "claude-opus-4-5-20251101",
+      "claude-opus-4-6",
       "claude-sonnet-4-5-20250929",
       "claude-haiku-4-5-20251001",
       "gemini-2.5-flash",
@@ -1063,7 +1063,7 @@ Output ONLY the JSON object, no other text.`;
     const modelDisplayNames: Record<ModelId, string> = {
       "gpt-5-mini": "GPT-5 Mini",
       "gpt-5.2": "GPT-5.2",
-      "claude-opus-4-5-20251101": "Claude Opus 4.5",
+      "claude-opus-4-6": "Claude Opus 4.6",
       "claude-sonnet-4-5-20250929": "Claude Sonnet 4.5",
       "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
       "gemini-2.5-flash": "Gemini 2.5 Flash",
@@ -1409,7 +1409,7 @@ Your explanation:`;
     const names: Record<ModelId, string> = {
       "gpt-5-mini": "GPT-5 Mini",
       "gpt-5.2": "GPT-5.2",
-      "claude-opus-4-5-20251101": "Claude Opus 4.5",
+      "claude-opus-4-6": "Claude Opus 4.6",
       "claude-sonnet-4-5-20250929": "Claude Sonnet 4.5",
       "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
       "gemini-2.5-flash": "Gemini 2.5 Flash",

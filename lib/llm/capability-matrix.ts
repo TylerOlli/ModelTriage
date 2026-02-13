@@ -123,9 +123,9 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
     },
   },
 
-  "claude-opus-4-5-20251101": {
-    id: "claude-opus-4-5-20251101",
-    displayName: "Claude Opus 4.5",
+  "claude-opus-4-6": {
+    id: "claude-opus-4-6",
+    displayName: "Claude Opus 4.6",
     provider: "Anthropic",
     capabilities: {
       reasoning: 0.94,         // Near-best reasoning

@@ -39,7 +39,7 @@ async function runTests() {
 
   // Test 2: Coding review - should route to claude-opus
   try {
-    console.log("Test 2: Coding review → claude-opus-4-5-20251101");
+    console.log("Test 2: Coding review → claude-opus-4-6");
     const prompt = "Refactor this function for better readability and maintainability. Here's the code: function processData(d){return d.map(x=>x*2).filter(y=>y>10)}";
     
     const decision = await router.route(prompt);
@@ -51,11 +51,11 @@ async function runTests() {
       confidence: decision.confidence.toFixed(2),
     });
 
-    if (decision.intent === "coding" && decision.chosenModel === "claude-opus-4-5-20251101") {
+    if (decision.intent === "coding" && decision.chosenModel === "claude-opus-4-6") {
       console.log("  ✓ Correctly routed to claude-opus for code review\n");
       testsPassed++;
     } else {
-      throw new Error(`Expected claude-opus-4-5-20251101, got ${decision.chosenModel}`);
+      throw new Error(`Expected claude-opus-4-6, got ${decision.chosenModel}`);
     }
   } catch (err) {
     console.error(`  ✗ FAILED: ${err}\n`);
@@ -114,7 +114,7 @@ async function runTests() {
 
   // Test 5: Writing high-stakes - should route to claude-opus
   try {
-    console.log("Test 5: Writing high-stakes → claude-opus-4-5-20251101");
+    console.log("Test 5: Writing high-stakes → claude-opus-4-6");
     const prompt = "Draft a sensitive executive announcement about company restructuring that will affect employees";
     
     const decision = await router.route(prompt);
@@ -126,11 +126,11 @@ async function runTests() {
       confidence: decision.confidence.toFixed(2),
     });
 
-    if (decision.intent === "writing" && decision.chosenModel === "claude-opus-4-5-20251101") {
+    if (decision.intent === "writing" && decision.chosenModel === "claude-opus-4-6") {
       console.log("  ✓ Correctly routed to claude-opus for high-stakes writing\n");
       testsPassed++;
     } else {
-      throw new Error(`Expected claude-opus-4-5-20251101, got ${decision.chosenModel}`);
+      throw new Error(`Expected claude-opus-4-6, got ${decision.chosenModel}`);
     }
   } catch (err) {
     console.error(`  ✗ FAILED: ${err}\n`);

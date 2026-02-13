@@ -73,7 +73,7 @@ export const MODEL_DEFAULTS = {
   codePrimary: "claude-sonnet-4-5-20250929", // Best for code/text
   codeFast: "gpt-5-mini",                  // Quick code questions
   deepReasoningA: "gpt-5.2",               // Deep reasoning primary
-  deepReasoningB: "claude-opus-4-5-20251101", // Deep reasoning secondary
+  deepReasoningB: "claude-opus-4-6", // Deep reasoning secondary
 };
 ```
 

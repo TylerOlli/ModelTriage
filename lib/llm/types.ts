@@ -5,7 +5,7 @@
 export type ModelId =
   | "gpt-5-mini"
   | "gpt-5.2"
-  | "claude-opus-4-5-20251101"
+  | "claude-opus-4-6"
   | "claude-sonnet-4-5-20250929"
   | "claude-haiku-4-5-20251001"
   | "gemini-2.5-flash"

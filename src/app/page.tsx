@@ -30,7 +30,7 @@ function getFriendlyModelName(modelId: string): string {
   const modelMap: Record<string, string> = {
     "gpt-5-mini": "GPT-5 Mini",
     "gpt-5.2": "GPT-5.2",
-    "claude-opus-4-5-20251101": "Claude Opus 4.5",
+    "claude-opus-4-6": "Claude Opus 4.6",
     "claude-sonnet-4-5-20250929": "Claude Sonnet 4.5",
     "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
     "gemini-2.5-flash": "Gemini 2.5 Flash",
@@ -188,8 +188,8 @@ export default function Home() {
     { id: "gpt-5-mini", label: "GPT-5 Mini", description: "Fast reasoning" },
     { id: "gpt-5.2", label: "GPT-5.2", description: "Advanced reasoning" },
     {
-      id: "claude-opus-4-5-20251101",
-      label: "Claude Opus 4.5",
+      id: "claude-opus-4-6",
+      label: "Claude Opus 4.6",
       description: "Best / Highest reasoning",
     },
     {
