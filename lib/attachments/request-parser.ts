@@ -12,6 +12,8 @@ export interface ParsedRequest {
   previousResponse?: string;
   isFollowUp?: boolean;
   files: File[];
+  /** Anonymous browser UUID for routing analytics */
+  anonymousId?: string;
 }
 
 /**
@@ -34,6 +36,7 @@ export async function parseInferenceRequest(
     const previousPromptRaw = formData.get("previousPrompt") as string | null;
     const previousResponseRaw = formData.get("previousResponse") as string | null;
     const isFollowUpRaw = formData.get("isFollowUp") as string | null;
+    const anonymousIdRaw = formData.get("anonymousId") as string | null;
 
     // Parse JSON fields
     const models = modelsRaw ? JSON.parse(modelsRaw) : undefined;
@@ -60,6 +63,7 @@ export async function parseInferenceRequest(
       previousResponse: previousResponseRaw || undefined,
       isFollowUp: isFollowUp || undefined,
       files,
+      anonymousId: anonymousIdRaw || undefined,
     };
   } else {
     // Parse JSON
@@ -74,6 +78,7 @@ export async function parseInferenceRequest(
       previousResponse: body.previousResponse,
       isFollowUp: body.isFollowUp || undefined,
       files: [],
+      anonymousId: body.anonymousId || undefined,
     };
   }
 }

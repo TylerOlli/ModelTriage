@@ -9,7 +9,7 @@ import type { LLMRequest } from "../llm/types";
 
 export class DiffAnalyzer {
   private readonly MAX_RESPONSE_LENGTH_PER_MODEL = 3000; // Truncate long responses to fit in LLM context
-  private readonly SUMMARY_MAX_TOKENS = 400; // Output tokens for summary
+  private readonly SUMMARY_MAX_TOKENS = 500; // Output tokens for summary (includes verdict)
   private readonly SUMMARY_TIMEOUT_MS = 12000;
 
   /**
@@ -21,6 +21,7 @@ export class DiffAnalyzer {
         commonGround: [],
         keyDifferences: [],
         notableGaps: [],
+        verdict: null,
       };
     }
 
@@ -118,6 +119,9 @@ For each model that has unique emphasis or a different approach, explain what it
 3) Notable Gaps (1-4 bullet points)
 Identify important topics that one or more models failed to cover or covered weakly. Be specific about what concept is missing, not just "model X omits details."
 
+4) Verdict (exactly 1 sentence)
+State which model performed best overall for this specific prompt and briefly explain why. If it's genuinely too close to call, say so. Be direct — name the model.
+
 Rules:
 - Write in plain, human language
 - Avoid quoting more than 10 words from any response
@@ -139,7 +143,10 @@ ${modelNames.map((name) => `${name}:\n- [statement]\n- [statement]`).join("\n\n"
 Notable Gaps:
 - [statement]
 - [statement]
-...`;
+...
+
+Verdict:
+[one sentence]`;
   }
 
   /**
@@ -154,8 +161,9 @@ Notable Gaps:
     const commonGround: string[] = [];
     const keyDifferences: ModelDifferences[] = [];
     const notableGaps: string[] = [];
+    let verdict: string | null = null;
 
-    let currentSection: "common" | "differences" | "gaps" | null = null;
+    let currentSection: "common" | "differences" | "gaps" | "verdict" | null = null;
     let currentModel: string | null = null;
     let currentModelPoints: string[] = [];
 
@@ -187,10 +195,32 @@ Notable Gaps:
           currentModel = null;
         }
         continue;
+      } else if (/^Verdict:?$/i.test(line)) {
+        currentSection = "verdict";
+        // Flush previous model if any
+        if (currentModel && currentModelPoints.length > 0) {
+          keyDifferences.push({
+            model: currentModel,
+            points: [...currentModelPoints],
+          });
+          currentModelPoints = [];
+          currentModel = null;
+        }
+        continue;
       }
 
       // Skip empty lines
       if (line.length === 0) continue;
+
+      // Verdict section: capture the first non-empty line as the verdict
+      if (currentSection === "verdict" && !verdict) {
+        // Strip leading bullet/dash if present
+        const cleaned = line.replace(/^[-•*]\s*/, "").trim();
+        if (cleaned.length > 0) {
+          verdict = cleaned;
+        }
+        continue;
+      }
 
       // In Key Differences section, detect model names
       if (currentSection === "differences") {
@@ -242,6 +272,7 @@ Notable Gaps:
         points: d.points.slice(0, 3),
       })),
       notableGaps: notableGaps.slice(0, 4),
+      verdict,
     };
   }
 
@@ -266,6 +297,7 @@ Notable Gaps:
       notableGaps: [
         "Comparison summary could not be generated automatically. Review individual responses above.",
       ],
+      verdict: null,
     };
   }
 

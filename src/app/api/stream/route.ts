@@ -15,6 +15,8 @@ import { supportsVision, anyModelSupportsVision, getDefaultVisionModel } from "@
 import type { ProcessedImageAttachment } from "@/lib/attachments/processor";
 import { getAttachmentsGist } from "@/lib/attachments/gist-generator";
 import { parseImageGist, generateRoutingReasonFromGist, type ImageGist } from "@/lib/attachments/image-gist-schema";
+import { persistAutoSelect } from "@/lib/db/persist-routing";
+import { classifyPrompt } from "@/lib/llm/prompt-classifier";
 
 /**
  * Check if a routing reason is a placeholder (not final)
@@ -209,7 +211,7 @@ export async function POST(request: Request) {
 
     // Parse request (supports both JSON and multipart/form-data)
     const parsedRequest = await parseInferenceRequest(request);
-    const { prompt, models, temperature, previousPrompt, previousResponse, files, stream } = parsedRequest;
+    const { prompt, models, temperature, previousPrompt, previousResponse, files, stream, anonymousId } = parsedRequest;
     const isFollowUp = (parsedRequest as any).isFollowUp === true || (parsedRequest as any).isFollowUp === "true";
     let { maxTokens } = parsedRequest;
     
@@ -958,6 +960,32 @@ ${prompt}`;
           } catch (err) {
             console.error("SSE stream error:", err);
           } finally {
+            // ── Fire-and-forget: persist routing decision ──────────
+            // Only persist auto-select decisions (not manual mode).
+            // This runs AFTER the stream closes — zero latency impact.
+            // Uses `routingMetadata` (outer scope) since `routingMetadataStream`
+            // is a const alias inside the start() function body.
+            if (anonymousId && routingMetadata.mode === "auto") {
+              const classification = classifyPrompt(prompt);
+              persistAutoSelect({
+                prompt,
+                anonymousId,
+                routing: {
+                  intent: routingMetadata.intent,
+                  category: routingMetadata.category,
+                  chosenModel: routingMetadata.chosenModel,
+                  confidence: routingMetadata.confidence,
+                },
+                scoring: routingMetadata.scoring ?? null,
+                classification: {
+                  taskType: classification.taskType,
+                  stakes: classification.stakes,
+                  inputSignals: classification.inputSignals as unknown as Record<string, boolean>,
+                },
+              }).catch((err) => {
+                console.error("[DB] Fire-and-forget persistence failed:", err);
+              });
+            }
             controller.close();
           }
         },

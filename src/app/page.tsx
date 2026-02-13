@@ -75,6 +75,22 @@ function getUserFriendlyError(error: string | null): string {
 type ModelPanel = ModelPanelData;
 
 /**
+ * Get or create an anonymous user ID for routing analytics.
+ * Stored in localStorage — not linked to any account.
+ * Used to correlate routing decisions from the same browser
+ * for outcome analysis and calibration.
+ */
+function getAnonymousId(): string {
+  const STORAGE_KEY = "mt_anonymous_id";
+  const existing = localStorage.getItem(STORAGE_KEY);
+  if (existing) return existing;
+
+  const id = crypto.randomUUID();
+  localStorage.setItem(STORAGE_KEY, id);
+  return id;
+}
+
+/**
  * Helper to detect if a routing reason is generic/fallback text
  */
 function isGenericReason(reason: string | undefined): boolean {
@@ -361,6 +377,7 @@ export default function Home() {
             setDiffError(null);
             
             // Call server-side API to generate summary (can't call LLM providers from client)
+            // Include anonymousId and prompt for database persistence.
             const res = await fetch("/api/compare", {
               method: "POST",
               headers: {
@@ -368,6 +385,8 @@ export default function Home() {
               },
               body: JSON.stringify({
                 responses: finalResponses,
+                anonymousId: getAnonymousId(),
+                prompt: prompt,
               }),
             });
 
@@ -1207,6 +1226,7 @@ export default function Home() {
   };
 
   // Build request for API (handles both JSON and multipart/form-data)
+  // Includes anonymousId for routing analytics persistence.
   const buildRequest = (params: {
     prompt: string;
     stream: boolean;
@@ -1216,12 +1236,14 @@ export default function Home() {
     isFollowUp?: boolean;
   }): { body: string | FormData; headers: Record<string, string> } => {
     const hasFiles = attachedFiles.length > 0;
+    const anonymousId = getAnonymousId();
 
     if (hasFiles) {
       // Use multipart/form-data
       const formData = new FormData();
       formData.append("prompt", params.prompt);
       formData.append("stream", String(params.stream));
+      formData.append("anonymousId", anonymousId);
       if (params.models) {
         formData.append("models", JSON.stringify(params.models));
       }
@@ -1250,6 +1272,7 @@ export default function Home() {
         body: JSON.stringify({
           prompt: params.prompt,
           stream: params.stream,
+          anonymousId,
           ...(params.models && { models: params.models }),
           ...(params.previousPrompt && { previousPrompt: params.previousPrompt }),
           ...(params.previousResponse && { previousResponse: params.previousResponse }),

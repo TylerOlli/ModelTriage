@@ -1,0 +1,95 @@
+// ─────────────────────────────────────────────────────────────────
+// ModelTriage — Prisma Schema
+//
+// Database: Supabase Postgres (transaction pooler on port 6543)
+//
+// This schema defines the persistence layer for routing analytics.
+// Phase 1: Store every routing decision and compare session for
+// future calibration of the model capability matrix.
+//
+// Two connection URLs:
+//   DATABASE_URL  — Transaction pooler (port 6543, pgbouncer=true)
+//                   Used for all runtime queries from the app.
+//   DIRECT_URL    — Direct connection (port 5432)
+//                   Used only by Prisma Migrate for DDL operations,
+//                   since pgbouncer cannot handle migration commands.
+// ─────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Routing Decision ───────────────────────────────────────────
+//
+// One row per auto-select or compare-mode request.
+// Auto-select rows include scoring data; compare rows include
+// the diff summary and verdict.
+//
+// Privacy: promptHash is a SHA-256 of the normalized prompt.
+// Raw prompts and model responses are NEVER stored.
+
+model RoutingDecision {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // ── Identity ──────────────────────────────────────────────────
+  // Anonymous user identifier (UUID from localStorage).
+  // Not linked to any account — just correlates decisions
+  // from the same browser session for outcome analysis.
+  anonymousId String @map("anonymous_id")
+
+  // ── Request ───────────────────────────────────────────────────
+  // SHA-256 hash of the normalized prompt. Used for deduplication
+  // and analytics without storing the raw prompt text.
+  promptHash String @map("prompt_hash")
+
+  // "auto" or "compare" — which mode the user was in.
+  mode String // "auto" | "compare"
+
+  // ── Classification (auto-select only) ─────────────────────────
+  // Output of the deterministic prompt classifier.
+  // Null for compare-mode rows (no classification occurs).
+  taskType    String? @map("task_type")    // code_gen, debug, refactor, etc.
+  stakes      String?                       // low, medium, high
+  // Input signals as JSON: { hasCode, hasStackTrace, strictFormat, ... }
+  inputSignals Json? @map("input_signals")
+
+  // ── Routing (auto-select only) ────────────────────────────────
+  // Which model was selected and why.
+  selectedModel String? @map("selected_model") // e.g. "claude-sonnet-4-5-20250929"
+  routingIntent String? @map("routing_intent") // coding, writing, analysis, vision
+  routingCategory String? @map("routing_category") // coding_quick, writing_standard, etc.
+  routingConfidence Float? @map("routing_confidence") // 0.0–1.0
+
+  // ── Scoring (auto-select only) ────────────────────────────────
+  // Output of the Expected Success scoring engine.
+  // Stored for future calibration of the capability matrix.
+  expectedSuccess Int?    @map("expected_success") // 0–100
+  confidence      String?                           // "Low", "Medium", "High"
+  // Full key factors array as JSON
+  keyFactors      Json?   @map("key_factors")
+
+  // ── Compare Mode Fields ───────────────────────────────────────
+  // Which models were compared (JSON array of model IDs).
+  modelsCompared Json? @map("models_compared") // ["gpt-5.2", "claude-sonnet-4-5-20250929"]
+  // Full diff summary as JSON (common ground, key differences, notable gaps).
+  diffSummary    Json? @map("diff_summary")
+  // One-sentence verdict from the comparison LLM.
+  verdict        String?
+
+  // ── Indexes ───────────────────────────────────────────────────
+  @@index([anonymousId])
+  @@index([mode])
+  @@index([selectedModel])
+  @@index([taskType])
+  @@index([createdAt])
+
+  @@map("routing_decisions")
+}
