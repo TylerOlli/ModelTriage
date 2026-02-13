@@ -374,6 +374,8 @@ ${prompt}`;
       chosenModel?: string;
       confidence?: number;
       reason?: string;
+      fitBreakdown?: any;
+      scoring?: any;
     };
 
     if (isAutoMode) {
@@ -438,6 +440,8 @@ ${prompt}`;
           chosenModel: decision.chosenModel,
           confidence: decision.confidence,
           reason: decision.reason,
+          fitBreakdown: decision.fitBreakdown,
+          scoring: decision.scoring,
         };
         console.log("Auto-routing decision:", routingMetadata);
       } catch (err) {

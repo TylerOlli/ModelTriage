@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import type { DiffSummary } from "@/lib/diff";
 import { FormattedResponse } from "../components/FormattedResponse";
 import { FollowUpComposer } from "../components/FollowUpComposer";
+import { ModelSelectionCard } from "../components/ModelSelectionCard";
 import { validateFiles, getFileValidationErrorMessage } from "@/lib/file-validation";
 import type {
   ConversationSession,
@@ -37,25 +38,6 @@ function getFriendlyModelName(modelId: string): string {
   };
   return modelMap[modelId] || modelId;
 }
-
-/**
- * Convert confidence score to user-friendly label
- * Returns null if confidence should not be displayed
- */
-function confidenceToLabel(confidence?: number): string | null {
-  if (confidence === undefined || confidence === 0) {
-    return null;
-  }
-  
-  if (confidence >= 0.8) {
-    return "High confidence";
-  } else if (confidence >= 0.6) {
-    return "Medium confidence";
-  } else {
-    return "Low confidence (verify recommended)";
-  }
-}
-
 
 /**
  * Map error codes and types to user-friendly messages
@@ -152,7 +134,6 @@ export default function Home() {
   const [expandedTurns, setExpandedTurns] = useState<Record<string, boolean>>({});
   // The active follow-up prompt text (shown above response when in follow-up)
   const [activeFollowUpPrompt, setActiveFollowUpPrompt] = useState<string | null>(null);
-
   // File attachment state
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -591,7 +572,7 @@ export default function Home() {
   const handleStreamSubmit = async (overridePrompt?: string) => {
     const submittedPrompt = overridePrompt || prompt;
     const isCompare = comparisonMode;
-
+    
     // ── Reset state & initialise panels ──────────────────────────
     if (isCompare) {
       const initialPanels: Record<string, ModelPanel> = {};
@@ -687,6 +668,8 @@ export default function Home() {
                       chosenModel: data.routing.chosenModel || currentAutoModel,
                       intent: data.routing.intent,
                       category: data.routing.category,
+                      fitBreakdown: data.routing.fitBreakdown,
+                      scoring: data.routing.scoring,
                     },
                     response: "",
                     metadata: null,
@@ -1831,20 +1814,12 @@ export default function Home() {
                           backgroundSize: '20px 20px'
                         }}
                       >
-                        {/* Routing reason */}
+                        {/* Model Selection Card (history turn) */}
                         {autoTurnPanel.routing && autoTurnPanel.routing.mode === "auto" && (
-                          <div className="px-6 pt-3 pb-2 bg-white/40 backdrop-blur-sm relative">
-                            <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Auto-selected</span>
-                              <span className="text-xs font-bold text-gray-900 font-mono">
-                                {autoTurnPanel.routing.chosenModel ? getFriendlyModelName(autoTurnPanel.routing.chosenModel) : ""}
-                              </span>
-                            </div>
-                            {autoTurnPanel.routing.reason && (
-                              <p className="text-xs text-slate-600 leading-relaxed">{autoTurnPanel.routing.reason}</p>
-                            )}
-                          </div>
+                          <ModelSelectionCard
+                            modelName={autoTurnPanel.routing.chosenModel ? getFriendlyModelName(autoTurnPanel.routing.chosenModel) : ""}
+                            reason={autoTurnPanel.routing.reason || ""}
+                          />
                         )}
                         {/* Response */}
                         <div className="m-3 bg-white rounded-lg border border-gray-200/60 shadow-sm">
@@ -2023,42 +1998,13 @@ export default function Home() {
                       backgroundSize: '20px 20px'
                     }}
                   >
-                    {/* Execution Header */}
+                    {/* Model Selection Card */}
                     {autoPanel.routing && autoPanel.routing.mode === "auto" && (
-                      <div className="px-6 pt-4 pb-3 bg-white/40 backdrop-blur-sm relative">
-                        {/* Hairline gradient divider */}
-                        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
-                        
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                            <span className="text-gray-400 text-sm flex-shrink-0 mt-0.5">⚡</span>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Auto-selected</span>
-                                <span className="text-sm font-bold text-gray-900 font-mono">
-                                  {autoPanel.routing.chosenModel ? getFriendlyModelName(autoPanel.routing.chosenModel) : ""}
-                                </span>
-                                <span className="px-1.5 py-0.5 text-[10px] font-bold text-gray-600 bg-gray-100/80 border border-gray-300/50 rounded uppercase tracking-wider">
-                                  Routed
-                                </span>
-                              </div>
-                              
-                              {/* Full routing reason - always visible */}
-                              {/*
-                                ASYNC HYDRATION: Routing explanation updates asynchronously.
-                                Phase A (model dispatch) starts immediately. Phase B (TEXT_GIST + explanation)
-                                runs in parallel. If the explanation isn't ready yet, we show a placeholder
-                                that gets replaced when the routing_reason SSE event arrives.
-                              */}
-                              <div className="mt-2 rounded-lg border border-gray-200/60 bg-white/70 p-3 max-w-[900px]">
-                                <p className="text-xs text-slate-600 leading-relaxed">
-                                  {autoPanel.routing.reason || (isStreaming ? "Why this model was selected…" : "Analyzing your request to select the best model...")}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                      <ModelSelectionCard
+                        modelName={autoPanel.routing.chosenModel ? getFriendlyModelName(autoPanel.routing.chosenModel) : ""}
+                        reason={autoPanel.routing.reason || (isStreaming ? "Selecting the best model for your request..." : "Analyzing your request...")}
+                        isStreaming={isStreaming}
+                      />
                     )}
                     
                     {/* Response Content Panel */}

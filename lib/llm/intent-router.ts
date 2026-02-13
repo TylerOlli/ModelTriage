@@ -18,6 +18,15 @@ import {
   getAttachmentsGist,
   type AttachmentGist,
 } from "../attachments/gist-generator";
+import {
+  type FitBreakdown,
+  mapToDisplayScore,
+  calculateOverallFit,
+  createDefaultFitBreakdown,
+  type FitDimension,
+} from "./score-breakdown";
+import type { ScoringResult } from "./scoring-types";
+import { scoreForModel } from "./scoring-engine";
 
 export interface RoutingDecision {
   intent: "coding" | "writing" | "analysis" | "vision" | "unknown";
@@ -25,6 +34,8 @@ export interface RoutingDecision {
   chosenModel: ModelId;
   confidence: number; // 0..1
   reason: string;
+  fitBreakdown?: FitBreakdown;
+  scoring?: ScoringResult;
 }
 
 export interface AttachmentContext {
@@ -95,7 +106,7 @@ export class IntentRouter {
         );
         if (attachmentDecision) {
           console.log("Attachment-aware routing decision:", attachmentDecision);
-          return attachmentDecision;
+          return this.enrichWithScoring(attachmentDecision, prompt);
         }
       }
 
@@ -105,7 +116,7 @@ export class IntentRouter {
       const fastPathDecision = this.tryFastPathRouting(prompt);
       if (fastPathDecision) {
         console.log("Fast-path routing decision (skipped LLM classifier):", fastPathDecision);
-        return fastPathDecision;
+        return this.enrichWithScoring(fastPathDecision, prompt);
       }
 
       // FALLBACK: Traditional intent-based routing via LLM classifier
@@ -125,23 +136,39 @@ export class IntentRouter {
           category: decision.category,
         });
 
-        return {
+        return this.enrichWithScoring({
           ...decision,
           reason: customReason,
-        };
+        }, prompt);
       }
 
-      return decision;
+      return this.enrichWithScoring(decision, prompt);
     } catch (err) {
       console.error("Classifier failed:", err);
       // Fallback to gpt-5-mini on classifier failure
-      return {
+      const fallbackDecision: RoutingDecision = {
         intent: "unknown",
         category: "router_fallback",
         chosenModel: "gpt-5-mini",
         confidence: 0,
         reason: "Selected as a reliable default for this request.",
+        fitBreakdown: createDefaultFitBreakdown(),
       };
+      return this.enrichWithScoring(fallbackDecision, prompt);
+    }
+  }
+
+  /**
+   * Enrich a routing decision with Expected Success scoring.
+   * This is deterministic and adds <1ms to routing latency.
+   */
+  private enrichWithScoring(decision: RoutingDecision, prompt: string): RoutingDecision {
+    try {
+      const scoring = scoreForModel(prompt, decision.chosenModel);
+      return { ...decision, scoring };
+    } catch (err) {
+      console.error("Scoring engine error (non-fatal):", err);
+      return decision;
     }
   }
 
@@ -592,6 +619,7 @@ export class IntentRouter {
         chosenModel,
         confidence: 0.95,
         reason,
+        fitBreakdown: this.generateFitBreakdown("vision", isLightweight ? "vision_lightweight" : "vision_standard", chosenModel, prompt, context),
       };
     }
 
@@ -621,6 +649,7 @@ export class IntentRouter {
           chosenModel: MODEL_DEFAULTS.deepReasoningA,
           confidence: 0.9,
           reason,
+          fitBreakdown: this.generateFitBreakdown("coding", "code_complex", MODEL_DEFAULTS.deepReasoningA, prompt, context),
         };
       }
 
@@ -640,6 +669,7 @@ export class IntentRouter {
           chosenModel: MODEL_DEFAULTS.codePrimary, // claude-sonnet-4-5-20250929
           confidence: 0.9,
           reason,
+          fitBreakdown: this.generateFitBreakdown("coding", "code_uploaded_file", MODEL_DEFAULTS.codePrimary, prompt, context),
         };
       }
 
@@ -842,7 +872,14 @@ Output ONLY the JSON object, no other text.`;
     if (confidence < 0.5) {
       chosenModel = "gpt-5-mini";
       reason = "Selected GPT-5 Mini as a reliable default for general-purpose tasks.";
-      return { intent, category, chosenModel, confidence, reason };
+      return { 
+        intent, 
+        category, 
+        chosenModel, 
+        confidence, 
+        reason,
+        fitBreakdown: this.generateFitBreakdown(intent as any, category, chosenModel, "", undefined),
+      };
     }
 
     // If classifier returned a valid model and confidence is acceptable, use it
@@ -856,7 +893,14 @@ Output ONLY the JSON object, no other text.`;
       reason = isDetailedReason 
         ? classifierReason 
         : (fallbackReasons[category] || "Selected as the best match for this request.");
-      return { intent, category, chosenModel, confidence, reason };
+      return { 
+        intent, 
+        category, 
+        chosenModel, 
+        confidence, 
+        reason,
+        fitBreakdown: this.generateFitBreakdown(intent as any, category, chosenModel, "", undefined),
+      };
     }
 
     // Fallback logic for low confidence (0.5 <= confidence < 0.6) or invalid model
@@ -925,6 +969,7 @@ Output ONLY the JSON object, no other text.`;
       chosenModel,
       confidence,
       reason,
+      fitBreakdown: this.generateFitBreakdown(intent as any, category, chosenModel, "", undefined),
     };
   }
 
@@ -1191,6 +1236,116 @@ Your explanation:`;
       // Return fallback instead of throwing - ensures the reason is always sent via SSE
       return fallbackReason;
     }
+  }
+
+  /**
+   * Generate fit breakdown for a routing decision
+   */
+  private generateFitBreakdown(
+    intent: string,
+    category: string,
+    chosenModel: ModelId,
+    prompt: string,
+    attachmentContext?: AttachmentContext
+  ): FitBreakdown {
+    const promptLength = prompt.length;
+    const hasAttachments = attachmentContext && (attachmentContext.hasImages || attachmentContext.hasTextFiles);
+    
+    // Determine reasoning complexity (0-10)
+    const complexKeywords = /\b(algorithm|architecture|system\s+design|optimize|performance|scalability|tradeoff|compare|analyze)\b/i;
+    const isComplex = complexKeywords.test(prompt) || promptLength > 400;
+    const reasoningRaw = isComplex ? 8 : category.includes("complex") ? 9 : category.includes("quick") ? 5 : 7;
+    
+    // Determine output structure needs (0-10)
+    const structuredKeywords = /\b(json|yaml|xml|csv|table|list|format|structure)\b/i;
+    const needsStructure = structuredKeywords.test(prompt);
+    const outputRaw = needsStructure ? 9 : category.includes("review") ? 8 : category.includes("quick") ? 6 : 7;
+    
+    // Determine cost efficiency (0-10) - higher for cheaper models
+    const costRaw = chosenModel.includes("haiku") || chosenModel.includes("mini") || chosenModel.includes("flash") ? 9 : 
+                    chosenModel.includes("sonnet") || chosenModel.includes("pro") ? 7 : 6;
+    
+    // Determine speed fit (0-10) - higher for faster models  
+    const speedRaw = chosenModel.includes("haiku") || chosenModel.includes("mini") || chosenModel.includes("flash") ? 9 :
+                     chosenModel.includes("sonnet") ? 8 : 
+                     promptLength < 100 ? 7 : 6;
+    
+    const dimensions: FitDimension[] = [
+      {
+        key: "reasoningFit",
+        label: "Reasoning Fit",
+        raw: reasoningRaw,
+        display: mapToDisplayScore(reasoningRaw),
+        note: isComplex ? "Strong reasoning for complex tasks" : "Well-suited for this reasoning level",
+      },
+      {
+        key: "outputMatch",
+        label: "Output Match",
+        raw: outputRaw,
+        display: mapToDisplayScore(outputRaw),
+        note: needsStructure ? "Excellent structured output control" : "Good format alignment",
+      },
+      {
+        key: "costEfficiency",
+        label: "Cost Efficiency",
+        raw: costRaw,
+        display: mapToDisplayScore(costRaw),
+        note: costRaw >= 9 ? "Highly cost-effective choice" : "Balanced cost-quality ratio",
+      },
+      {
+        key: "speedFit",
+        label: "Speed Fit",
+        raw: speedRaw,
+        display: mapToDisplayScore(speedRaw),
+        note: speedRaw >= 9 ? "Very fast response time" : "Appropriate response speed",
+      },
+    ];
+    
+    // Add recency fit if prompt mentions recent/latest
+    const recencyKeywords = /\b(latest|recent|current|new|2026|2025|updated?)\b/i;
+    if (recencyKeywords.test(prompt)) {
+      const recencyRaw = chosenModel.includes("gpt-5") || chosenModel.includes("claude-") ? 8 : 6;
+      dimensions.push({
+        key: "recencyFit",
+        label: "Recency Fit",
+        raw: recencyRaw,
+        display: mapToDisplayScore(recencyRaw),
+        note: "Current knowledge for latest info",
+      });
+    }
+    
+    const overallFit = calculateOverallFit(dimensions);
+    
+    // Generate short explanation
+    const modelName = this.getModelDisplayName(chosenModel);
+    const shortWhy = category.includes("complex") 
+      ? `${modelName} excels at complex reasoning and architectural planning for this task.`
+      : category.includes("quick")
+      ? `${modelName} delivers fast, accurate results for straightforward tasks.`
+      : category.includes("review")
+      ? `${modelName} provides thorough analysis and quality assessment.`
+      : category.includes("high_stakes")
+      ? `${modelName} handles sensitive, nuanced content with precision.`
+      : `${modelName} offers balanced capabilities for this request.`;
+    
+    return {
+      shortWhy,
+      overallFit,
+      fitBreakdown: dimensions,
+    };
+  }
+
+  private getModelDisplayName(modelId: ModelId): string {
+    const names: Record<ModelId, string> = {
+      "gpt-5-mini": "GPT-5 Mini",
+      "gpt-5.2": "GPT-5.2",
+      "claude-opus-4-5-20251101": "Claude Opus 4.5",
+      "claude-sonnet-4-5-20250929": "Claude Sonnet 4.5",
+      "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
+      "gemini-2.5-flash": "Gemini 2.5 Flash",
+      "gemini-2.5-pro": "Gemini 2.5 Pro",
+    };
+    return names[modelId] || modelId;
   }
 }
 

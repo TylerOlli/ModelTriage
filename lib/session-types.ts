@@ -7,6 +7,8 @@
  */
 
 import type { DiffSummary } from "@/lib/diff";
+import type { FitBreakdown } from "@/lib/llm/score-breakdown";
+import type { ScoringResult } from "@/lib/llm/scoring-types";
 
 // ─── Metadata ───────────────────────────────────────────────────
 
@@ -33,6 +35,8 @@ export interface ModelPanelData {
     chosenModel?: string;
     intent?: string;
     category?: string;
+    fitBreakdown?: FitBreakdown;
+    scoring?: ScoringResult;
   } | null;
   response: string;
   metadata: ResponseMetadata | null;
