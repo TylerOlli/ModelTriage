@@ -19,6 +19,8 @@ export type TaskType =
   | "explain"
   | "research"
   | "creative"
+  | "math"
+  | "qa"
   | "general";
 
 export type StakesLevel = "low" | "medium" | "high";

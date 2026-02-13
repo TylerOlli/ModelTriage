@@ -211,6 +211,30 @@ export const TASK_WEIGHTS: Record<TaskType, TaskWeightProfile> = {
     recencyStrength: 0.13,
   },
 
+  math: {
+    reasoning: 0.50,               // Math demands strong reasoning above all
+    codeGeneration: 0.03,
+    debugging: 0.02,
+    structuredOutput: 0.15,        // Precise formatting of solutions
+    instructionFollowing: 0.15,    // Following the specific ask
+    speed: 0.05,
+    costEfficiency: 0.03,
+    recencyStrength: 0.07,
+  },
+
+  // QA: Simple factual questions that don't need premium models.
+  // Speed and cost are weighted heavily — get the answer fast and cheap.
+  qa: {
+    reasoning: 0.10,
+    codeGeneration: 0.02,
+    debugging: 0.02,
+    structuredOutput: 0.08,
+    instructionFollowing: 0.18,
+    speed: 0.28,                   // Fast answers matter for simple questions
+    costEfficiency: 0.27,          // No need for expensive models
+    recencyStrength: 0.05,
+  },
+
   // General: when the classifier can't confidently categorize,
   // lean toward quality (reasoning + instruction following) rather
   // than speed/cost. Better to over-deliver than pick a cheap model.

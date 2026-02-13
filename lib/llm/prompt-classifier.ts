@@ -70,6 +70,30 @@ const CREATIVE_PATTERNS = [
   /\b(landing\s+page|headline|tagline|slogan)\b/i,
 ];
 
+const MATH_PATTERNS = [
+  /\b(solve|calculate|compute|evaluate|simplify|derive|integrate|differentiate)\b/i,
+  /\b(equation|formula|expression|inequality|proof|theorem)\b/i,
+  /\b(probability|statistics|standard\s+deviation|variance|mean|median|regression)\b/i,
+  /\b(what('s|\s+is)\s+\d+\s*[\+\-\*\/\%\^]|how\s+much\s+is)\b/i,
+  /\b(percent|percentage|ratio|proportion|fraction)\b/i,
+  /\b(algebra|calculus|geometry|trigonometry|linear\s+algebra|matrix|matrices)\b/i,
+  /\b(logarithm|exponent|factorial|permutation|combination)\b/i,
+  /\b(graph\s+(the|this)|plot|chart\s+(the|this))\b/i,
+  /\b(optimize|maximize|minimize|find\s+the\s+(max|min|minimum|maximum))\b/i,
+];
+
+const QA_PATTERNS = [
+  /^(what|who|when|where|which|how\s+(many|much|old|long|far|tall))\b/i,
+  /\b(what\s+(is|are|was|were|does|did)\s+(the|a|an))\b/i,
+  /\b(who\s+(is|was|were|invented|created|discovered|founded))\b/i,
+  /\b(when\s+(did|was|were|is))\b/i,
+  /\b(where\s+(is|was|are|were|did|does|do))\b/i,
+  /\b(is\s+it\s+true\s+that|true\s+or\s+false)\b/i,
+  /\b(name\s+(the|a|some)|list\s+(the|all|some))\b/i,
+  /\b(define|definition\s+of)\b/i,
+  /\b(how\s+do\s+you\s+say|translate)\b/i,
+];
+
 const STACK_TRACE_PATTERNS = [
   /\b(at\s+\w+\.\w+\s*\()/,       // "at Module.func ("
   /\b(File\s+"[^"]+",\s+line\s+\d+)/i, // Python traceback
@@ -120,6 +144,8 @@ function detectTaskType(prompt: string): { taskType: TaskType; strength: number 
     explain: matchCount(prompt, EXPLAIN_PATTERNS),
     research: matchCount(prompt, RESEARCH_PATTERNS),
     creative: matchCount(prompt, CREATIVE_PATTERNS),
+    math: matchCount(prompt, MATH_PATTERNS),
+    qa: matchCount(prompt, QA_PATTERNS),
     general: 0,
   };
 
@@ -131,6 +157,20 @@ function detectTaskType(prompt: string): { taskType: TaskType; strength: number 
   // Boost code_gen if code language mentioned alongside generation keywords
   if (CODE_LANGUAGE_SIGNALS.test(prompt) && scores.code_gen > 0) {
     scores.code_gen += 1;
+  }
+
+  // QA disambiguation: if both qa and explain match, prefer explain
+  // for "how does X work" style questions (more depth needed).
+  // Pure factual questions ("what is X", "who invented Y") stay as qa.
+  if (scores.qa > 0 && scores.explain >= scores.qa) {
+    scores.qa = 0;
+  }
+
+  // QA disambiguation: if qa matches alongside code/debug/math, those
+  // are more specific and should win (e.g. "what is a closure" is explain,
+  // "what is 15% of 340" is math)
+  if (scores.qa > 0 && (scores.code_gen > 0 || scores.debug > 0 || scores.math > 0)) {
+    scores.qa = 0;
   }
 
   // Find the winning task type
@@ -162,14 +202,56 @@ function detectInputSignals(prompt: string): InputSignals {
   return { hasCode, hasStackTrace, strictFormat, longForm, concise, mentionsLatest };
 }
 
-function detectStakes(prompt: string): StakesLevel {
+/**
+ * Complexity-based stakes detection.
+ *
+ * Determines the consequence level of getting the answer wrong,
+ * using a hybrid of prompt complexity, task type, and input signals.
+ *
+ * Distribution target: ~40% low, ~45% medium, ~15% high
+ */
+function detectStakes(
+  prompt: string,
+  taskType: TaskType,
+  signals: InputSignals
+): StakesLevel {
+  let stakePoints = 0;
+
+  // ── Enterprise keyword boost (backward compatibility) ───────
   const highStakesHits = matchCount(prompt, HIGH_STAKES_PATTERNS);
-  if (highStakesHits >= 2) return "high";
-  if (highStakesHits >= 1) return "medium";
+  stakePoints += highStakesHits * 3;
 
-  // Long, complex prompts default to medium stakes
-  if (prompt.length > 600) return "medium";
+  // ── Task type signals ──────────────────────────────────────
+  // Math and debug have concretely wrong answers — higher stakes
+  if (taskType === "math") stakePoints += 2;
+  if (taskType === "debug") stakePoints += 2;
+  if (taskType === "refactor") stakePoints += 1;
+  if (taskType === "code_gen") stakePoints += 1;
+  // QA and creative are low-consequence by nature
+  if (taskType === "qa") stakePoints -= 1;
 
+  // ── Input signal signals ───────────────────────────────────
+  // Code in the prompt means the output will likely be executed
+  if (signals.hasCode) stakePoints += 2;
+  // Stack traces indicate a real bug — accuracy is critical
+  if (signals.hasStackTrace) stakePoints += 2;
+  // Strict format requirements demand precision
+  if (signals.strictFormat) stakePoints += 1;
+  // Multiple signals compound: code + stack trace = real issue
+  if (signals.hasCode && signals.hasStackTrace) stakePoints += 1;
+  // Code + strict format = needs to be precise AND structured
+  if (signals.hasCode && signals.strictFormat) stakePoints += 1;
+
+  // ── Prompt complexity ──────────────────────────────────────
+  // Longer prompts have more nuance and more that can go wrong
+  if (prompt.length > 800) stakePoints += 2;
+  else if (prompt.length > 300) stakePoints += 1;
+  // Very short prompts are inherently lower stakes
+  if (prompt.length < 80) stakePoints -= 1;
+
+  // ── Map to stakes level ────────────────────────────────────
+  if (stakePoints >= 5) return "high";
+  if (stakePoints >= 2) return "medium";
   return "low";
 }
 
@@ -197,7 +279,7 @@ function computeClassifierConfidence(
 export function classifyPrompt(prompt: string): PromptClassification {
   const { taskType, strength } = detectTaskType(prompt);
   const inputSignals = detectInputSignals(prompt);
-  const stakes = detectStakes(prompt);
+  const stakes = detectStakes(prompt, taskType, inputSignals);
   const recencyRequirement = inputSignals.mentionsLatest;
   const classifierConfidence = computeClassifierConfidence(strength, prompt);
 

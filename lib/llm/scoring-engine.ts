@@ -144,6 +144,16 @@ function computeModelScore(
     adjustedScore -= 6;
   }
 
+  // Penalty: math task with weak reasoning (math needs strong logical thinking)
+  if (classification.taskType === "math" && caps.reasoning < 0.7) {
+    adjustedScore -= 10;
+  }
+
+  // Bonus: math task with strong reasoning
+  if (classification.taskType === "math" && caps.reasoning >= 0.9) {
+    adjustedScore += 5;
+  }
+
   // Clamp 0–100
   adjustedScore = Math.max(0, Math.min(100, Math.round(adjustedScore)));
 
@@ -275,6 +285,8 @@ function generateShortWhy(
     explain: "explanations and analysis",
     research: "deep research and reasoning",
     creative: "creative writing and content",
+    math: "mathematical reasoning and calculations",
+    qa: "quick factual answers",
     general: "general-purpose tasks",
   };
 
