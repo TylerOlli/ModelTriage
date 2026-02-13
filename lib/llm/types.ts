@@ -8,8 +8,8 @@ export type ModelId =
   | "claude-opus-4-6"
   | "claude-sonnet-4-5-20250929"
   | "claude-haiku-4-5-20251001"
-  | "gemini-2.5-flash"
-  | "gemini-2.5-pro";
+  | "gemini-3-flash-preview"
+  | "gemini-3-pro-preview";
 
 export interface ImageAttachment {
   data: Buffer;

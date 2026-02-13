@@ -182,7 +182,7 @@ while (true) {
 import { streamGemini } from '@/lib/llm/providers/gemini';
 
 const request = { prompt: 'Hello!', images: [] };
-const response = streamGemini(request, 'gemini-2.5-flash');
+const response = streamGemini(request, 'gemini-3-flash-preview');
 
 // Stream chunks
 for await (const chunk of response.chunks) {

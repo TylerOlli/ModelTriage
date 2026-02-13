@@ -328,7 +328,7 @@ Verdict:
         : "Claude";
     }
 
-    // Convert "gemini-2.5-flash" to "Gemini 2.5 Flash"
+    // Convert "gemini-3-flash-preview" to "Gemini 3 Flash"
     if (model.startsWith("gemini-")) {
       const parts = model.split("-");
       return parts

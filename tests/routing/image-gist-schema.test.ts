@@ -35,7 +35,7 @@ The TypeScript code in the image implements user authentication...`;
       console.log(`  - Gist:`, gist);
       console.log(`  - Cleaned response starts with: "${cleanedResponse.substring(0, 50)}..."`);
       
-      const reason = generateRoutingReasonFromGist(gist, "Gemini 2.5 Flash");
+      const reason = generateRoutingReasonFromGist(gist, "Gemini 3 Flash");
       console.log(`  - Reason: ${reason}`);
       
       if (reason.includes("TypeScript") && reason.includes("authentication logic")) {
@@ -67,7 +67,7 @@ The code in the image appears to...`;
       console.log("✓ Successfully parsed low-certainty IMAGE_GIST");
       console.log(`  - Gist:`, gist);
       
-      const reason = generateRoutingReasonFromGist(gist, "Gemini 2.5 Flash");
+      const reason = generateRoutingReasonFromGist(gist, "Gemini 3 Flash");
       console.log(`  - Reason: ${reason}`);
       
       if (reason.includes("screenshot of code") && !reason.includes("unknown")) {
@@ -103,7 +103,7 @@ The terminal output shows an npm build error...`;
       console.log("✓ Successfully parsed terminal output IMAGE_GIST");
       console.log(`  - Gist:`, gist);
       
-      const reason = generateRoutingReasonFromGist(gist, "Gemini 2.5 Pro");
+      const reason = generateRoutingReasonFromGist(gist, "Gemini 3 Pro");
       console.log(`  - Reason: ${reason}`);
       
       // Simplified template: treats terminal as "bash code for X"
@@ -140,7 +140,7 @@ This UI shows a login form...`;
       console.log("✓ Successfully parsed UI screenshot IMAGE_GIST");
       console.log(`  - Gist:`, gist);
       
-      const reason = generateRoutingReasonFromGist(gist, "Gemini 2.5 Flash");
+      const reason = generateRoutingReasonFromGist(gist, "Gemini 3 Flash");
       console.log(`  - Reason: ${reason}`);
       
       // Simplified template: treats UI as "React code for X"
@@ -177,7 +177,7 @@ The diagram illustrates...`;
       console.log("✓ Successfully parsed diagram IMAGE_GIST");
       console.log(`  - Gist:`, gist);
       
-      const reason = generateRoutingReasonFromGist(gist, "Gemini 2.5 Pro");
+      const reason = generateRoutingReasonFromGist(gist, "Gemini 3 Pro");
       console.log(`  - Reason: ${reason}`);
       
       // Simplified template: treats diagram as "UML code for X"
@@ -228,7 +228,7 @@ This JavaScript code defines an API endpoint...`;
     const { gist } = parseImageGist(response);
     
     if (gist && gist.language === "JavaScript" && gist.certainty === "high") {
-      const reason = generateRoutingReasonFromGist(gist, "Gemini 2.5 Flash");
+      const reason = generateRoutingReasonFromGist(gist, "Gemini 3 Flash");
       console.log(`  - Reason: ${reason}`);
       
       if (reason.includes("JavaScript") && reason.includes("REST API endpoint handler")) {
@@ -257,7 +257,7 @@ The terminal shows some output...`;
     const { gist } = parseImageGist(response);
     
     if (gist && gist.certainty === "low") {
-      const reason = generateRoutingReasonFromGist(gist, "Gemini 2.5 Pro");
+      const reason = generateRoutingReasonFromGist(gist, "Gemini 3 Pro");
       console.log(`  - Reason: ${reason}`);
       
       // Simplified template: unknown language = generic code fallback

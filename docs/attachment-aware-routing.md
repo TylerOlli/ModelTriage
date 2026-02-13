@@ -21,7 +21,7 @@ Before this fix:
 ## Solution
 
 **Attachment-aware routing with clear escalation rules:**
-- **Screenshots → Gemini 2.5 Pro** (vision-first)
+- **Screenshots → Gemini 3 Pro** (vision-first)
 - **Code/text files → Claude Sonnet 4.5** (coding workhorse)
 - **Deep reasoning** only on complexity signals
 - **Fast models** for lightweight requests
@@ -54,7 +54,7 @@ export const MODEL_CAPABILITIES: Record<ModelId, ModelCapability> = {
     strengths: ["coding", "writing", "vision"],
     costTier: "medium",
   },
-  "gemini-2.5-pro": {
+  "gemini-3-pro-preview": {
     vision: true,
     tier: "balanced",
     strengths: ["vision", "coding", "reasoning"],
@@ -68,8 +68,8 @@ export const MODEL_CAPABILITIES: Record<ModelId, ModelCapability> = {
 
 ```typescript
 export const MODEL_DEFAULTS = {
-  visionPrimary: "gemini-2.5-pro",         // Best for screenshots
-  visionFast: "gemini-2.5-flash",          // Quick image analysis
+  visionPrimary: "gemini-3-pro-preview",         // Best for screenshots
+  visionFast: "gemini-3-flash-preview",          // Quick image analysis
   codePrimary: "claude-sonnet-4-5-20250929", // Best for code/text
   codeFast: "gpt-5-mini",                  // Quick code questions
   deepReasoningA: "gpt-5.2",               // Deep reasoning primary
@@ -104,14 +104,14 @@ if (context.hasImages) {
   
   // Choose model
   if (isLightweight) {
-    return "gemini-2.5-flash"; // Fast vision
+    return "gemini-3-flash-preview"; // Fast vision
   } else {
-    return "gemini-2.5-pro";   // Standard vision
+    return "gemini-3-pro-preview";   // Standard vision
   }
 }
 ```
 
-**Example:** "Describe this screenshot" + image.png → `gemini-2.5-pro`
+**Example:** "Describe this screenshot" + image.png → `gemini-3-pro-preview`
 
 ### Priority 2: Code/Text Files
 
@@ -178,7 +178,7 @@ Falls back to traditional intent-based routing (unchanged).
 
 ### When to Use Fast Models
 
-**Gemini 2.5 Flash:**
+**Gemini 3 Flash:**
 - Single screenshot
 - Short prompt (< 200 chars)
 - No other attachments
@@ -198,7 +198,7 @@ Falls back to traditional intent-based routing (unchanged).
 export function getComparisonModeDefaults(hasImages: boolean): ModelId[] {
   if (hasImages) {
     // Vision: Gemini Pro + deep reasoning for second opinion
-    return ["gemini-2.5-pro", "gpt-5.2"];
+    return ["gemini-3-pro-preview", "gpt-5.2"];
   } else {
     // Code/text: Sonnet + GPT-5.2
     return ["claude-sonnet-4-5-20250929", "gpt-5.2"];
@@ -288,7 +288,7 @@ async route(
 ```
 hasImages: true
 → visionPrimary
-→ gemini-2.5-pro
+→ gemini-3-pro-preview
 → Reason: "Best fit for analyzing screenshots and extracting code accurately."
 ```
 
@@ -355,7 +355,7 @@ isLightweight: false
 ### After Attachment-Aware Routing
 
 **Screenshots:**
-- Route to Gemini 2.5 Pro: **Medium** ($1.25 per 1M tokens)
+- Route to Gemini 3 Pro: **Medium** ($1.25 per 1M tokens)
 - 92% cost reduction for vision tasks
 
 **Code files:**
@@ -406,7 +406,7 @@ export function supportsVision(modelId: string): boolean {
 ### Test Cases
 
 1. **Image attachment → Vision model**
-   - hasImages: true → gemini-2.5-pro
+   - hasImages: true → gemini-3-pro-preview
 
 2. **Code file → Code model**
    - hasTextFiles: true, textFileTypes: [".ts"] → claude-sonnet-4-5-20250929
@@ -415,7 +415,7 @@ export function supportsVision(modelId: string): boolean {
    - totalTextChars: 15000 → gpt-5.2
 
 4. **Lightweight request → Fast model**
-   - promptChars: 150, imageCount: 1 → gemini-2.5-flash
+   - promptChars: 150, imageCount: 1 → gemini-3-flash-preview
 
 5. **No attachments → Traditional routing**
    - No attachmentContext → intent-based
@@ -424,7 +424,7 @@ export function supportsVision(modelId: string): boolean {
 
 **Upload a screenshot of code:**
 ```
-Expected: gemini-2.5-pro
+Expected: gemini-3-pro-preview
 Check logs: "Attachment-aware routing decision"
 ```
 

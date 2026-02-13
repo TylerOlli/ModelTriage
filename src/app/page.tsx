@@ -33,8 +33,8 @@ function getFriendlyModelName(modelId: string): string {
     "claude-opus-4-6": "Claude Opus 4.6",
     "claude-sonnet-4-5-20250929": "Claude Sonnet 4.5",
     "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
-    "gemini-2.5-flash": "Gemini 2.5 Flash",
-    "gemini-2.5-pro": "Gemini 2.5 Pro",
+    "gemini-3-flash-preview": "Gemini 3 Flash",
+    "gemini-3-pro-preview": "Gemini 3 Pro",
   };
   return modelMap[modelId] || modelId;
 }
@@ -203,13 +203,13 @@ export default function Home() {
       description: "Fast / Low cost",
     },
     {
-      id: "gemini-2.5-flash",
-      label: "Gemini 2.5 Flash",
+      id: "gemini-3-flash-preview",
+      label: "Gemini 3 Flash",
       description: "Fast and efficient",
     },
     {
-      id: "gemini-2.5-pro",
-      label: "Gemini 2.5 Pro",
+      id: "gemini-3-pro-preview",
+      label: "Gemini 3 Pro",
       description: "Advanced capabilities",
     },
   ];
@@ -823,7 +823,7 @@ export default function Home() {
                         userIntent = "identify issues and fixes";
                       }
 
-                      const modelDisplayName = "Gemini 2.5 Flash";
+                      const modelDisplayName = "Gemini 3 Flash";
                       let newReason = "";
                       if (gist.certainty === "high" && gist.language && gist.language !== "unknown" && gist.purpose && gist.purpose !== "unknown") {
                         newReason = `This screenshot shows ${gist.language} code that ${gist.purpose}, so ${modelDisplayName} is a strong fit to accurately read code from images and ${userIntent}.`;

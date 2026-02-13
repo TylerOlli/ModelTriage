@@ -442,7 +442,7 @@ export class IntentRouter {
     }
 
     // No strong deterministic signal — fall back to LLM classifier.
-    // Gemini models (gemini-2.5-flash, gemini-2.5-pro) are intentionally absent
+    // Gemini models (gemini-3-flash-preview, gemini-3-pro-preview) are intentionally absent
     // from the fast-path. They serve as low-confidence alternatives in the LLM
     // classifier's routeByCategory() fallback (confidence < 0.6). Since the
     // fast-path only fires for high-confidence matches (≥0.86), Gemini selection
@@ -475,8 +475,8 @@ export class IntentRouter {
     
     // Model-specific capabilities
     const modelCapabilities: Record<string, string> = {
-      "gemini-2.5-pro": "Gemini 2.5 Pro is highly effective at",
-      "gemini-2.5-flash": "Gemini 2.5 Flash is well-suited for quickly",
+      "gemini-3-pro-preview": "Gemini 3 Pro is highly effective at",
+      "gemini-3-flash-preview": "Gemini 3 Flash is well-suited for quickly",
       "gpt-5.2": "GPT-5.2 excels at",
       "claude-sonnet-4-5-20250929": "Claude Sonnet 4.5 is well-suited for",
     };
@@ -530,10 +530,10 @@ export class IntentRouter {
       ? "Claude Opus 4.6"
       : chosenModel.includes("gpt-5-mini")
       ? "GPT-5 Mini"
-      : chosenModel.includes("gemini-2.5-pro")
-      ? "Gemini 2.5 Pro"
-      : chosenModel.includes("gemini-2.5-flash")
-      ? "Gemini 2.5 Flash"
+      : chosenModel.includes("gemini-3-pro-preview")
+      ? "Gemini 3 Pro"
+      : chosenModel.includes("gemini-3-flash-preview")
+      ? "Gemini 3 Flash"
       : chosenModel.includes("haiku")
       ? "Claude Haiku 4.5"
       : "the selected model";
@@ -781,45 +781,45 @@ Routing Rules (Primary → Alternative):
 CODING:
 - coding_quick (small functions, snippets, type fixes)
   Primary: claude-sonnet-4-5-20250929 (confidence ≥ 0.6)
-  Alternative: gemini-2.5-flash (confidence < 0.6)
+  Alternative: gemini-3-flash-preview (confidence < 0.6)
 
 - coding_review (refactor, PR review, explain code)
   Primary: claude-opus-4-6 (confidence ≥ 0.6)
-  Alternative: gemini-2.5-pro (confidence < 0.6)
+  Alternative: gemini-3-pro-preview (confidence < 0.6)
 
 - coding_debug (stack traces, errors, logs)
   Primary: gpt-5.2 (confidence ≥ 0.6)
-  Alternative: gemini-2.5-pro (confidence < 0.6)
+  Alternative: gemini-3-pro-preview (confidence < 0.6)
 
 - coding_complex_impl (algorithms, performance, system design)
   Primary: gpt-5.2 (confidence ≥ 0.6)
-  Alternative: gemini-2.5-pro (confidence < 0.6)
+  Alternative: gemini-3-pro-preview (confidence < 0.6)
 
 WRITING:
 - writing_light (summarize, shorten, casual rewrite)
   Primary: claude-haiku-4-5-20251001 (confidence ≥ 0.6)
-  Alternative: gemini-2.5-flash (confidence < 0.6)
+  Alternative: gemini-3-flash-preview (confidence < 0.6)
 
 - writing_standard (marketing, blog, landing pages)
   Primary: claude-sonnet-4-5-20250929 (confidence ≥ 0.6)
-  Alternative: gemini-2.5-pro (confidence < 0.6)
+  Alternative: gemini-3-pro-preview (confidence < 0.6)
 
 - writing_high_stakes (executive, public statements, sensitive)
   Primary: claude-opus-4-6 (confidence ≥ 0.6)
-  Alternative: gemini-2.5-pro (confidence < 0.6, fallback only)
+  Alternative: gemini-3-pro-preview (confidence < 0.6, fallback only)
 
 ANALYSIS:
 - analysis_standard (compare options, basic reasoning)
   Primary: gpt-5-mini (confidence ≥ 0.6)
-  Alternative: gemini-2.5-flash (confidence < 0.6)
+  Alternative: gemini-3-flash-preview (confidence < 0.6)
 
 - analysis_complex (deep tradeoffs, multi-step reasoning)
   Primary: gpt-5.2 (confidence ≥ 0.6)
-  Alternative: gemini-2.5-pro (confidence < 0.6)
+  Alternative: gemini-3-pro-preview (confidence < 0.6)
 
 Cost-awareness:
-- Prefer gemini-2.5-flash over gemini-2.5-pro when both viable
-- Do not select gemini-2.5-pro for trivial/low-confidence prompts
+- Prefer gemini-3-flash-preview over gemini-3-pro-preview when both viable
+- Do not select gemini-3-pro-preview for trivial/low-confidence prompts
 - If confidence < 0.5, default to gpt-5-mini
 
 Required JSON format:
@@ -915,8 +915,8 @@ Output ONLY the JSON object, no other text.`;
       "claude-opus-4-6",
       "claude-sonnet-4-5-20250929",
       "claude-haiku-4-5-20251001",
-      "gemini-2.5-flash",
-      "gemini-2.5-pro",
+      "gemini-3-flash-preview",
+      "gemini-3-pro-preview",
     ];
 
     // Fallback reason mapping (used only when classifier reason is missing or too short)
@@ -982,49 +982,49 @@ Output ONLY the JSON object, no other text.`;
     // Coding intent routing
     if (intent === "coding") {
       if (category === "coding_quick") {
-        chosenModel = "gemini-2.5-flash";
-        reason = isDetailedReason ? classifierReason : "This coding question is best suited for Gemini 2.5 Flash because it's fast and effective at quick code generation and snippets.";
+        chosenModel = "gemini-3-flash-preview";
+        reason = isDetailedReason ? classifierReason : "This coding question is best suited for Gemini 3 Flash because it's fast and effective at quick code generation and snippets.";
       } else if (category === "coding_review") {
-        chosenModel = "gemini-2.5-pro";
-        reason = isDetailedReason ? classifierReason : "This code review task is best suited for Gemini 2.5 Pro because it has strong capabilities for analyzing and refactoring code.";
+        chosenModel = "gemini-3-pro-preview";
+        reason = isDetailedReason ? classifierReason : "This code review task is best suited for Gemini 3 Pro because it has strong capabilities for analyzing and refactoring code.";
       } else if (category === "coding_debug") {
-        chosenModel = "gemini-2.5-pro";
-        reason = isDetailedReason ? classifierReason : "This debugging request is best suited for Gemini 2.5 Pro because it excels at systematic error analysis and tracing issues.";
+        chosenModel = "gemini-3-pro-preview";
+        reason = isDetailedReason ? classifierReason : "This debugging request is best suited for Gemini 3 Pro because it excels at systematic error analysis and tracing issues.";
       } else if (category === "coding_complex_impl") {
-        chosenModel = "gemini-2.5-pro";
-        reason = isDetailedReason ? classifierReason : "This complex implementation task is best suited for Gemini 2.5 Pro because it has strong algorithm design and reasoning capabilities.";
+        chosenModel = "gemini-3-pro-preview";
+        reason = isDetailedReason ? classifierReason : "This complex implementation task is best suited for Gemini 3 Pro because it has strong algorithm design and reasoning capabilities.";
       } else {
         // Unknown coding category
-        chosenModel = "gemini-2.5-flash";
-        reason = isDetailedReason ? classifierReason : "This programming question is best suited for Gemini 2.5 Flash because it's fast and reliable for general code tasks.";
+        chosenModel = "gemini-3-flash-preview";
+        reason = isDetailedReason ? classifierReason : "This programming question is best suited for Gemini 3 Flash because it's fast and reliable for general code tasks.";
       }
     }
     // Writing intent routing
     else if (intent === "writing") {
       if (category === "writing_light") {
-        chosenModel = "gemini-2.5-flash";
-        reason = isDetailedReason ? classifierReason : "This lightweight writing task is best suited for Gemini 2.5 Flash because it's fast and efficient at summaries and casual rewrites.";
+        chosenModel = "gemini-3-flash-preview";
+        reason = isDetailedReason ? classifierReason : "This lightweight writing task is best suited for Gemini 3 Flash because it's fast and efficient at summaries and casual rewrites.";
       } else if (category === "writing_standard") {
-        chosenModel = "gemini-2.5-pro";
-        reason = isDetailedReason ? classifierReason : "This writing task is best suited for Gemini 2.5 Pro because it produces polished, professional-quality content.";
+        chosenModel = "gemini-3-pro-preview";
+        reason = isDetailedReason ? classifierReason : "This writing task is best suited for Gemini 3 Pro because it produces polished, professional-quality content.";
       } else if (category === "writing_high_stakes") {
-        chosenModel = "gemini-2.5-pro";
-        reason = isDetailedReason ? classifierReason : "This high-stakes communication task is best suited for Gemini 2.5 Pro because it handles nuanced, sensitive writing with care.";
+        chosenModel = "gemini-3-pro-preview";
+        reason = isDetailedReason ? classifierReason : "This high-stakes communication task is best suited for Gemini 3 Pro because it handles nuanced, sensitive writing with care.";
       } else {
         // Unknown writing category
-        chosenModel = "gemini-2.5-flash";
-        reason = isDetailedReason ? classifierReason : "This writing request is best suited for Gemini 2.5 Flash because it's balanced and effective for clear, concise content.";
+        chosenModel = "gemini-3-flash-preview";
+        reason = isDetailedReason ? classifierReason : "This writing request is best suited for Gemini 3 Flash because it's balanced and effective for clear, concise content.";
       }
     }
     // Analysis intent routing
     else if (intent === "analysis") {
       if (category === "analysis_complex") {
-        chosenModel = "gemini-2.5-pro";
-        reason = isDetailedReason ? classifierReason : "This complex analysis task is best suited for Gemini 2.5 Pro because it has strong deep reasoning and multi-step analysis abilities.";
+        chosenModel = "gemini-3-pro-preview";
+        reason = isDetailedReason ? classifierReason : "This complex analysis task is best suited for Gemini 3 Pro because it has strong deep reasoning and multi-step analysis abilities.";
       } else {
         // analysis_standard or unknown
-        chosenModel = "gemini-2.5-flash";
-        reason = isDetailedReason ? classifierReason : "This analytical question is best suited for Gemini 2.5 Flash because it provides clear, efficient reasoning for standard research tasks.";
+        chosenModel = "gemini-3-flash-preview";
+        reason = isDetailedReason ? classifierReason : "This analytical question is best suited for Gemini 3 Flash because it provides clear, efficient reasoning for standard research tasks.";
       }
     }
     // Unknown intent
@@ -1066,8 +1066,8 @@ Output ONLY the JSON object, no other text.`;
       "claude-opus-4-6": "Claude Opus 4.6",
       "claude-sonnet-4-5-20250929": "Claude Sonnet 4.5",
       "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
-      "gemini-2.5-flash": "Gemini 2.5 Flash",
-      "gemini-2.5-pro": "Gemini 2.5 Pro",
+      "gemini-3-flash-preview": "Gemini 3 Flash",
+      "gemini-3-pro-preview": "Gemini 3 Pro",
     };
 
     const modelDisplayName = modelDisplayNames[chosenModel] || chosenModel;
@@ -1412,8 +1412,8 @@ Your explanation:`;
       "claude-opus-4-6": "Claude Opus 4.6",
       "claude-sonnet-4-5-20250929": "Claude Sonnet 4.5",
       "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
-      "gemini-2.5-flash": "Gemini 2.5 Flash",
-      "gemini-2.5-pro": "Gemini 2.5 Pro",
+      "gemini-3-flash-preview": "Gemini 3 Flash",
+      "gemini-3-pro-preview": "Gemini 3 Pro",
     };
     return names[modelId] || modelId;
   }

@@ -254,7 +254,7 @@ export const TodoList = () => {
     });
 
     if (
-      decision.chosenModel === "gemini-2.5-pro" &&
+      decision.chosenModel === "gemini-3-pro-preview" &&
       decision.intent === "vision" &&
       decision.reason?.includes("screenshot of code")
     ) {
@@ -262,7 +262,7 @@ export const TodoList = () => {
       testsPassed++;
     } else {
       throw new Error(
-        `Expected gemini-2.5-pro with code-aware reason, got ${decision.chosenModel}: ${decision.reason}`
+        `Expected gemini-3-pro-preview with code-aware reason, got ${decision.chosenModel}: ${decision.reason}`
       );
     }
   } catch (err) {
@@ -296,14 +296,14 @@ export const TodoList = () => {
     });
 
     if (
-      decision.chosenModel === "gemini-2.5-flash" &&
+      decision.chosenModel === "gemini-3-flash-preview" &&
       decision.category === "vision_lightweight"
     ) {
       console.log("  ✓ Correctly used Gemini Flash for lightweight image\n");
       testsPassed++;
     } else {
       throw new Error(
-        `Expected gemini-2.5-flash with vision_lightweight, got ${decision.chosenModel}`
+        `Expected gemini-3-flash-preview with vision_lightweight, got ${decision.chosenModel}`
       );
     }
   } catch (err) {
@@ -336,12 +336,12 @@ export const TodoList = () => {
       intent: decision.intent,
     });
 
-    if (decision.chosenModel === "gemini-2.5-pro" && decision.intent === "vision") {
+    if (decision.chosenModel === "gemini-3-pro-preview" && decision.intent === "vision") {
       console.log("  ✓ Correctly prioritized vision for mixed attachments\n");
       testsPassed++;
     } else {
       throw new Error(
-        `Expected gemini-2.5-pro with vision intent, got ${decision.chosenModel}`
+        `Expected gemini-3-pro-preview with vision intent, got ${decision.chosenModel}`
       );
     }
   } catch (err) {

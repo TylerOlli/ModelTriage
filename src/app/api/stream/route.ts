@@ -157,7 +157,7 @@ async function* streamProvider(
     modelId === "claude-haiku-4-5-20251001"
   ) {
     streamFn = streamAnthropic(llmRequest, modelId);
-  } else if (modelId === "gemini-2.5-flash" || modelId === "gemini-2.5-pro") {
+  } else if (modelId === "gemini-3-flash-preview" || modelId === "gemini-3-pro-preview") {
     streamFn = streamGemini(llmRequest, modelId);
   } else {
     yield formatSSE("error", {
@@ -522,7 +522,7 @@ ${prompt}`;
           if (visionModels.length === 0) {
             return new Response(
               JSON.stringify({
-                error: `This request includes an image attachment and requires a vision-capable model. Enable Verify/Advanced and select a vision model (GPT-5.2, Claude Opus 4.5, Claude Sonnet 4.5, Gemini 2.5 Flash, or Gemini 2.5 Pro), or remove the image.`,
+                error: `This request includes an image attachment and requires a vision-capable model. Enable Verify/Advanced and select a vision model (GPT-5.2, Claude Opus 4.5, Claude Sonnet 4.5, Gemini 3 Flash, or Gemini 3 Pro), or remove the image.`,
               }),
               {
                 status: 400,
@@ -824,10 +824,10 @@ ${prompt}`;
                               const { gist, cleanedResponse, parseError } = parseImageGist(newResponse);
                               
                               if (gist) {
-                                const modelDisplayName = modelId.includes("gemini-2.5-flash") 
-                                  ? "Gemini 2.5 Flash"
-                                  : modelId.includes("gemini-2.5-pro")
-                                  ? "Gemini 2.5 Pro"
+                                const modelDisplayName = modelId.includes("gemini-3-flash-preview") 
+                                  ? "Gemini 3 Flash"
+                                  : modelId.includes("gemini-3-pro-preview")
+                                  ? "Gemini 3 Pro"
                                   : modelId;
                                 
                                 const improvedReason = generateRoutingReasonFromGist(gist, modelDisplayName);

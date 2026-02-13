@@ -31,7 +31,7 @@ async function runTests() {
   // Test 1: Placeholder with "snippet or file"
   try {
     console.log("Test 1: Detect placeholder with 'snippet or file'");
-    const reason = "This is screenshot of code showing code snippet or file, and Gemini 2.5 Pro is well-suited for extracting code from images.";
+    const reason = "This is screenshot of code showing code snippet or file, and Gemini 3 Pro is well-suited for extracting code from images.";
     
     const isPlaceholder = isPlaceholderImageReason(reason);
     
@@ -50,7 +50,7 @@ async function runTests() {
   // Test 2: Placeholder with "visual content"
   try {
     console.log("Test 2: Detect placeholder with 'visual content'");
-    const reason = "This is image showing visual content, and Gemini 2.5 Flash is well-suited for quickly interpreting visual information.";
+    const reason = "This is image showing visual content, and Gemini 3 Flash is well-suited for quickly interpreting visual information.";
     
     const isPlaceholder = isPlaceholderImageReason(reason);
     
@@ -69,7 +69,7 @@ async function runTests() {
   // Test 3: IMAGE_GIST-derived reason (NOT a placeholder)
   try {
     console.log("Test 3: IMAGE_GIST-derived reason is NOT a placeholder");
-    const reason = "This screenshot shows TypeScript code for authentication logic, and Gemini 2.5 Flash is well-suited for extracting and interpreting code from images.";
+    const reason = "This screenshot shows TypeScript code for authentication logic, and Gemini 3 Flash is well-suited for extracting and interpreting code from images.";
     
     const isPlaceholder = isPlaceholderImageReason(reason);
     
@@ -88,7 +88,7 @@ async function runTests() {
   // Test 4: Another IMAGE_GIST-derived reason (NOT a placeholder)
   try {
     console.log("Test 4: IMAGE_GIST-derived reason with language only");
-    const reason = "This screenshot shows JavaScript code, and Gemini 2.5 Flash is well-suited for extracting and interpreting code from images.";
+    const reason = "This screenshot shows JavaScript code, and Gemini 3 Flash is well-suited for extracting and interpreting code from images.";
     
     const isPlaceholder = isPlaceholderImageReason(reason);
     
@@ -107,7 +107,7 @@ async function runTests() {
   // Test 5: Generic fallback (edge case - NOT a placeholder)
   try {
     console.log("Test 5: Generic fallback is NOT technically a placeholder");
-    const reason = "This request includes a screenshot of code, and Gemini 2.5 Flash is well-suited for extracting and interpreting code from images.";
+    const reason = "This request includes a screenshot of code, and Gemini 3 Flash is well-suited for extracting and interpreting code from images.";
     
     const isPlaceholder = isPlaceholderImageReason(reason);
     
@@ -126,7 +126,7 @@ async function runTests() {
   // Test 6: Placeholder with "code snippet"
   try {
     console.log("Test 6: Detect placeholder with 'code snippet'");
-    const reason = "This screenshot shows a code snippet, and Gemini 2.5 Pro is effective at reading code from images.";
+    const reason = "This screenshot shows a code snippet, and Gemini 3 Pro is effective at reading code from images.";
     
     const isPlaceholder = isPlaceholderImageReason(reason);
     

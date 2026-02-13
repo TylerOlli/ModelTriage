@@ -48,13 +48,13 @@ export const MODEL_CAPABILITIES: Record<ModelId, ModelCapability> = {
     strengths: ["reasoning", "writing", "vision", "coding"],
     costTier: "high",
   },
-  "gemini-2.5-flash": {
+  "gemini-3-flash-preview": {
     vision: true,
     tier: "fast",
     strengths: ["vision", "coding"],
     costTier: "low",
   },
-  "gemini-2.5-pro": {
+  "gemini-3-pro-preview": {
     vision: true,
     tier: "balanced",
     strengths: ["vision", "coding", "reasoning"],
@@ -66,8 +66,8 @@ export const MODEL_CAPABILITIES: Record<ModelId, ModelCapability> = {
  * Default model selections for different use cases
  */
 export const MODEL_DEFAULTS = {
-  visionPrimary: "gemini-2.5-pro" as ModelId, // Best for screenshots/images
-  visionFast: "gemini-2.5-flash" as ModelId, // Quick image analysis
+  visionPrimary: "gemini-3-pro-preview" as ModelId, // Best for screenshots/images
+  visionFast: "gemini-3-flash-preview" as ModelId, // Quick image analysis
   codePrimary: "claude-sonnet-4-5-20250929" as ModelId, // Best for code/text
   codeFast: "gpt-5-mini" as ModelId, // Quick code questions
   deepReasoningA: "gpt-5.2" as ModelId, // Deep reasoning primary

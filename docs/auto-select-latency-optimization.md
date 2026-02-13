@@ -99,7 +99,7 @@ The full routing evaluation order:
 
 ```
 1. Attachment-aware routing (deterministic, instant)
-   → Images: gemini-2.5-flash or gemini-2.5-pro
+   → Images: gemini-3-flash-preview or gemini-3-pro-preview
    → Code files: claude-sonnet-4-5 or gpt-5.2
    → Confidence: 0.9-0.95
 

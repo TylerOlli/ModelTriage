@@ -50,7 +50,7 @@ This is the **MVP (Minimum Viable Product)** implementation. The following featu
   - Images: 5MB max per file, 2 images max per request
   - Automatic truncation and summarization to prevent cost overruns
 - **Smart routing**:
-  - Screenshots → **Gemini 2.5 Pro** (vision-optimized, 92% cost reduction vs Opus)
+  - Screenshots → **Gemini 3 Pro** (vision-optimized, 92% cost reduction vs Opus)
   - Code/text files → **Claude Sonnet 4.5** (coding workhorse, 80% cost reduction vs Opus)
   - Deep reasoning (Opus, GPT-5.2) only on complexity signals
   - Fast models (Gemini Flash, GPT-5-mini) for lightweight requests

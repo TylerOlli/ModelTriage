@@ -47,8 +47,8 @@ All attachments are processed server-side with automatic truncation, compression
   - `gpt-5.2`
   - `claude-opus-4-6`
   - `claude-sonnet-4-5-20250929`
-  - `gemini-2.5-flash`
-  - `gemini-2.5-pro`
+  - `gemini-3-flash-preview`
+  - `gemini-3-pro-preview`
 - In auto-routing mode: automatically falls back to a vision-capable model if images are attached
 - In Comparison/Advanced mode: filters to only vision-capable models, or returns an error if none are selected
 
@@ -129,7 +129,7 @@ const fileInputRef = useRef<HTMLInputElement>(null);
 ### Image Attachment
 
 1. Attach an image file
-2. If in auto-routing mode: automatically routed to a vision-capable model (e.g., `gemini-2.5-flash`)
+2. If in auto-routing mode: automatically routed to a vision-capable model (e.g., `gemini-3-flash-preview`)
 3. If in Comparison mode: only vision-capable selected models will receive the image
 
 ### Mixed Attachments
@@ -279,8 +279,8 @@ export const VISION_CAPABLE_MODELS: ModelId[] = [
   "gpt-5.2",
   "claude-opus-4-6",
   "claude-sonnet-4-5-20250929",
-  "gemini-2.5-flash",
-  "gemini-2.5-pro",
+  "gemini-3-flash-preview",
+  "gemini-3-pro-preview",
 ];
 ```
 

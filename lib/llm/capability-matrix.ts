@@ -52,9 +52,9 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
     },
   },
 
-  "gemini-2.5-flash": {
-    id: "gemini-2.5-flash",
-    displayName: "Gemini 2.5 Flash",
+  "gemini-3-flash-preview": {
+    id: "gemini-3-flash-preview",
+    displayName: "Gemini 3 Flash",
     provider: "Google",
     capabilities: {
       reasoning: 0.48,         // Slightly better than GPT-5 Mini
@@ -87,9 +87,9 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
     },
   },
 
-  "gemini-2.5-pro": {
-    id: "gemini-2.5-pro",
-    displayName: "Gemini 2.5 Pro",
+  "gemini-3-pro-preview": {
+    id: "gemini-3-pro-preview",
+    displayName: "Gemini 3 Pro",
     provider: "Google",
     capabilities: {
       reasoning: 0.75,         // Strong reasoning

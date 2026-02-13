@@ -192,7 +192,7 @@
   - Bypass lightweight prompt detection
 - When images are uploaded:
   - Only route to vision-capable models
-  - Prefer vision-optimized models (Gemini 2.5 Pro, Claude Opus 4.5)
+  - Prefer vision-optimized models (Gemini 3 Pro, Claude Opus 4.5)
 - The system must generate text gists for better routing decisions:
   - Analyze file content and prompt together
   - Use gist to inform model selection

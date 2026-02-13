@@ -274,7 +274,7 @@ The application integrates with three major LLM providers:
 - Used for: Code analysis, writing, detailed responses
 
 **Google Gemini:**
-- Models: `gemini-2.5-flash` (fast), `gemini-2.5-pro` (quality)
+- Models: `gemini-3-flash-preview` (fast), `gemini-3-pro-preview` (quality)
 - Used for: Vision tasks (screenshots), multimodal requests
 - ✅ **Streaming simulation** - behaves like real providers (async chunks)
 - ✅ **Standard interface** - implements the `Provider` interface that real providers will use
