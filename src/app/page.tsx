@@ -1953,8 +1953,7 @@ export default function Home() {
                       if (streamingStage === "streaming") return "Starting response\u2026";
                       const chosen = autoPanel?.routing?.chosenModel;
                       if (chosen) {
-                        const label = chosen.includes("gemini") ? "Gemini" : chosen.includes("claude") ? "Claude" : chosen.includes("gpt") ? "GPT" : chosen;
-                        return `Dispatching to ${label}\u2026`;
+                        return `Dispatching to ${getFriendlyModelName(chosen)}\u2026`;
                       }
                       return "Selecting model\u2026";
                     })()}
