@@ -59,57 +59,61 @@ export async function POST(request: NextRequest) {
     const summary = await diffAnalyzer.analyze(responses);
 
     // ── Fire-and-forget: persist compare session ──────────────
-    // Now includes shadow classification, routing, and scoring
-    // so compare rows have the same data density as auto-select rows.
+    // The entire block runs AFTER the response is returned.
+    // Shadow routing involves an LLM call (1-5s) which must NOT
+    // block the user from seeing the comparison summary.
+    //
+    // Classification (regex) and scoring (math) are instant.
+    // Only intentRouter.route() is slow — it's an LLM call purely
+    // for analytics, not for the user experience.
     if (anonymousId && prompt) {
-      // All of this is fast and deterministic (no LLM calls):
-      // - classifyPrompt: regex-based, microseconds
-      // - intentRouter.route: may involve LLM but we wrap in try/catch
-      // - scoreForModel: pure math, microseconds
+      const modelsCompared = responses.map((r) => r.model);
 
-      let classification;
-      let shadowRouting;
-      let shadowScoring;
+      (async () => {
+        let classification;
+        let shadowRouting;
+        let shadowScoring;
 
-      try {
-        // 1. Classify the prompt (deterministic, instant)
-        classification = classifyPrompt(prompt);
+        try {
+          // 1. Classify the prompt (deterministic, microseconds)
+          classification = classifyPrompt(prompt);
 
-        // 2. Shadow route — what would auto-select have picked?
-        const decision = await intentRouter.route(prompt, false);
-        shadowRouting = {
-          intent: decision.intent,
-          category: decision.category,
-          chosenModel: decision.chosenModel,
-          confidence: decision.confidence,
-        };
+          // 2. Shadow route — what would auto-select have picked? (LLM call, 1-5s)
+          const decision = await intentRouter.route(prompt, false);
+          shadowRouting = {
+            intent: decision.intent,
+            category: decision.category,
+            chosenModel: decision.chosenModel,
+            confidence: decision.confidence,
+          };
 
-        // 3. Shadow score — Expected Success for the router's pick
-        shadowScoring = scoreForModel(prompt, decision.chosenModel as ModelId);
-      } catch (err) {
-        // Non-fatal — shadow routing/scoring is best-effort.
-        // Classification alone is still valuable.
-        console.error("[DB] Shadow routing failed (non-fatal):", {
-          error: err instanceof Error ? err.message : err,
+          // 3. Shadow score — Expected Success for the router's pick (microseconds)
+          shadowScoring = scoreForModel(prompt, decision.chosenModel as ModelId);
+        } catch (err) {
+          // Non-fatal — shadow routing/scoring is best-effort.
+          // Classification alone is still valuable.
+          console.error("[DB] Shadow routing failed (non-fatal):", {
+            error: err instanceof Error ? err.message : err,
+          });
+        }
+
+        await persistCompare({
+          prompt,
+          anonymousId,
+          modelsCompared,
+          diffSummary: summary,
+          classification: classification
+            ? {
+                taskType: classification.taskType,
+                stakes: classification.stakes,
+                inputSignals: classification.inputSignals as unknown as Record<string, boolean>,
+              }
+            : null,
+          shadowRouting: shadowRouting ?? null,
+          shadowScoring: shadowScoring ?? null,
+          responseTimeMs: responseTimeMs ?? null,
         });
-      }
-
-      persistCompare({
-        prompt,
-        anonymousId,
-        modelsCompared: responses.map((r) => r.model),
-        diffSummary: summary,
-        classification: classification
-          ? {
-              taskType: classification.taskType,
-              stakes: classification.stakes,
-              inputSignals: classification.inputSignals as unknown as Record<string, boolean>,
-            }
-          : null,
-        shadowRouting: shadowRouting ?? null,
-        shadowScoring: shadowScoring ?? null,
-        responseTimeMs: responseTimeMs ?? null,
-      }).catch((err) => {
+      })().catch((err) => {
         console.error("[DB] Fire-and-forget compare persistence failed:", err);
       });
     }
