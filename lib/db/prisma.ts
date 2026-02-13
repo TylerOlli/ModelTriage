@@ -14,7 +14,7 @@
  *   await prisma.routingDecision.create({ data: { ... } });
  */
 
-import { PrismaClient } from "@/src/generated/prisma/client";
+import { PrismaClient } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;

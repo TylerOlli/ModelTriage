@@ -45,6 +45,5 @@ yarn-error.log*
 next-env.d.ts
 
 # prisma
-src/generated/prisma
+# Generated client is in node_modules/@prisma/client (standard location)
 
-/src/generated/prisma
