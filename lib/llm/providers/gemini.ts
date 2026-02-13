@@ -118,9 +118,7 @@ export async function runGemini(
 }
 
 /**
- * Stream Gemini response with SSE
- * Note: Gemini doesn't support native streaming in this SDK version,
- * so we simulate it by chunking the response
+ * Stream Gemini response with SSE using native streaming
  */
 export async function* streamGemini(
   request: LLMRequest,
@@ -179,43 +177,53 @@ export async function* streamGemini(
       }
     }
 
-    const result = await geminiClient.models.generateContent({
+    // Use native streaming with generateContentStream
+    const stream = await geminiClient.models.generateContentStream({
       model: modelId,
       contents: [{ role: "user", parts }],
       config: generationConfig,
     });
 
-    const firstCandidate = result.candidates?.[0];
-    const text = firstCandidate?.content?.parts?.[0]?.text || "";
-    const usage = result.usageMetadata;
-    const finishReason = firstCandidate?.finishReason;
+    let fullText = "";
+    let usage: any;
+    let finishReason: string | undefined;
+
+    // Process stream chunks in real-time
+    for await (const chunk of stream) {
+      const firstCandidate = chunk.candidates?.[0];
+      const text = firstCandidate?.content?.parts?.[0]?.text || "";
+      
+      if (text) {
+        fullText += text;
+        yield {
+          type: "chunk",
+          data: { model: modelId, delta: text },
+        };
+      }
+
+      // Capture finish reason and usage metadata
+      if (firstCandidate?.finishReason) {
+        finishReason = firstCandidate.finishReason;
+      }
+      
+      if (chunk.usageMetadata) {
+        usage = chunk.usageMetadata;
+      }
+    }
 
     if (isDev && hasImages) {
       console.log('[GEMINI_STREAM] ========================================');
       console.log('[GEMINI_STREAM] Gemini Response Received');
-      console.log('[GEMINI_STREAM] Response length:', text.length, 'characters');
+      console.log('[GEMINI_STREAM] Response length:', fullText.length, 'characters');
       console.log('[GEMINI_STREAM] First 800 chars of response:');
-      console.log(text.substring(0, 800));
+      console.log(fullText.substring(0, 800));
       console.log('[GEMINI_STREAM] ========================================');
       
-      if (text.includes('IMAGE_GIST:')) {
+      if (fullText.includes('IMAGE_GIST:')) {
         console.log('[GEMINI_STREAM] ✓ IMAGE_GIST detected in response');
       } else {
         console.log('[GEMINI_STREAM] ✗ IMAGE_GIST NOT FOUND in response');
       }
-    }
-
-    // Simulate streaming by chunking the response
-    // Split text into reasonable chunks (approximately by words)
-    const chunkSize = 50; // characters per chunk
-    for (let i = 0; i < text.length; i += chunkSize) {
-      const chunk = text.slice(i, i + chunkSize);
-      yield {
-        type: "chunk",
-        data: { model: modelId, delta: chunk },
-      };
-      // Small delay to simulate streaming
-      await new Promise((resolve) => setTimeout(resolve, 10));
     }
 
     const latencyMs = Date.now() - startTime;
