@@ -261,30 +261,25 @@ ${prompt}`;
           (a) => a.type === "image"
         ) as ProcessedImageAttachment[];
 
-        // Resize and compress images
+        // Resize and compress images (parallelized for speed)
         if (imageAttachments.length > 0) {
-          console.log(`Resizing ${imageAttachments.length} image(s)`);
-          for (const img of imageAttachments) {
-            try {
+          console.log(`Resizing ${imageAttachments.length} image(s) in parallel`);
+          const resizeResults = await Promise.allSettled(
+            imageAttachments.map(async (img) => {
               const resized = await resizeAndCompressImage(img.data, img.mimeType);
-              img.data = resized.buffer;
-              img.mimeType = resized.mimeType;
-              img.resized = true;
-              console.log(
-                `Image ${img.filename}: ${img.originalSize} → ${resized.compressedSize} bytes`
-              );
-              
-              // Store for provider
-              imageAttachmentsForProvider.push({
-                data: img.data,
-                mimeType: img.mimeType,
-                filename: img.filename,
-              });
-            } catch (imgError) {
-              console.error(`Failed to process image ${img.filename}:`, imgError);
+              return { img, resized };
+            })
+          );
+
+          for (const result of resizeResults) {
+            if (result.status === "rejected") {
+              // Find which image failed (best-effort)
+              const failedImg = imageAttachments[resizeResults.indexOf(result)];
+              const filename = failedImg?.filename || "unknown";
+              console.error(`Failed to process image ${filename}:`, result.reason);
               return new Response(
                 JSON.stringify({
-                  error: `We couldn't process the image attachment "${img.filename}". Please re-upload a clearer screenshot or try a different image format.`,
+                  error: `We couldn't process the image attachment "${filename}". Please re-upload a clearer screenshot or try a different image format.`,
                 }),
                 {
                   status: 400,
@@ -292,6 +287,20 @@ ${prompt}`;
                 }
               );
             }
+
+            const { img, resized } = result.value;
+            img.data = resized.buffer;
+            img.mimeType = resized.mimeType;
+            img.resized = true;
+            console.log(
+              `Image ${img.filename}: ${img.originalSize} → ${resized.compressedSize} bytes`
+            );
+
+            imageAttachmentsForProvider.push({
+              data: img.data,
+              mimeType: img.mimeType,
+              filename: img.filename,
+            });
           }
         }
 

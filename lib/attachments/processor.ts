@@ -297,7 +297,9 @@ export async function processAttachments(
     };
   }
 
-  // Process each file
+  // Process each file (parallelized for speed)
+  // Validation is synchronous; file reading is async and parallelized.
+  const validFiles: { file: File; isImage: boolean }[] = [];
   for (const file of files) {
     const typeValidation = validateFileType(file.name, file.type, file.size);
     if (!typeValidation.valid) {
@@ -308,25 +310,29 @@ export async function processAttachments(
     const isImage = ALLOWED_IMAGE_TYPES.includes(
       file.type as (typeof ALLOWED_IMAGE_TYPES)[number]
     );
-
-    if (isImage) {
-      // Process image
-      const buffer = Buffer.from(await file.arrayBuffer());
-      imageAttachments.push({
-        type: "image",
-        filename: file.name,
-        mimeType: file.type,
-        originalSize: file.size,
-        data: buffer,
-        resized: false, // Resizing will be done separately
-      });
-    } else {
-      // Process text file
-      const text = await file.text();
-      const processed = truncateTextFile(text, file.name);
-      textAttachments.push(processed);
-    }
+    validFiles.push({ file, isImage });
   }
+
+  // Read all files in parallel
+  await Promise.all(
+    validFiles.map(async ({ file, isImage }) => {
+      if (isImage) {
+        const buffer = Buffer.from(await file.arrayBuffer());
+        imageAttachments.push({
+          type: "image",
+          filename: file.name,
+          mimeType: file.type,
+          originalSize: file.size,
+          data: buffer,
+          resized: false, // Resizing will be done separately
+        });
+      } else {
+        const text = await file.text();
+        const processed = truncateTextFile(text, file.name);
+        textAttachments.push(processed);
+      }
+    })
+  );
 
   // Validate image count
   const imageCountValidation = validateImageCount(imageAttachments.length);

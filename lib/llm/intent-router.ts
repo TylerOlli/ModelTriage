@@ -63,6 +63,34 @@ interface ClassifierResponse {
   reason: string;
 }
 
+// ─── Routing Cache ──────────────────────────────────────────────
+// In-memory cache for routing decisions, keyed by normalized prompt hash.
+// Eliminates the 1-2s LLM classifier call for repeated or similar prompts.
+// Entries expire after TTL_MS. Cleanup runs on every cache check.
+
+interface CachedDecision {
+  decision: RoutingDecision;
+  expiresAt: number;
+}
+
+const ROUTE_CACHE = new Map<string, CachedDecision>();
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const CACHE_MAX_SIZE = 200; // Prevent unbounded memory growth
+
+function getCacheKey(prompt: string): string {
+  // Normalize: lowercase, trim, collapse whitespace
+  return prompt.toLowerCase().trim().replace(/\s+/g, " ");
+}
+
+function cleanExpiredCache(): void {
+  const now = Date.now();
+  for (const [key, entry] of ROUTE_CACHE) {
+    if (entry.expiresAt <= now) {
+      ROUTE_CACHE.delete(key);
+    }
+  }
+}
+
 export class IntentRouter {
   private readonly CLASSIFIER_MODEL: ModelId = "gpt-5-mini";
   private readonly CLASSIFIER_TIMEOUT_MS = 10000;
@@ -75,15 +103,16 @@ export class IntentRouter {
    * for instant model selection. This eliminates ~1-2s of latency from the
    * gpt-5-mini classifier call for clear-cut prompts.
    *
-   * The threshold is set conservatively: only prompts with unambiguous intent
-   * signals qualify. This ensures no degradation in routing accuracy.
+   * Lowered from 0.85 to 0.78 to let more prompts skip the LLM classifier.
+   * Combined with the routing cache, this means most prompts are routed
+   * in <1ms after the first request.
    *
    * Signals used (all deterministic, zero additional model calls):
    * - Attachment type (images → vision, code files → code model)
    * - Prompt keyword patterns (debug/error → coding_debug, etc.)
    * - Prompt length and structure (short → lightweight, complex keywords → deep reasoning)
    */
-  private readonly FAST_PATH_CONFIDENCE_THRESHOLD = 0.85;
+  private readonly FAST_PATH_CONFIDENCE_THRESHOLD = 0.78;
 
   /**
    * Route a prompt to the best model using attachment-aware selection
@@ -97,6 +126,22 @@ export class IntentRouter {
     attachmentContext?: AttachmentContext
   ): Promise<RoutingDecision> {
     try {
+      // PRIORITY 0: Cache lookup (instant, <1ms)
+      // Skips ALL routing logic for repeat prompts.
+      // Only used when no attachments (attachments change routing).
+      if (!attachmentContext) {
+        cleanExpiredCache();
+        const cacheKey = getCacheKey(prompt);
+        const cached = ROUTE_CACHE.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+          console.log("Cache hit — routing decision from cache:", {
+            model: cached.decision.chosenModel,
+            intent: cached.decision.intent,
+          });
+          return cached.decision;
+        }
+      }
+
       // PRIORITY 1: Attachment-aware routing (deterministic, no model calls)
       // Returns immediately when attachments provide clear routing signals.
       if (attachmentContext) {
@@ -116,7 +161,9 @@ export class IntentRouter {
       const fastPathDecision = this.tryFastPathRouting(prompt);
       if (fastPathDecision) {
         console.log("Fast-path routing decision (skipped LLM classifier):", fastPathDecision);
-        return this.enrichWithScoring(fastPathDecision, prompt);
+        const enriched = this.enrichWithScoring(fastPathDecision, prompt);
+        this.cacheDecision(prompt, enriched);
+        return enriched;
       }
 
       // FALLBACK: Traditional intent-based routing via LLM classifier
@@ -136,13 +183,17 @@ export class IntentRouter {
           category: decision.category,
         });
 
-        return this.enrichWithScoring({
+        const enriched = this.enrichWithScoring({
           ...decision,
           reason: customReason,
         }, prompt);
+        this.cacheDecision(prompt, enriched);
+        return enriched;
       }
 
-      return this.enrichWithScoring(decision, prompt);
+      const enriched = this.enrichWithScoring(decision, prompt);
+      this.cacheDecision(prompt, enriched);
+      return enriched;
     } catch (err) {
       console.error("Classifier failed:", err);
       // Fallback to gpt-5-mini on classifier failure
@@ -156,6 +207,25 @@ export class IntentRouter {
       };
       return this.enrichWithScoring(fallbackDecision, prompt);
     }
+  }
+
+  /**
+   * Store a routing decision in the in-memory cache.
+   * Evicts oldest entries if the cache exceeds max size.
+   */
+  private cacheDecision(prompt: string, decision: RoutingDecision): void {
+    const cacheKey = getCacheKey(prompt);
+
+    // Evict oldest entries if at capacity
+    if (ROUTE_CACHE.size >= CACHE_MAX_SIZE) {
+      const firstKey = ROUTE_CACHE.keys().next().value;
+      if (firstKey) ROUTE_CACHE.delete(firstKey);
+    }
+
+    ROUTE_CACHE.set(cacheKey, {
+      decision,
+      expiresAt: Date.now() + CACHE_TTL_MS,
+    });
   }
 
   /**
