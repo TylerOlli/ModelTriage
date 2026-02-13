@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fafafa;
+  --foreground: #0a0a0a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -17,7 +17,14 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Enter animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* Shimmer animation for skeletons */
@@ -45,16 +52,16 @@ body {
   }
 }
 
-/* Compare mode content styling - tame markdown verbosity */
+/* Compare mode content styling — tame markdown verbosity */
 .compare-content h1,
 .compare-content h2,
 .compare-content h3,
 .compare-content h4,
 .compare-content h5,
 .compare-content h6 {
-  font-size: 0.9375rem; /* 15px - same as lead line */
+  font-size: 0.9375rem;
   font-weight: 600;
-  color: #374151; /* gray-700 */
+  color: #374151;
   margin-top: 0.75rem;
   margin-bottom: 0.5rem;
   line-height: 1.5;
@@ -85,12 +92,12 @@ body {
 .compare-content li {
   margin-top: 0.25rem;
   margin-bottom: 0.25rem;
-  color: #374151; /* gray-700 */
+  color: #404040;
 }
 
 .compare-content strong {
   font-weight: 600;
-  color: #1f2937; /* gray-800 */
+  color: #171717;
 }
 
 .compare-content em {
@@ -98,24 +105,23 @@ body {
 }
 
 .compare-content code:not(pre code) {
-  background-color: #f3f4f6; /* gray-100 */
-  color: #1f2937; /* gray-800 */
+  background-color: #f5f5f5;
+  color: #171717;
   padding: 0.125rem 0.375rem;
   border-radius: 0.25rem;
   font-size: 0.875rem;
-  font-family: 'Courier New', monospace;
 }
 
 .compare-content blockquote {
-  border-left: 3px solid #e5e7eb; /* gray-200 */
+  border-left: 3px solid #e5e5e5;
   padding-left: 0.75rem;
   margin: 0.75rem 0;
-  color: #6b7280; /* gray-500 */
+  color: #737373;
   font-style: italic;
 }
 
 .compare-content hr {
   margin: 0.75rem 0;
   border: none;
-  border-top: 1px solid #e5e7eb; /* gray-200 */
+  border-top: 1px solid #e5e5e5;
 }

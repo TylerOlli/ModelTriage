@@ -1299,600 +1299,415 @@ export default function Home() {
   const hasResults = Object.keys(modelPanels).length > 0;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Header */}
-        <header className="mb-2 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3">
-            <span className="text-slate-900">Model</span>
-            <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">Triage</span>
+    <div className="min-h-screen bg-[#fafafa]">
+      <div className="max-w-3xl mx-auto px-4 pt-12 pb-16 transition-all duration-300" style={{ maxWidth: comparisonMode && hasResults ? '80rem' : '48rem' }}>
+        {/* Identity Bar */}
+        <header className={`mb-10 transition-all duration-300 ${hasResults ? 'text-left' : 'text-center pt-8'}`}>
+          <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
+            Model<span className="text-blue-600">Triage</span>
           </h1>
-          <p className="text-lg md:text-xl font-medium text-slate-700">
-            Right LLM. Every time.
-          </p>
+          {!hasResults && !isStreaming && (
+            <p className="text-base text-neutral-500 mt-1">
+              Right LLM. Every time.
+            </p>
+          )}
         </header>
 
-        {/* Mode Selector - Tier 2 (Secondary) */}
-        <div className="mb-4">
-          <div className="inline-flex rounded-lg bg-gray-100 p-1 gap-1">
-            <button
-              type="button"
-              onClick={() => handleModeSwitch(false)}
-              disabled={isStreaming}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                !comparisonMode
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
-              } ${isStreaming ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-            >
-              Auto-select LLM
-            </button>
-            <button
-              type="button"
-              onClick={() => handleModeSwitch(true)}
-              disabled={isStreaming}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                comparisonMode
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
-              } ${isStreaming ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-            >
-              Compare models
-            </button>
-          </div>
-          
-          {/* Mode Switch Modal — rendered via portal-style at bottom of JSX */}
-          
-          {/* Helper text */}
-          <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
-            {!comparisonMode 
-              ? "We automatically choose the best model for your prompt."
-              : "Select multiple models to compare responses side-by-side."}
-          </p>
-        </div>
-        
-        {/* Model Selection (Comparison Mode) */}
-        <div
-          className={`transition-all duration-300 origin-top ${
-            comparisonMode
-              ? "max-h-[600px] opacity-100 mb-4"
-              : "max-h-0 opacity-0 overflow-hidden"
-          }`}
-        >
-          {comparisonMode && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-              <label className="block text-sm font-bold text-gray-900 mb-3 tracking-tight">
-                Select Models
-              </label>
-              <div className="grid grid-cols-4 gap-3">
-                {availableModels.map((model) => {
-                  const isSelected = selectedModels.includes(model.id);
-                  
-                  return (
-                    <label
-                      key={model.id}
-                      className={`flex items-start gap-2.5 px-4 py-3 rounded-lg border cursor-pointer transition-all duration-200 ${
-                        isSelected
-                          ? "border-blue-500/60 bg-blue-500/5 shadow-sm ring-1 ring-blue-500/20"
-                          : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedModels([...selectedModels, model.id]);
-                          } else {
-                            if (selectedModels.length > 1) {
-                              setSelectedModels(
-                                selectedModels.filter((id) => id !== model.id)
-                              );
-                            }
-                          }
-                        }}
-                        disabled={isStreaming}
-                        className="mt-0.5 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-2 focus:ring-blue-500/30 focus:ring-offset-0 transition-colors"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-bold text-gray-900 leading-tight">
-                          {model.label}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-                          {model.description}
-                        </div>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-              <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-                {selectedModels.length} model{selectedModels.length !== 1 ? "s" : ""} selected
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Prompt Input Form - Tier 1 (Primary) */}
-        <form onSubmit={handleSubmit} className="mb-6">
+        {/* Prompt Composer */}
+        <form onSubmit={handleSubmit} className="mb-10">
           <div 
-            className="relative bg-slate-50 rounded-lg shadow-md border border-gray-300 p-6"
+            className={`relative bg-white rounded-2xl border transition-all duration-200 ${
+              isDraggingOver
+                ? "border-blue-400 ring-4 ring-blue-500/10"
+                : isOverLimit
+                  ? "border-red-300 shadow-sm"
+                  : "border-neutral-200/80 shadow-[0_0_0_1px_rgba(0,0,0,0.02),0_1px_6px_rgba(0,0,0,0.04)] focus-within:border-neutral-300 focus-within:shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_2px_12px_rgba(0,0,0,0.06)]"
+            }`}
             onDragEnter={handleDragEnter}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
-            <div className="flex items-center justify-between mb-2">
-              <label
-                htmlFor="prompt"
-                className="block text-sm font-bold text-gray-900 tracking-tight"
-              >
-                Prompt
-              </label>
-              {session && session.turns.length > 0 && (
-                <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-md border border-green-200 flex items-center gap-1">
-                  <span>🔗</span>
-                  Conversation active ({session.turns.length} turn{session.turns.length !== 1 ? "s" : ""})
-                </span>
-              )}
-            </div>
-            
-            {/* Drag-and-drop indicator */}
+            {/* Drag-and-drop overlay */}
             {isDraggingOver && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-blue-50/80 backdrop-blur-sm rounded-lg border-2 border-blue-400 border-dashed pointer-events-none">
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-blue-50/80 rounded-2xl border-2 border-blue-400 border-dashed pointer-events-none">
                 <div className="text-center">
-                  <div className="text-4xl mb-2">📎</div>
+                  <svg className="w-8 h-8 text-blue-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
                   <div className="text-sm font-medium text-blue-700">Drop files to attach</div>
-                  <div className="text-xs text-blue-600 mt-1">
-                    {attachedFiles.length > 0 && `${3 - attachedFiles.length} more file${3 - attachedFiles.length !== 1 ? 's' : ''} allowed`}
-                  </div>
+                  {attachedFiles.length > 0 && (
+                    <div className="text-sm text-blue-500 mt-1">{3 - attachedFiles.length} more allowed</div>
+                  )}
                 </div>
               </div>
             )}
+
+            {/* Conversation active indicator */}
+            {session && session.turns.length > 0 && (
+              <div className="px-5 pt-3 pb-0">
+                <span className="inline-flex items-center gap-1.5 text-sm text-blue-600 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                  Conversation active &middot; {session.turns.length} turn{session.turns.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+            )}
             
+            {/* Textarea */}
             <textarea
               ref={promptInputRef}
               id="prompt"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Enter your prompt here..."
-              className={`w-full px-5 py-4 border-2 rounded-lg outline-none resize-vertical bg-white text-lg leading-7 text-gray-900 placeholder:text-gray-400/70 transition-all duration-300 ease-out ${
-                isDraggingOver
-                  ? "border-blue-400 ring-4 ring-blue-500/20 bg-blue-50/30"
-                  : isOverLimit 
-                    ? "border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10" 
-                    : "border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-              }`}
-              rows={6}
+              placeholder="What do you want to ask?"
+              className="w-full px-5 pt-4 pb-2 border-0 outline-none resize-none bg-transparent text-[15px] leading-relaxed text-neutral-900 placeholder:text-neutral-400 disabled:text-neutral-400"
+              rows={4}
               disabled={isStreaming}
               aria-describedby="character-count"
-              style={{
-                boxShadow: 'none',
-              }}
             />
-            
-            {/* Utilities row - Tier 3 (Supporting) */}
-            <div className="flex justify-between items-center mt-3 gap-4">
-              <div className="flex items-center gap-3">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  onChange={handleFileSelect}
-                  multiple
-                  className="hidden"
-                  disabled={isStreaming}
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isStreaming || attachedFiles.length >= 3}
-                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 active:translate-y-[0.5px] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 flex items-center gap-2 text-gray-600"
-                >
-                  📎 Attach Files
-                </button>
-                {attachedFiles.length > 0 && (
-                  <span className="text-xs text-gray-400 font-medium">
-                    {attachedFiles.length}/3
-                  </span>
-                )}
-              </div>
-              
-              <div className="flex items-center gap-4">
-                <span
-                  id="character-count"
-                  className={`text-xs font-medium ${
-                    isOverLimit ? "text-red-600" : "text-gray-400"
-                  }`}
-                >
-                  {characterCount} / 4,000
-                </span>
-                
-                {/* Reset button */}
-                <button
-                  type="button"
-                  onClick={handleResetPrompt}
-                  disabled={!prompt.trim() || isStreaming}
-                  className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-all duration-150 ${
-                    resetConfirming
-                      ? "text-orange-700 bg-orange-50 border border-orange-300 hover:bg-orange-100"
-                      : "text-gray-500 hover:text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                  }`}
-                  title={resetConfirming ? "Click again to confirm" : "Clear prompt"}
-                >
-                  {resetConfirming ? "Click again to clear" : "Reset"}
-                </button>
-                
-                {promptHistory.length > 0 && (
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setShowHistory(!showHistory)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 hover:text-gray-900 transition-all duration-150 group"
-                      title="Reuse or refine previous prompts"
-                    >
-                      <svg className="w-3.5 h-3.5 transition-transform duration-150 group-hover:rotate-[-15deg]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span>History</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Prompt History Popover */}
-            {showHistory && promptHistory.length > 0 && (
-              <>
-                {/* Backdrop to close on click outside */}
-                <div 
-                  className="fixed inset-0 z-10" 
-                  onClick={() => setShowHistory(false)}
-                />
-                
-                {/* Popover Panel */}
-                <div className="relative z-20 mt-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="bg-white/95 backdrop-blur-sm rounded-xl border border-gray-200 shadow-xl overflow-hidden">
-                    {/* Header */}
-                    <div className="px-4 py-3 bg-gradient-to-b from-gray-50/50 to-transparent border-b border-gray-100">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <h4 className="text-sm font-bold text-gray-900 tracking-tight flex items-center gap-2">
-                            <span className="text-gray-400">🕐</span>
-                            <span>Recent prompts</span>
-                          </h4>
-                          <p className="text-xs text-gray-600 mt-0.5">
-                            Click a prompt to reuse it instantly
-                          </p>
-                        </div>
-                        
-                        {/* Overflow menu */}
-                        <div className="relative">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowHistoryMenu(!showHistoryMenu);
-                            }}
-                            className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100/80 rounded-md transition-all duration-150"
-                            aria-label="History options"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                            </svg>
-                          </button>
-                          
-                          {/* Dropdown menu */}
-                          {showHistoryMenu && (
-                            <>
-                              <div 
-                                className="fixed inset-0 z-30" 
-                                onClick={() => setShowHistoryMenu(false)}
-                              />
-                              <div className="absolute right-0 top-full mt-1 z-40 bg-white rounded-lg border border-gray-200 shadow-lg py-1 min-w-[180px] animate-in fade-in slide-in-from-top-1 duration-150">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    clearHistory();
-                                    setShowHistoryMenu(false);
-                                    setShowHistory(false);
-                                  }}
-                                  className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors duration-150"
-                                >
-                                  Clear history
-                                </button>
-                                <div className="h-px bg-gray-100 my-1" />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setRememberDrafts(!rememberDrafts);
-                                    setShowHistoryMenu(false);
-                                  }}
-                                  className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors duration-150 flex items-center justify-between gap-2"
-                                >
-                                  <span>Remember drafts</span>
-                                  <div className={`w-8 h-4 rounded-full transition-colors duration-200 ${
-                                    rememberDrafts ? 'bg-blue-600' : 'bg-gray-300'
-                                  }`}>
-                                    <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-200 mt-0.5 ${
-                                      rememberDrafts ? 'ml-4' : 'ml-0.5'
-                                    }`} />
-                                  </div>
-                                </button>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* Draft toggle hint */}
-                      {rememberDrafts && (
-                        <p className="text-[10px] text-blue-600 bg-blue-50/50 px-2 py-1 rounded">
-                          Draft auto-saved on this device
-                        </p>
-                      )}
-                    </div>
-                    
-                    {/* History List */}
-                    <div className="max-h-64 overflow-y-auto">
-                      {promptHistory.map((historyItem, index) => (
-                        <button
-                          key={index}
-                          type="button"
-                          onClick={() => {
-                            setPrompt(historyItem);
-                            setShowHistory(false);
-                          }}
-                          className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-blue-50/50 active:bg-blue-100/50 transition-all duration-150 border-b border-gray-50 last:border-b-0 group cursor-pointer"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="flex-1 truncate leading-relaxed">{historyItem}</span>
-                            <div className="flex items-center gap-1.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex-shrink-0">
-                              <span className="text-xs font-medium">Reuse</span>
-                              <svg 
-                                className="w-3.5 h-3.5" 
-                                fill="none" 
-                                viewBox="0 0 24 24" 
-                                stroke="currentColor"
-                              >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                              </svg>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
 
             {/* File Attachments */}
             {attachedFiles.length > 0 && (
-              <div className="mt-4 space-y-2">
+              <div className="px-5 pb-2">
                 <div className="flex flex-wrap gap-2">
                   {attachedFiles.map((file, index) => (
                     <div
                       key={`${file.name}-${index}`}
-                      className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                      className="flex items-center gap-2 px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-lg text-sm"
                     >
-                      <span className="text-gray-600">
-                        {file.type.startsWith("image/") ? "🖼️" : "📄"}
+                      <span className="text-neutral-500">
+                        {file.type.startsWith("image/") ? (
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        ) : (
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        )}
                       </span>
-                      <span className="text-gray-900 font-medium">
-                        {file.name}
-                      </span>
-                      <span className="text-gray-500 text-xs">
-                        ({formatFileSize(file.size)})
-                      </span>
+                      <span className="text-neutral-700 font-medium truncate max-w-[200px]">{file.name}</span>
+                      <span className="text-neutral-400 text-sm">{formatFileSize(file.size)}</span>
                       <button
                         type="button"
                         onClick={() => handleRemoveFile(index)}
                         disabled={isStreaming}
-                        className="ml-1 text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                        className="ml-0.5 text-neutral-400 hover:text-neutral-600 disabled:opacity-50 transition-colors"
                         aria-label={`Remove ${file.name}`}
                       >
-                        ✕
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                       </button>
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-2 py-1.5">
-                  ⚠️ Avoid including secrets or sensitive data. Attachments are sent to the model.
+                <p className="text-sm text-amber-600 mt-2">
+                  Attachments are sent to the model. Avoid sensitive data.
                 </p>
               </div>
             )}
+            
+            {/* Action Bar — mode toggle, utilities, submit */}
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-neutral-100">
+              {/* Left: Mode toggle + utilities */}
+              <div className="flex items-center gap-3">
+                {/* Pill toggle */}
+                <div className="inline-flex rounded-lg bg-neutral-100 p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => handleModeSwitch(false)}
+                    disabled={isStreaming}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-150 ${
+                      !comparisonMode
+                        ? "bg-white text-neutral-900 shadow-sm"
+                        : "text-neutral-500 hover:text-neutral-700"
+                    } ${isStreaming ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                  >
+                    Auto-select
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleModeSwitch(true)}
+                    disabled={isStreaming}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-150 ${
+                      comparisonMode
+                        ? "bg-white text-neutral-900 shadow-sm"
+                        : "text-neutral-500 hover:text-neutral-700"
+                    } ${isStreaming ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                  >
+                    Compare
+                  </button>
+                </div>
 
-            <div className="flex gap-3 mt-6">
-              <button
-                type="submit"
-                disabled={isStreaming || !prompt.trim() || isOverLimit}
-                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-gradient-to-br hover:from-blue-600 hover:to-blue-700 active:translate-y-[1px] disabled:bg-gray-300 disabled:cursor-not-allowed font-medium transition-all duration-200 shadow-sm"
-              >
-                {isStreaming ? "Processing..." : "Submit"}
-              </button>
+                {/* Divider */}
+                <div className="w-px h-5 bg-neutral-200" />
 
-              {isStreaming && (
+                {/* Attach */}
+                <input ref={fileInputRef} type="file" onChange={handleFileSelect} multiple className="hidden" disabled={isStreaming} />
                 <button
                   type="button"
-                  onClick={handleCancel}
-                  className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 active:translate-y-[1px] font-medium transition-all duration-200"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isStreaming || attachedFiles.length >= 3}
+                  className="text-sm text-neutral-400 hover:text-neutral-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 flex items-center gap-1.5"
                 >
-                  Cancel
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+                  <span className="hidden sm:inline">Attach</span>
                 </button>
-              )}
 
-              {hasResults && !isStreaming && (
-                <button
-                  type="button"
-                  onClick={handleClear}
-                  className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 active:translate-y-[1px] font-medium transition-all duration-200"
+                {/* History */}
+                {promptHistory.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowHistory(!showHistory)}
+                    className="text-sm text-neutral-400 hover:text-neutral-600 transition-colors duration-150 flex items-center gap-1.5"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <span className="hidden sm:inline">History</span>
+                  </button>
+                )}
+
+                {/* Reset */}
+                {prompt.trim() && (
+                  <button
+                    type="button"
+                    onClick={handleResetPrompt}
+                    disabled={isStreaming}
+                    className={`text-sm transition-colors duration-150 ${
+                      resetConfirming
+                        ? "text-amber-600 font-medium"
+                        : "text-neutral-400 hover:text-neutral-600"
+                    }`}
+                  >
+                    {resetConfirming ? "Confirm clear" : "Reset"}
+                  </button>
+                )}
+              </div>
+
+              {/* Right: char count + submit */}
+              <div className="flex items-center gap-3">
+                <span
+                  id="character-count"
+                  className={`text-sm tabular-nums ${isOverLimit ? "text-red-500 font-medium" : "text-neutral-400"}`}
                 >
-                  Clear
+                  {characterCount > 0 ? `${characterCount} / 4,000` : ""}
+                </span>
+
+                {isStreaming ? (
+                  <button
+                    type="button"
+                    onClick={handleCancel}
+                    className="px-4 py-1.5 text-sm font-medium text-neutral-600 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors duration-150"
+                  >
+                    Cancel
+                  </button>
+                ) : hasResults ? (
+                  <button
+                    type="button"
+                    onClick={handleClear}
+                    className="px-4 py-1.5 text-sm font-medium text-neutral-600 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors duration-150"
+                  >
+                    Clear
+                  </button>
+                ) : null}
+
+                <button
+                  type="submit"
+                  disabled={isStreaming || !prompt.trim() || isOverLimit}
+                  className="flex-shrink-0 w-9 h-9 flex items-center justify-center bg-neutral-900 text-white rounded-xl hover:bg-neutral-800 active:scale-95 disabled:bg-neutral-200 disabled:text-neutral-400 disabled:cursor-not-allowed transition-all duration-150"
+                  aria-label="Submit prompt"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
                 </button>
+              </div>
+            </div>
+
+            {/* Model Selection Chips (Compare mode) — slides in below action bar */}
+            <div className={`overflow-hidden transition-all duration-200 ease-out ${
+              comparisonMode ? "max-h-[200px] opacity-100" : "max-h-0 opacity-0"
+            }`}>
+              {comparisonMode && (
+                <div className="px-5 pb-4 pt-2 border-t border-neutral-100">
+                  <div className="flex flex-wrap gap-2">
+                    {availableModels.map((model) => {
+                      const isSelected = selectedModels.includes(model.id);
+                      return (
+                        <button
+                          key={model.id}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              if (selectedModels.length > 1) {
+                                setSelectedModels(selectedModels.filter((id) => id !== model.id));
+                              }
+                            } else {
+                              setSelectedModels([...selectedModels, model.id]);
+                            }
+                          }}
+                          disabled={isStreaming}
+                          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-150 ${
+                            isSelected
+                              ? "bg-blue-50 text-blue-700 border border-blue-200"
+                              : "bg-white text-neutral-500 border border-neutral-200 hover:border-neutral-300 hover:text-neutral-700"
+                          } ${isStreaming ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                        >
+                          {isSelected && (
+                            <svg className="w-3 h-3 inline mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                          )}
+                          {model.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-sm text-neutral-400 mt-2">
+                    {selectedModels.length} model{selectedModels.length !== 1 ? "s" : ""} selected
+                  </p>
+                </div>
               )}
             </div>
           </div>
+
+          {/* Prompt History Popover */}
+          {showHistory && promptHistory.length > 0 && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowHistory(false)} />
+              <div className="relative z-20 mt-2 animate-enter">
+                <div className="bg-white rounded-xl border border-neutral-200 shadow-lg overflow-hidden">
+                  <div className="px-4 py-3 border-b border-neutral-100">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-neutral-900">Recent prompts</h4>
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setShowHistoryMenu(!showHistoryMenu); }}
+                          className="p-1 text-neutral-400 hover:text-neutral-600 rounded-md transition-colors duration-150"
+                          aria-label="History options"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                          </svg>
+                        </button>
+                        {showHistoryMenu && (
+                          <>
+                            <div className="fixed inset-0 z-30" onClick={() => setShowHistoryMenu(false)} />
+                            <div className="absolute right-0 top-full mt-1 z-40 bg-white rounded-lg border border-neutral-200 shadow-lg py-1 min-w-[180px] animate-enter">
+                              <button type="button" onClick={() => { clearHistory(); setShowHistoryMenu(false); setShowHistory(false); }} className="w-full text-left px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-50 transition-colors">Clear history</button>
+                              <div className="h-px bg-neutral-100 my-1" />
+                              <button type="button" onClick={() => { setRememberDrafts(!rememberDrafts); setShowHistoryMenu(false); }} className="w-full text-left px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-50 transition-colors flex items-center justify-between gap-2">
+                                <span>Remember drafts</span>
+                                <div className={`w-8 h-4 rounded-full transition-colors duration-200 ${rememberDrafts ? 'bg-blue-600' : 'bg-neutral-300'}`}>
+                                  <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-200 mt-0.5 ${rememberDrafts ? 'ml-4' : 'ml-0.5'}`} />
+                                </div>
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {rememberDrafts && <p className="text-sm text-blue-600 mt-1">Draft auto-saved on this device</p>}
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {promptHistory.map((historyItem, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => { setPrompt(historyItem); setShowHistory(false); }}
+                        className="w-full text-left px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors duration-150 border-b border-neutral-50 last:border-b-0 group"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="flex-1 truncate">{historyItem}</span>
+                          <span className="text-sm text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">Reuse</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </form>
 
         {/* Undo Toast */}
         {showUndoToast && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
-            <div className="bg-gray-900 text-white rounded-lg shadow-xl px-4 py-3 flex items-center gap-3">
-              <span className="text-sm font-medium">Prompt cleared</span>
-              <button
-                type="button"
-                onClick={handleUndoClear}
-                className="text-sm font-semibold text-blue-400 hover:text-blue-300 transition-colors duration-150"
-              >
-                Undo
-              </button>
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-enter">
+            <div className="bg-neutral-900 text-white rounded-xl shadow-xl px-4 py-3 flex items-center gap-3">
+              <span className="text-sm">Prompt cleared</span>
+              <button type="button" onClick={handleUndoClear} className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors">Undo</button>
             </div>
           </div>
         )}
 
         {/* Previous Conversation Turns (Accordion) */}
         {session && session.turns.length > 0 && (
-          <div className="space-y-2 mb-6">
-            {session.turns.map((turn, turnIdx) => {
+          <div className="space-y-2 mb-8">
+            {session.turns.map((turn) => {
               const isExpanded = expandedTurns[turn.id] || false;
               const panelEntries = Object.entries(turn.modelPanels);
               const isAutoTurn = panelEntries.length === 1 && panelEntries[0][1]?.routing?.mode === "auto";
               const isCompareTurn = panelEntries.length > 1;
               const autoTurnPanel = isAutoTurn ? panelEntries[0][1] : null;
 
-              // Build a concise summary label for the collapsed state
               const modelLabel = isAutoTurn && autoTurnPanel?.routing?.chosenModel
                 ? getFriendlyModelName(autoTurnPanel.routing.chosenModel)
                 : isCompareTurn
                   ? Object.keys(turn.modelPanels).map(getFriendlyModelName).join(", ")
                   : "";
               const promptPreview = turn.prompt.length > 120
-                ? turn.prompt.substring(0, 120) + "…"
+                ? turn.prompt.substring(0, 120) + "\u2026"
                 : turn.prompt;
 
               return (
-                <div key={turn.id} className="animate-in fade-in duration-200">
-                  {/* Accordion Header — always visible */}
+                <div key={turn.id} className="animate-enter">
                   <button
                     type="button"
-                    onClick={() =>
-                      setExpandedTurns((prev) => ({
-                        ...prev,
-                        [turn.id]: !prev[turn.id],
-                      }))
-                    }
-                    className={`w-full text-left px-4 py-3 rounded-lg border transition-all duration-200 group ${
+                    onClick={() => setExpandedTurns((prev) => ({ ...prev, [turn.id]: !prev[turn.id] }))}
+                    className={`w-full text-left px-4 py-3 rounded-xl border transition-all duration-150 group ${
                       isExpanded
-                        ? "bg-white border-gray-300 shadow-sm"
-                        : "bg-gray-50/80 border-gray-200/60 hover:bg-gray-100/80 hover:border-gray-300"
+                        ? "bg-white border-neutral-200 shadow-sm"
+                        : "bg-neutral-50 border-neutral-200/60 hover:bg-white hover:border-neutral-200"
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      {/* Expand/collapse chevron */}
-                      <svg
-                        className={`w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform duration-200 ${
-                          isExpanded ? "rotate-90" : ""
-                        }`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                      <svg className={`w-3.5 h-3.5 text-neutral-400 flex-shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
-
-                      {/* Turn indicator */}
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {turn.isFollowUp ? (
-                          <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                            Follow-up
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                            Previous
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Prompt preview */}
-                      <p className="text-sm text-gray-700 truncate flex-1 min-w-0">
-                        {promptPreview}
-                      </p>
-
-                      {/* Model badge */}
+                      <span className={`text-sm font-medium flex-shrink-0 ${turn.isFollowUp ? "text-blue-600" : "text-neutral-500"}`}>
+                        {turn.isFollowUp ? "Follow-up" : "Previous"}
+                      </span>
+                      <p className="text-sm text-neutral-700 truncate flex-1 min-w-0">{promptPreview}</p>
                       {modelLabel && (
-                        <span className="text-[10px] font-bold text-gray-500 bg-gray-100/80 px-2 py-0.5 rounded-md font-mono flex-shrink-0 hidden sm:inline">
-                          {modelLabel}
-                        </span>
+                        <span className="text-sm text-neutral-400 font-mono flex-shrink-0 hidden sm:inline">{modelLabel}</span>
                       )}
                     </div>
                   </button>
 
-                  {/* Accordion Body — expanded content */}
-                  <div
-                    className={`overflow-hidden transition-all duration-300 ease-out ${
-                      isExpanded ? "max-h-[2000px] opacity-100 mt-2" : "max-h-0 opacity-0"
-                    }`}
-                  >
-                    {/* Auto-select turn */}
+                  <div className={`overflow-hidden transition-all duration-200 ease-out ${isExpanded ? "max-h-[2000px] opacity-100 mt-3" : "max-h-0 opacity-0"}`}>
                     {isAutoTurn && autoTurnPanel && (
-                      <div className="bg-slate-900/[0.02] rounded-xl shadow-sm border border-gray-200/50 overflow-hidden relative"
-                        style={{
-                          backgroundImage: `
-                            repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
-                            repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
-                          `,
-                          backgroundSize: '20px 20px'
-                        }}
-                      >
-                        {/* Model Selection Card (history turn) */}
+                      <div className="pl-8">
                         {autoTurnPanel.routing && autoTurnPanel.routing.mode === "auto" && (
                           <ModelSelectionCard
                             modelName={autoTurnPanel.routing.chosenModel ? getFriendlyModelName(autoTurnPanel.routing.chosenModel) : ""}
                             reason={autoTurnPanel.routing.reason || ""}
                           />
                         )}
-                        {/* Response */}
-                        <div className="m-3 bg-white rounded-lg border border-gray-200/60 shadow-sm">
-                          <div className="px-6 py-4">
-                            <div className="prose prose-sm max-w-none text-[15px] leading-7">
-                              <FormattedResponse response={autoTurnPanel.response} />
-                            </div>
-                          </div>
+                        <div className="text-[15px] leading-relaxed text-neutral-700">
+                          <FormattedResponse response={autoTurnPanel.response} />
                         </div>
                       </div>
                     )}
 
-                    {/* Compare mode turn */}
                     {isCompareTurn && (
-                      <div>
-                        <div className={`grid gap-4 items-start ${Object.keys(turn.modelPanels).length === 2 ? "md:grid-cols-2" : Object.keys(turn.modelPanels).length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
-                          {Object.entries(turn.modelPanels).map(([mId, panel]) => (
-                            <div key={mId} className="bg-slate-900/[0.02] rounded-xl shadow-sm border border-gray-200/50 overflow-hidden"
-                              style={{
-                                backgroundImage: `
-                                  repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
-                                  repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
-                                `,
-                                backgroundSize: '20px 20px'
-                              }}
-                            >
-                              <div className="px-4 pt-3 pb-2 bg-white/40 relative">
-                                <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
-                                <span className="text-xs font-bold text-gray-900 font-mono">{getFriendlyModelName(mId)}</span>
-                                {panel.routing?.reason && (
-                                  <p className="text-xs text-slate-500 leading-relaxed mt-1">{panel.routing.reason}</p>
-                                )}
-                              </div>
-                              <div className="m-2 bg-white rounded-lg border border-gray-200/60 shadow-sm">
-                                <div className="px-4 py-3">
-                                  <div className="text-sm leading-relaxed">
-                                    <FormattedResponse response={panel.response} mode="compare" />
-                                  </div>
-                                </div>
-                              </div>
+                      <div className="grid gap-4 md:grid-cols-2 items-start">
+                        {Object.entries(turn.modelPanels).map(([mId, panel]) => (
+                          <div key={mId} className="bg-white rounded-xl border border-neutral-200 p-5 border-l-2 border-l-blue-500">
+                            <div className="flex items-baseline gap-2 mb-3">
+                              <span className="text-sm font-semibold text-neutral-900 font-mono">{getFriendlyModelName(mId)}</span>
+                              {panel.routing?.reason && (
+                                <>
+                                  <span className="text-neutral-300">&mdash;</span>
+                                  <span className="text-sm text-neutral-500">{panel.routing.reason}</span>
+                                </>
+                              )}
                             </div>
-                          ))}
-                        </div>
+                            <div className="text-sm leading-relaxed text-neutral-700">
+                              <FormattedResponse response={panel.response} mode="compare" />
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -1902,111 +1717,37 @@ export default function Home() {
           </div>
         )}
 
-        {/* Unified Loading State - AI Pipeline (Both Modes) */}
-        {/* Active Follow-Up Question Label — rendered above loading skeleton and response */}
+        {/* Follow-Up Question Label */}
         {activeFollowUpPrompt && (isStreaming || Object.keys(modelPanels).length > 0) && (
-          <div className="flex items-start gap-2.5 mb-4 animate-in fade-in slide-in-from-top-1 duration-200">
-            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <svg className="w-3 h-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-              </svg>
-            </div>
+          <div className="flex items-start gap-2.5 mb-6 animate-enter">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-2 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Follow-up</span>
-              <p className="text-sm text-gray-800 leading-relaxed mt-0.5">{activeFollowUpPrompt}</p>
+              <span className="text-sm font-medium text-blue-600">Follow-up</span>
+              <p className="text-sm text-neutral-700 leading-relaxed mt-0.5">{activeFollowUpPrompt}</p>
             </div>
           </div>
         )}
 
-        {/*
-          LATENCY OPTIMIZATION: Collapsed loading states.
-          Previously showed a 3-step pipeline (Routing → Connecting → Preparing response)
-          which made the wait feel longer than it was. Now shows a single compact
-          "Selecting model..." state that transitions directly to streaming content.
-
-          Compare mode still uses the multi-step pipeline via routing/connecting/contacting stages.
-        */}
+        {/* Loading State (Auto mode) */}
         {isStreaming && streamingStage && !comparisonMode && !Object.values(modelPanels).some(p => p.response) && (
-          <div className="space-y-6">
-            {/* Loading Pipeline */}
-            <div className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative"
-              style={{
-                backgroundImage: `
-                  repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
-                  repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
-                `,
-                backgroundSize: '20px 20px'
-              }}
-            >
-              <div className="p-8">
-                {/* Single-line loading indicator (Option C).
-                    One piece of information at a time — updates as state changes:
-                    1. "Selecting model..." (before routing resolves)
-                    2. "Dispatching to [Provider]..." (once model is chosen)
-                    3. "Starting response..." (first chunk arriving) */}
-                <div className="flex items-center gap-3 mb-7">
-                  <div className="flex items-center justify-center w-7 h-7 rounded-full border-2 border-blue-600 bg-blue-50">
-                    <div className="animate-spin w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full" />
-                  </div>
-                  <span className="text-lg font-semibold text-gray-900">
-                    {(() => {
-                      if (streamingStage === "streaming") return "Starting response\u2026";
-                      const chosen = autoPanel?.routing?.chosenModel;
-                      if (chosen) {
-                        return `Dispatching to ${getFriendlyModelName(chosen)}\u2026`;
-                      }
-                      return "Selecting model\u2026";
-                    })()}
-                  </span>
-                </div>
-              </div>
+          <div className="animate-enter">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full" />
+              <span className="text-base font-medium text-neutral-700">
+                {(() => {
+                  if (streamingStage === "streaming") return "Starting response\u2026";
+                  const chosen = autoPanel?.routing?.chosenModel;
+                  if (chosen) return `Routing to ${getFriendlyModelName(chosen)}\u2026`;
+                  return "Selecting model\u2026";
+                })()}
+              </span>
             </div>
-
-            {/* Skeleton Response Cards */}
-            <div className={`grid gap-6 ${comparisonMode ? (selectedModels.length === 2 ? "md:grid-cols-2" : selectedModels.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2") : ""}`}>
-              {(comparisonMode ? selectedModels : ["single"]).map((modelId, idx) => (
-                <div 
-                  key={modelId}
-                  className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative"
-                  style={{
-                    backgroundImage: `
-                      repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
-                      repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
-                    `,
-                    backgroundSize: '20px 20px'
-                  }}
-                >
-                  {/* Skeleton Header */}
-                  {comparisonMode && (
-                    <div className="px-6 pt-4 pb-3 bg-white/40 backdrop-blur-sm relative">
-                      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className="h-3 w-24 bg-gray-200/70 rounded animate-pulse" />
-                        <div className="h-3 w-32 bg-gray-200/70 rounded animate-pulse" />
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Skeleton Response Content */}
-                  <div className="m-3 bg-white rounded-lg border border-gray-200/60 shadow-sm">
-                    <div className="px-6 py-4">
-                      <div className="flex items-center gap-2.5 mb-4">
-                        <span className="text-sm font-bold text-gray-700 tracking-tight">Response</span>
-                        <span className="px-2 py-0.5 text-[10px] font-bold text-gray-500 bg-gray-200/60 border border-gray-300/50 rounded uppercase tracking-wider">
-                          Pending
-                        </span>
-                      </div>
-                      <div className="space-y-3.5">
-                        <div className="h-4 bg-gray-200/70 rounded-md w-full animate-pulse" />
-                        <div className="h-4 bg-gray-200/70 rounded-md w-[97%] animate-pulse" />
-                        <div className="h-4 bg-gray-200/70 rounded-md w-[82%] animate-pulse" />
-                        <div className="h-4 bg-gray-200/70 rounded-md w-[93%] animate-pulse" />
-                        <div className="h-4 bg-gray-200/70 rounded-md w-[68%] animate-pulse" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div className="space-y-3">
+              <div className="h-4 bg-neutral-100 rounded w-full animate-pulse" />
+              <div className="h-4 bg-neutral-100 rounded w-[95%] animate-pulse" />
+              <div className="h-4 bg-neutral-100 rounded w-[80%] animate-pulse" />
+              <div className="h-4 bg-neutral-100 rounded w-[90%] animate-pulse" />
+              <div className="h-4 bg-neutral-100 rounded w-[65%] animate-pulse" />
             </div>
           </div>
         )}
@@ -2014,113 +1755,60 @@ export default function Home() {
         {/* Single-Answer Mode Display */}
         {!comparisonMode && (
           <>
-            {/* Response Display */}
             {(autoPanel?.response || autoPanel?.error || autoPanel?.metadata) && (
-              <div className="space-y-4 animate-in fade-in duration-300">
+              <div className="animate-enter">
                 {autoPanel?.response && (
-                  <div className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative"
-                    style={{
-                      backgroundImage: `
-                        repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
-                        repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
-                      `,
-                      backgroundSize: '20px 20px'
-                    }}
-                  >
-                    {/* Model Selection Card */}
+                  <div>
+                    {/* Model routing bar */}
                     {autoPanel.routing && autoPanel.routing.mode === "auto" && (
                       <ModelSelectionCard
                         modelName={autoPanel.routing.chosenModel ? getFriendlyModelName(autoPanel.routing.chosenModel) : ""}
-                        reason={autoPanel.routing.reason || (isStreaming ? "Selecting the best model for your request..." : "Analyzing your request...")}
+                        reason={autoPanel.routing.reason || (isStreaming ? "Selecting the best model for your request\u2026" : "Analyzing your request\u2026")}
                         isStreaming={isStreaming}
                       />
                     )}
                     
-                    {/* Response Content Panel */}
-                    <div className="m-3 bg-white rounded-lg border border-gray-200/60 shadow-sm">
-                      <div className="px-6 py-4">
-                        <div className="flex items-center justify-between mb-4">
-                          <h2 className="text-sm font-bold text-gray-900 tracking-tight uppercase text-gray-600 tracking-wider">
-                            Response
-                          </h2>
-                          {isStreaming && (
-                            <span className="px-2 py-0.5 text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200/50 rounded uppercase tracking-wider">
-                              Streaming
-                            </span>
-                          )}
-                        </div>
-                        <div className="prose prose-sm max-w-none text-[15px] leading-7">
-                          <FormattedResponse response={autoPanel.response} />
-                        </div>
-                      </div>
+                    {/* Response content — direct on surface */}
+                    <div className="text-[15px] leading-relaxed text-neutral-700">
+                      <FormattedResponse response={autoPanel.response} />
                     </div>
 
-                    {/* Run Metadata Chips */}
+                    {/* Run metadata — single muted line */}
                     {autoPanel.metadata && (
-                      <div className="px-6 pb-4 pt-3">
-                        <div className="flex items-center justify-between gap-4 mb-2">
-                          <div className="flex flex-wrap gap-2">
-                            {/* Always visible chips */}
-                            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
-                              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Model</span>
-                              <span className="text-xs font-bold text-gray-900 font-mono">{getFriendlyModelName(autoPanel.metadata.model)}</span>
-                            </div>
-                            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
-                              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Provider</span>
-                              <span className="text-xs font-bold text-gray-900">{autoPanel.metadata.provider}</span>
-                            </div>
+                      <div className="mt-8 pt-4 border-t border-neutral-200/60">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4 text-sm text-neutral-400">
+                            <span className="font-mono">{getFriendlyModelName(autoPanel.metadata.model)}</span>
+                            <span>&middot;</span>
+                            <span>{autoPanel.metadata.provider}</span>
+                            {autoPanel.showRunDetails && (
+                              <>
+                                <span>&middot;</span>
+                                <span className="font-mono tabular-nums">{(autoPanel.metadata.latency / 1000).toFixed(1)}s</span>
+                                <span>&middot;</span>
+                                <span className="font-mono tabular-nums">{autoPanel.metadata.tokenUsage?.total || "N/A"} tokens</span>
+                              </>
+                            )}
                           </div>
-                          
-                          {/* Run details disclosure toggle */}
                           <button
                             type="button"
                             onClick={() => autoPanel && updatePanel(autoPanel.modelId, { showRunDetails: !autoPanel.showRunDetails })}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors duration-150 rounded-md hover:bg-gray-100/50"
+                            className="text-sm text-neutral-400 hover:text-neutral-600 transition-colors duration-150"
                           >
-                            <span>Run details</span>
-                            <svg
-                              className={`w-3 h-3 transition-transform duration-200 ${autoPanel.showRunDetails ? 'rotate-180' : ''}`}
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                            </svg>
+                            {autoPanel.showRunDetails ? "Less" : "Details"}
                           </button>
-                        </div>
-                        
-                        {/* Collapsible detail chips */}
-                        <div
-                          className={`overflow-hidden transition-all duration-200 ease-out ${
-                            autoPanel.showRunDetails ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'
-                          }`}
-                        >
-                          <div className="flex flex-wrap gap-2 pt-2">
-                            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
-                              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Latency</span>
-                              <span className="text-xs font-bold text-gray-900 font-mono tabular-nums">
-                                {(autoPanel.metadata.latency / 1000).toFixed(1)}s
-                              </span>
-                            </div>
-                            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
-                              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Tokens</span>
-                              <span className="text-xs font-bold text-gray-900 font-mono tabular-nums">
-                                {autoPanel.metadata.tokenUsage?.total || "N/A"}
-                              </span>
-                            </div>
-                          </div>
                         </div>
                       </div>
                     )}
 
-                    {/* Follow-up Composer */}
+                    {/* Follow-up */}
                     {!isStreaming && !autoPanel.error && autoPanel.response && (
                       <FollowUpComposer
                         value={followUpInput}
                         onChange={setFollowUpInput}
                         onSubmit={handleFollowUpSubmit}
                         isLoading={isStreaming}
-                        placeholder="Ask a follow-up question…"
+                        placeholder="Ask a follow-up question\u2026"
                       />
                     )}
                   </div>
@@ -2128,142 +1816,56 @@ export default function Home() {
 
                 {/* Empty Response Warning */}
                 {!autoPanel?.response && !autoPanel?.error && autoPanel?.metadata && (
-                  <div className="bg-yellow-50 rounded-lg border border-yellow-200 p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="text-yellow-600 text-lg">⚠️</span>
-                      <div>
-                        <h3 className="text-sm font-semibold text-yellow-900 mb-1">
-                          Empty Response
-                        </h3>
-                        <p className="text-sm text-yellow-800">
-                          The model completed but returned no text. This may happen if all tokens were used for internal reasoning. Try a simpler prompt or consider the token limit.
-                        </p>
-                      </div>
-                    </div>
+                  <div className="bg-amber-50 rounded-xl border border-amber-200 p-4">
+                    <p className="text-sm text-amber-800">
+                      <span className="font-semibold">Empty response.</span> The model completed but returned no text. Try a simpler prompt.
+                    </p>
                   </div>
                 )}
 
                 {/* Token Limit Warning */}
                 {autoPanel?.metadata?.finishReason === "length" && (
-                  <div className="bg-yellow-50 rounded-lg border border-yellow-200 p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="text-yellow-600 text-lg">⚠️</span>
-                      <div>
-                        <h3 className="text-sm font-semibold text-yellow-900 mb-1">
-                          Response Incomplete
-                        </h3>
-                        <p className="text-sm text-yellow-800">
-                          The response was cut off because the model reached its token
-                          limit. GPT-5 mini uses tokens for internal reasoning before
-                          generating output. Consider using a model with a higher token
-                          limit for complex queries.
-                        </p>
-                      </div>
-                    </div>
+                  <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 mt-4">
+                    <p className="text-sm text-amber-800">
+                      <span className="font-semibold">Response truncated.</span> The model reached its token limit. Consider a model with higher capacity for complex queries.
+                    </p>
                   </div>
                 )}
 
-                {/* Error Display */}
+                {/* Error */}
                 {autoPanel?.error && (
-                  <div className="bg-red-50 rounded-lg border border-red-200 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3">
-                        <span className="text-red-600 text-lg">⚠️</span>
-                        <div>
-                          <h3 className="text-sm font-semibold text-red-900 mb-1">
-                            Error
-                          </h3>
-                          <p className="text-sm text-red-700">{getUserFriendlyError(autoPanel.error)}</p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleClear}
-                        className="px-4 py-1 text-sm bg-white text-red-700 border border-red-300 rounded-lg hover:bg-red-50 hover:border-red-400 active:translate-y-[0.5px] font-medium transition-all duration-150"
-                      >
-                        Try Again
-                      </button>
-                    </div>
+                  <div className="bg-red-50 rounded-xl border border-red-200 p-4 flex items-center justify-between gap-4">
+                    <p className="text-sm text-red-700">
+                      <span className="font-semibold">Error:</span> {getUserFriendlyError(autoPanel.error)}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleClear}
+                      className="px-4 py-1.5 text-sm font-medium text-red-700 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition-colors duration-150 flex-shrink-0"
+                    >
+                      Try Again
+                    </button>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Instructions - Tier 3 (Supporting) */}
+            {/* How it works — shown when no results */}
             {!autoPanel?.response && !isStreaming && !autoPanel?.error && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-8">
-                <h3 className="text-sm font-bold text-gray-900 mb-5 tracking-tight">
-                  How it works
-                </h3>
-                
-                {/* Two-column layout for modes */}
-                <div className="grid md:grid-cols-2 gap-8 mb-5">
-                  {/* Single-Answer Mode */}
+              <div className="mt-6">
+                <div className="grid md:grid-cols-2 gap-8">
                   <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-base">🎯</span>
-                      <h4 className="text-sm font-semibold text-gray-900">
-                        Single-Answer Mode
-                      </h4>
-                    </div>
-                    <p className="text-sm text-gray-700 mb-3 leading-relaxed">
-                      One response, automatically routed to the best model for your prompt.
-                    </p>
-                    <ul className="space-y-2 text-sm text-gray-600 leading-relaxed mb-3">
-                      <li className="flex items-start gap-2">
-                        <span className="text-gray-400 mt-0.5">•</span>
-                        <span>Submit a prompt and get one AI response</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-gray-400 mt-0.5">•</span>
-                        <span>Model is auto-selected based on prompt type</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-gray-400 mt-0.5">•</span>
-                        <span>Fast and cost-effective for most requests</span>
-                      </li>
-                    </ul>
-                    <p className="text-xs text-gray-400">
-                      <span className="font-medium text-gray-500">Best for:</span> everyday questions, coding, brainstorming, summaries
+                    <h4 className="text-sm font-semibold text-neutral-900 mb-2">Auto-select</h4>
+                    <p className="text-sm text-neutral-500 leading-relaxed">
+                      Submit a prompt and we route it to the best model. Fast, cost-effective, and accurate for most requests.
                     </p>
                   </div>
-
-                  {/* Comparison Mode */}
                   <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-base">⚡</span>
-                      <h4 className="text-sm font-semibold text-gray-900">
-                        Comparison Mode
-                      </h4>
-                    </div>
-                    <p className="text-sm text-gray-700 mb-3 leading-relaxed">
-                      Run the same prompt across multiple models and compare results side-by-side.
-                    </p>
-                    <ul className="space-y-2 text-sm text-gray-600 leading-relaxed mb-3">
-                      <li className="flex items-start gap-2">
-                        <span className="text-gray-400 mt-0.5">•</span>
-                        <span>Select models, then submit once to run them all</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-gray-400 mt-0.5">•</span>
-                        <span>See differences, agreement, and potential conflicts</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-gray-400 mt-0.5">•</span>
-                        <span>Useful when accuracy or tone matters</span>
-                      </li>
-                    </ul>
-                    <p className="text-xs text-gray-400">
-                      <span className="font-medium text-gray-500">Best for:</span> critical decisions, evaluation, verification
+                    <h4 className="text-sm font-semibold text-neutral-900 mb-2">Compare</h4>
+                    <p className="text-sm text-neutral-500 leading-relaxed">
+                      Run the same prompt across multiple models side-by-side. Ideal for critical decisions and verification.
                     </p>
                   </div>
-                </div>
-
-                {/* Footer metadata */}
-                <div className="pt-4 border-t border-gray-200">
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    4,000 character limit • Real-time streaming
-                  </p>
                 </div>
               </div>
             )}
@@ -2274,165 +1876,64 @@ export default function Home() {
         {comparisonMode && Object.keys(modelPanels).length > 0 && (
           <>
             {/* Response Cards Grid */}
-            <div className={`grid gap-6 mb-6 items-start ${selectedModels.length === 2 ? "md:grid-cols-2" : selectedModels.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+            <div className="grid gap-5 mb-8 md:grid-cols-2 items-start">
               {Object.entries(modelPanels).map(([modelId, panel], idx) => (
                 <div
                   key={modelId}
-                  className="animate-in fade-in duration-300"
-                  style={{ animationDelay: `${idx * 60}ms` }}
+                  className="animate-enter"
+                  style={{ animationDelay: `${idx * 50}ms` }}
                 >
-                  <div className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative flex flex-col"
-                    style={{
-                      backgroundImage: `
-                        repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
-                        repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
-                      `,
-                      backgroundSize: '20px 20px'
-                    }}
-                  >
-                    {/* Execution Header — always show full routing reason */}
-                    <div className="px-6 pt-4 pb-3 bg-white/40 backdrop-blur-sm relative">
-                      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
-                      
-                      <div className="flex items-start gap-2.5 min-w-0">
-                        <span className="text-gray-400 text-sm flex-shrink-0 mt-0.5">⚡</span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Model</span>
-                            <span className="text-sm font-bold text-gray-900 font-mono">
-                              {getFriendlyModelName(modelId)}
-                            </span>
-                          </div>
-                          {panel.routing?.reason && (
-                            <div className="mt-1.5 rounded-lg border border-gray-200/60 bg-white/70 p-2.5">
-                              <p className="text-xs text-slate-600 leading-relaxed">
-                                {panel.routing.reason}
-                              </p>
-                            </div>
-                          )}
-                        </div>
+                  <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden flex flex-col border-l-2 border-l-blue-500 shadow-sm">
+                    {/* Model header */}
+                    <div className="px-5 pt-4 pb-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-sm font-semibold text-neutral-900 font-mono">
+                          {getFriendlyModelName(modelId)}
+                        </h3>
+                        {isStreaming && !panel.metadata && !panel.error && (
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+                          </span>
+                        )}
                       </div>
+                      {panel.routing?.reason && (
+                        <p className="text-sm text-neutral-500 leading-relaxed">{panel.routing.reason}</p>
+                      )}
                     </div>
                     
-                    {/* Response Content Panel */}
-                    <div className="m-3 bg-white rounded-lg border border-gray-200/60 shadow-sm flex-1 flex flex-col">
-                      <div className="px-6 py-4 flex-1 flex flex-col">
-                        {/* Streaming indicator - top right only */}
-                        {isStreaming && !panel.metadata && !panel.error && (
-                          <div className="flex justify-end mb-3">
-                            <span className="px-2 py-0.5 text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200/50 rounded uppercase tracking-wider">
-                              Generating
-                            </span>
-                          </div>
-                        )}
-                        
-                        {/* Response or Error/Empty States */}
-                        {panel.error ? (
-                          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                            <div className="flex items-start gap-2">
-                              <span className="text-red-600 text-lg">❌</span>
-                              <div>
-                                <h4 className="text-sm font-semibold text-red-900 mb-1">
-                                  Error
-                                </h4>
-                                <p className="text-sm text-red-700">
-                                  {getUserFriendlyError(panel.error)}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ) : !panel.response && panel.metadata ? (
-                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                            <div className="flex items-start gap-2">
-                              <span className="text-yellow-600 text-lg">⚠️</span>
-                              <div>
-                                <h4 className="text-sm font-semibold text-yellow-900 mb-1">
-                                  Empty Response
-                                </h4>
-                                <p className="text-sm text-yellow-800">
-                                  The model completed but returned no text. This may happen if all tokens were used for internal reasoning.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ) : panel.response ? (
-                          <div className="flex-1 flex flex-col min-h-0">
-                            {/* Response content */}
-                            <div className="compare-response-content">
-                              <FormattedResponse response={panel.response} mode="compare" />
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="text-sm text-gray-400">
-                            Waiting for response...
-                          </div>
-                        )}
+                    {/* Response content */}
+                    <div className="px-5 pb-4 flex-1">
+                      {panel.error ? (
+                        <div className="bg-red-50 rounded-lg border border-red-200 p-3">
+                          <p className="text-sm text-red-700"><span className="font-semibold">Error:</span> {getUserFriendlyError(panel.error)}</p>
+                        </div>
+                      ) : !panel.response && panel.metadata ? (
+                        <div className="bg-amber-50 rounded-lg border border-amber-200 p-3">
+                          <p className="text-sm text-amber-800"><span className="font-semibold">Empty response.</span> Model returned no text.</p>
+                        </div>
+                      ) : panel.response ? (
+                        <div className="text-sm leading-relaxed text-neutral-700">
+                          <FormattedResponse response={panel.response} mode="compare" />
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="h-3 bg-neutral-100 rounded w-full animate-pulse" />
+                          <div className="h-3 bg-neutral-100 rounded w-[90%] animate-pulse" />
+                          <div className="h-3 bg-neutral-100 rounded w-[75%] animate-pulse" />
+                        </div>
+                      )}
 
-                        {/* Token Limit Warning */}
-                        {panel.metadata?.finishReason === "length" && (
-                          <div className="bg-yellow-50 rounded-lg border border-yellow-200 p-3 mt-4">
-                            <div className="flex items-start gap-2">
-                              <span className="text-yellow-600">⚠️</span>
-                              <div>
-                                <h4 className="text-xs font-semibold text-yellow-900 mb-1">
-                                  Response Incomplete
-                                </h4>
-                                <p className="text-xs text-yellow-800">
-                                  Response cut off due to token limit.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                      {panel.metadata?.finishReason === "length" && (
+                        <p className="text-sm text-amber-700 mt-3">Response truncated due to token limit.</p>
+                      )}
                     </div>
 
-                    {/* Run Metadata Chips */}
+                    {/* Metadata footer */}
                     {panel.metadata && (
-                      <div className="px-6 pb-4 pt-3">
-                        <div className="flex items-center justify-between gap-4 mb-2">
-                          <div className="flex flex-wrap gap-2">
-                            {/* Always visible chips */}
-                            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
-                              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Provider</span>
-                              <span className="text-xs font-bold text-gray-900">{panel.metadata.provider}</span>
-                            </div>
-                          </div>
-                          
-                          {/* Run details disclosure toggle */}
-                          <button
-                            type="button"
-                            onClick={() => updatePanel(modelId, { showRunDetails: !panel.showRunDetails })}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors duration-150 rounded-md hover:bg-gray-100/50"
-                          >
-                            <span>Run details</span>
-                            <svg
-                              className={`w-3 h-3 transition-transform duration-200 ${panel.showRunDetails ? 'rotate-180' : ''}`}
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </button>
-                        </div>
-                        
-                        {/* Collapsible run details */}
-                        <div className={`overflow-hidden transition-all duration-200 ease-out ${panel.showRunDetails ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'}`}>
-                          <div className="flex flex-wrap gap-2 pt-2">
-                            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
-                              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Latency</span>
-                              <span className="text-xs font-bold text-gray-900 font-mono tabular-nums">
-                                {(panel.metadata.latency / 1000).toFixed(1)}s
-                              </span>
-                            </div>
-                            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/[0.03] border border-gray-300/50 rounded-md">
-                              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Tokens</span>
-                              <span className="text-xs font-bold text-gray-900 font-mono tabular-nums">
-                                {panel.metadata.tokenUsage?.total || "N/A"}
-                              </span>
-                            </div>
-                          </div>
+                      <div className="px-5 py-3 border-t border-neutral-100">
+                        <div className="flex items-center justify-between text-sm text-neutral-400">
+                          <span>{panel.metadata.provider} &middot; {(panel.metadata.latency / 1000).toFixed(1)}s &middot; {panel.metadata.tokenUsage?.total || "N/A"} tokens</span>
                         </div>
                       </div>
                     )}
@@ -2441,98 +1942,55 @@ export default function Home() {
               ))}
             </div>
 
-            {/* Comparison Summary - Modern AI-native design */}
+            {/* Comparison Summary */}
             {!isStreaming && diffSummary && (
-              <div className="bg-slate-900/[0.02] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative"
-                style={{
-                  backgroundImage: `
-                    repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px),
-                    repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.01) 1px, rgb(0 0 0 / 0.01) 2px)
-                  `,
-                  backgroundSize: '20px 20px'
-                }}
-              >
-                {/* Header Band */}
-                <div className="px-6 pt-4 pb-3 bg-white/40 backdrop-blur-sm relative">
-                  <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-lg">🔍</span>
-                    <h3 className="text-base font-bold text-gray-900 tracking-tight">
-                      Comparison Summary
-                    </h3>
-                  </div>
-                  <p className="text-xs text-gray-500 tracking-wide">
+              <div className="bg-white rounded-xl border border-neutral-200 shadow-sm overflow-hidden animate-enter">
+                <div className="px-6 pt-5 pb-4">
+                  <h3 className="text-base font-semibold text-neutral-900 tracking-tight mb-1">
+                    Comparison Summary
+                  </h3>
+                  <p className="text-sm text-neutral-500">
                     AI synthesis across selected models
                   </p>
                 </div>
 
-                {/* Content */}
-                <div className="p-6 space-y-6">
-                  {/* Verdict Callout */}
-                  {(diffSummary.verdict || diffSummary.commonGround.length > 0 || diffSummary.keyDifferences.length > 0) && (
-                    <div className="bg-blue-50/50 border border-blue-200/50 rounded-lg p-4">
-                      <div className="flex items-start gap-2.5">
-                        <span className="text-blue-600 text-base flex-shrink-0 mt-0.5">💡</span>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-sm font-bold text-blue-900 mb-2 uppercase tracking-wide">
-                            Verdict
-                          </h4>
-                          <p className="text-sm text-blue-900 leading-relaxed">
-                            {diffSummary.verdict}
-                          </p>
-                        </div>
-                      </div>
+                <div className="px-6 pb-6 space-y-5">
+                  {/* Verdict */}
+                  {diffSummary.verdict && (
+                    <div className="bg-blue-50 rounded-xl p-4">
+                      <p className="text-sm font-semibold text-blue-900 mb-1">Verdict</p>
+                      <p className="text-sm text-blue-800 leading-relaxed">{diffSummary.verdict}</p>
                     </div>
                   )}
 
-                  {/* Mini Cards Grid */}
+                  {/* Summary cards */}
                   <div className="grid md:grid-cols-3 gap-4">
-                    {/* Common Ground Card */}
                     {diffSummary.commonGround.length > 0 && (
-                      <div className="bg-white rounded-lg border border-gray-200/60 shadow-sm p-4">
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="text-green-600 text-sm">✓</span>
-                          <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-                            Common Ground
-                          </h4>
-                          <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold text-green-700 bg-green-100 rounded uppercase tracking-wider">
-                            Consensus
-                          </span>
-                        </div>
-                        <ul className="space-y-2">
+                      <div className="bg-neutral-50 rounded-xl p-4">
+                        <p className="text-sm font-semibold text-neutral-900 mb-2">Common Ground</p>
+                        <ul className="space-y-1.5">
                           {diffSummary.commonGround.map((item, idx) => (
-                            <li key={idx} className="text-xs text-gray-700 leading-relaxed flex items-start gap-2">
-                              <span className="text-gray-400 text-[10px] mt-0.5 flex-shrink-0">•</span>
-                              <span className="flex-1 min-w-0">{item}</span>
+                            <li key={idx} className="text-sm text-neutral-600 leading-relaxed flex items-start gap-2">
+                              <span className="text-green-500 mt-0.5 flex-shrink-0">&bull;</span>
+                              <span>{item}</span>
                             </li>
                           ))}
                         </ul>
                       </div>
                     )}
 
-                    {/* Key Differences Card */}
                     {diffSummary.keyDifferences.length > 0 && (
-                      <div className="bg-white rounded-lg border border-gray-200/60 shadow-sm p-4">
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="text-orange-600 text-sm">⚡</span>
-                          <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-                            Key Differences
-                          </h4>
-                          <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold text-orange-700 bg-orange-100 rounded uppercase tracking-wider">
-                            Outlier
-                          </span>
-                        </div>
-                        <div className="space-y-3">
+                      <div className="bg-neutral-50 rounded-xl p-4">
+                        <p className="text-sm font-semibold text-neutral-900 mb-2">Key Differences</p>
+                        <div className="space-y-2">
                           {diffSummary.keyDifferences.map((diff, idx) => (
-                            <div key={idx} className="space-y-1">
-                              <p className="text-xs font-semibold text-gray-800">
-                                {diff.model}
-                              </p>
-                              <ul className="space-y-1">
+                            <div key={idx}>
+                              <p className="text-sm font-medium text-neutral-700">{diff.model}</p>
+                              <ul className="space-y-1 mt-1">
                                 {diff.points.map((point, pIdx) => (
-                                  <li key={pIdx} className="text-xs text-gray-600 leading-relaxed flex items-start gap-2">
-                                    <span className="text-gray-400 text-[10px] mt-0.5 flex-shrink-0">•</span>
-                                    <span className="flex-1 min-w-0">{point}</span>
+                                  <li key={pIdx} className="text-sm text-neutral-600 leading-relaxed flex items-start gap-2">
+                                    <span className="text-amber-500 mt-0.5 flex-shrink-0">&bull;</span>
+                                    <span>{point}</span>
                                   </li>
                                 ))}
                               </ul>
@@ -2542,23 +2000,14 @@ export default function Home() {
                       </div>
                     )}
 
-                    {/* Notable Gaps Card */}
                     {diffSummary.notableGaps.length > 0 && (
-                      <div className="bg-white rounded-lg border border-gray-200/60 shadow-sm p-4">
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="text-purple-600 text-sm">◐</span>
-                          <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-                            Notable Gaps
-                          </h4>
-                          <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold text-purple-700 bg-purple-100 rounded uppercase tracking-wider">
-                            Gap
-                          </span>
-                        </div>
-                        <ul className="space-y-2">
+                      <div className="bg-neutral-50 rounded-xl p-4">
+                        <p className="text-sm font-semibold text-neutral-900 mb-2">Notable Gaps</p>
+                        <ul className="space-y-1.5">
                           {diffSummary.notableGaps.map((item, idx) => (
-                            <li key={idx} className="text-xs text-gray-700 leading-relaxed flex items-start gap-2">
-                              <span className="text-gray-400 text-[10px] mt-0.5 flex-shrink-0">•</span>
-                              <span className="flex-1 min-w-0">{item}</span>
+                            <li key={idx} className="text-sm text-neutral-600 leading-relaxed flex items-start gap-2">
+                              <span className="text-neutral-400 mt-0.5 flex-shrink-0">&bull;</span>
+                              <span>{item}</span>
                             </li>
                           ))}
                         </ul>
@@ -2567,20 +2016,22 @@ export default function Home() {
                   </div>
                 </div>
                 
-                {/* Follow-up Composer */}
+                {/* Follow-up */}
                 {!isStreaming && (
-                  <FollowUpComposer
-                    value={followUpInput}
-                    onChange={setFollowUpInput}
-                    onSubmit={handleFollowUpSubmit}
-                    isLoading={isStreaming}
-                    placeholder="Ask a follow-up about this comparison…"
-                  />
+                  <div className="px-6 pb-5">
+                    <FollowUpComposer
+                      value={followUpInput}
+                      onChange={setFollowUpInput}
+                      onSubmit={handleFollowUpSubmit}
+                      isLoading={isStreaming}
+                      placeholder="Ask a follow-up about this comparison\u2026"
+                    />
+                  </div>
                 )}
               </div>
             )}
 
-            {/* Loading state for comparison summary - AI-native design */}
+            {/* Loading summary */}
             {!isStreaming && !diffSummary && !diffError && Object.keys(modelPanels).length >= 2 && (
               (() => {
                 const successfulCount = Object.values(modelPanels).filter(
@@ -2589,122 +2040,15 @@ export default function Home() {
                 
                 if (successfulCount >= 2) {
                   return (
-                    <div className="bg-slate-900/[0.03] rounded-xl shadow-md border border-gray-200/50 overflow-hidden relative animate-in fade-in duration-300"
-                      style={{
-                        backgroundImage: `
-                          repeating-linear-gradient(0deg, transparent, transparent 1px, rgb(0 0 0 / 0.015) 1px, rgb(0 0 0 / 0.015) 2px),
-                          repeating-linear-gradient(90deg, transparent, transparent 1px, rgb(0 0 0 / 0.015) 1px, rgb(0 0 0 / 0.015) 2px)
-                        `,
-                        backgroundSize: '20px 20px'
-                      }}
-                    >
-                      <div className="p-8">
-                        {/* Header with spinner */}
-                        <div className="flex items-center gap-3 mb-6">
-                          <div 
-                            className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full"
-                            style={{
-                              animation: 'spin 1.5s linear infinite'
-                            }}
-                          />
-                          <div className="flex-1">
-                            <h3 className="text-base font-extrabold text-gray-900 tracking-[-0.01em]">
-                              Comparing responses
-                            </h3>
-                            <p className="text-xs text-gray-500/80 mt-1 leading-[1.6]">
-                              Synthesizing similarities, differences, and gaps across models
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Skeleton Preview */}
-                        <div className="space-y-4">
-                          {/* Verdict skeleton */}
-                          <div className="bg-blue-50/40 border border-blue-200/40 rounded-lg p-4">
-                            <div className="space-y-2">
-                              <div className="h-3 bg-gradient-to-r from-blue-200/30 via-blue-200/50 to-blue-200/30 rounded w-20 animate-shimmer" 
-                                style={{
-                                  backgroundSize: '200% 100%'
-                                }}
-                              />
-                              <div className="h-3 bg-gradient-to-r from-blue-200/30 via-blue-200/50 to-blue-200/30 rounded w-full animate-shimmer" 
-                                style={{
-                                  backgroundSize: '200% 100%',
-                                  animationDelay: '0.1s'
-                                }}
-                              />
-                              <div className="h-3 bg-gradient-to-r from-blue-200/30 via-blue-200/50 to-blue-200/30 rounded w-4/5 animate-shimmer" 
-                                style={{
-                                  backgroundSize: '200% 100%',
-                                  animationDelay: '0.2s'
-                                }}
-                              />
-                            </div>
-                          </div>
-
-                          {/* Summary cards skeleton */}
-                          <div className="grid md:grid-cols-3 gap-3">
-                            <div className="bg-white/60 rounded-lg border border-gray-200/50 p-3 space-y-2">
-                              <div className="h-2.5 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-24 animate-shimmer" 
-                                style={{
-                                  backgroundSize: '200% 100%'
-                                }}
-                              />
-                              <div className="h-2 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-full animate-shimmer" 
-                                style={{
-                                  backgroundSize: '200% 100%',
-                                  animationDelay: '0.15s'
-                                }}
-                              />
-                              <div className="h-2 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-5/6 animate-shimmer" 
-                                style={{
-                                  backgroundSize: '200% 100%',
-                                  animationDelay: '0.3s'
-                                }}
-                              />
-                            </div>
-                            <div className="bg-white/60 rounded-lg border border-gray-200/50 p-3 space-y-2">
-                              <div className="h-2.5 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-28 animate-shimmer" 
-                                style={{
-                                  backgroundSize: '200% 100%',
-                                  animationDelay: '0.1s'
-                                }}
-                              />
-                              <div className="h-2 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-full animate-shimmer" 
-                                style={{
-                                  backgroundSize: '200% 100%',
-                                  animationDelay: '0.25s'
-                                }}
-                              />
-                              <div className="h-2 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-4/5 animate-shimmer" 
-                                style={{
-                                  backgroundSize: '200% 100%',
-                                  animationDelay: '0.4s'
-                                }}
-                              />
-                            </div>
-                            <div className="bg-white/60 rounded-lg border border-gray-200/50 p-3 space-y-2">
-                              <div className="h-2.5 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-20 animate-shimmer" 
-                                style={{
-                                  backgroundSize: '200% 100%',
-                                  animationDelay: '0.2s'
-                                }}
-                              />
-                              <div className="h-2 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-full animate-shimmer" 
-                                style={{
-                                  backgroundSize: '200% 100%',
-                                  animationDelay: '0.35s'
-                                }}
-                              />
-                              <div className="h-2 bg-gradient-to-r from-gray-200/50 via-gray-200/70 to-gray-200/50 rounded w-3/4 animate-shimmer" 
-                                style={{
-                                  backgroundSize: '200% 100%',
-                                  animationDelay: '0.5s'
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </div>
+                    <div className="animate-enter">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full" />
+                        <span className="text-base font-medium text-neutral-700">Comparing responses&hellip;</span>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="h-3 bg-neutral-100 rounded w-full animate-pulse" />
+                        <div className="h-3 bg-neutral-100 rounded w-[90%] animate-pulse" />
+                        <div className="h-3 bg-neutral-100 rounded w-[75%] animate-pulse" />
                       </div>
                     </div>
                   );
@@ -2714,14 +2058,11 @@ export default function Home() {
             )}
 
             {diffError && (
-              <div className="bg-yellow-50 rounded-lg border border-yellow-200 p-4">
-                <p className="text-sm text-yellow-800">
-                  Note: {diffError}
-                </p>
+              <div className="bg-amber-50 rounded-xl border border-amber-200 p-4">
+                <p className="text-sm text-amber-800">Note: {diffError}</p>
               </div>
             )}
 
-            {/* Show message when not enough successful panels for comparison */}
             {!isStreaming && !diffSummary && !diffError && Object.keys(modelPanels).length > 0 && (
               (() => {
                 const successfulCount = Object.values(modelPanels).filter(
@@ -2731,12 +2072,10 @@ export default function Home() {
                 
                 if (errorCount > 0 && successfulCount < 2) {
                   return (
-                    <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-                      <p className="text-sm text-gray-700">
-                        ℹ Comparison requires at least 2 successful responses. 
-                        {successfulCount === 1 
-                          ? " Only 1 panel completed successfully."
-                          : " No panels completed successfully."}
+                    <div className="bg-neutral-50 rounded-xl border border-neutral-200 p-4">
+                      <p className="text-sm text-neutral-600">
+                        Comparison requires at least 2 successful responses.
+                        {successfulCount === 1 ? " Only 1 model completed." : " No models completed."}
                       </p>
                     </div>
                   );
@@ -2747,7 +2086,6 @@ export default function Home() {
           </>
         )}
       </div>
-
     </div>
   );
 }
