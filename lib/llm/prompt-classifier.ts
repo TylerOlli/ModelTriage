@@ -178,13 +178,17 @@ function computeClassifierConfidence(
   prompt: string
 ): ClassifierConfidence {
   // Strong signal: multiple pattern matches
-  if (taskStrength >= 3) return "high";
-  if (taskStrength >= 2) return "medium";
+  // Lowered from 3 to 2 — most real prompts only match 1-2 patterns.
+  if (taskStrength >= 2) return "high";
 
-  // Single pattern match with supporting signals
-  if (taskStrength === 1 && prompt.length > 50) return "medium";
+  // Single match is still meaningful, especially with a real prompt
+  if (taskStrength === 1 && prompt.length > 30) return "medium";
+  if (taskStrength === 1) return "medium";
 
-  // Ambiguous or very short prompt
+  // Zero pattern matches — truly ambiguous
+  // Even then, if the prompt has meaningful length, it's not "low"
+  if (prompt.length > 100) return "medium";
+
   return "low";
 }
 

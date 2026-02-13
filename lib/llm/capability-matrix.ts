@@ -15,67 +15,24 @@ import type { ModelProfile, TaskWeightProfile, TaskType } from "./scoring-types"
 // ─── Model Profiles ─────────────────────────────────────────────
 
 export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
+  // ── Budget / Fast Tier ────────────────────────────────────────
+  // These models trade quality for speed and cost. Quality scores
+  // are clearly separated from the premium tier to ensure the
+  // scoring engine picks premium models for complex tasks.
+
   "gpt-5-mini": {
     id: "gpt-5-mini",
     displayName: "GPT-5 Mini",
     provider: "OpenAI",
     capabilities: {
-      reasoning: 0.65,
-      codeGeneration: 0.70,
-      debugging: 0.60,
-      structuredOutput: 0.75,
-      instructionFollowing: 0.80,
-      speed: 0.95,
-      costEfficiency: 0.95,
-      recencyStrength: 0.80,
-    },
-  },
-
-  "gpt-5.2": {
-    id: "gpt-5.2",
-    displayName: "GPT-5.2",
-    provider: "OpenAI",
-    capabilities: {
-      reasoning: 0.95,
-      codeGeneration: 0.88,
-      debugging: 0.92,
-      structuredOutput: 0.85,
-      instructionFollowing: 0.88,
-      speed: 0.50,
-      costEfficiency: 0.35,
-      recencyStrength: 0.85,
-    },
-  },
-
-  "claude-opus-4-5-20251101": {
-    id: "claude-opus-4-5-20251101",
-    displayName: "Claude Opus 4.5",
-    provider: "Anthropic",
-    capabilities: {
-      reasoning: 0.92,
-      codeGeneration: 0.85,
-      debugging: 0.85,
-      structuredOutput: 0.80,
-      instructionFollowing: 0.92,
-      speed: 0.40,
-      costEfficiency: 0.25,
-      recencyStrength: 0.78,
-    },
-  },
-
-  "claude-sonnet-4-5-20250929": {
-    id: "claude-sonnet-4-5-20250929",
-    displayName: "Claude Sonnet 4.5",
-    provider: "Anthropic",
-    capabilities: {
-      reasoning: 0.82,
-      codeGeneration: 0.90,
-      debugging: 0.80,
-      structuredOutput: 0.82,
-      instructionFollowing: 0.90,
-      speed: 0.75,
-      costEfficiency: 0.65,
-      recencyStrength: 0.78,
+      reasoning: 0.45,         // Basic reasoning, struggles with multi-step
+      codeGeneration: 0.55,    // Adequate for simple snippets
+      debugging: 0.40,         // Weak at root-cause analysis
+      structuredOutput: 0.70,  // Good JSON/format adherence
+      instructionFollowing: 0.72, // Follows clear instructions well
+      speed: 0.95,             // Very fast
+      costEfficiency: 0.95,    // Cheapest option
+      recencyStrength: 0.80,   // Recent training data
     },
   },
 
@@ -84,14 +41,14 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
     displayName: "Claude Haiku 4.5",
     provider: "Anthropic",
     capabilities: {
-      reasoning: 0.55,
-      codeGeneration: 0.60,
-      debugging: 0.50,
-      structuredOutput: 0.70,
-      instructionFollowing: 0.82,
-      speed: 0.95,
-      costEfficiency: 0.92,
-      recencyStrength: 0.75,
+      reasoning: 0.42,         // Light reasoning only
+      codeGeneration: 0.48,    // Basic code, misses edge cases
+      debugging: 0.35,         // Shallow error analysis
+      structuredOutput: 0.65,  // Decent format compliance
+      instructionFollowing: 0.70, // Generally follows instructions
+      speed: 0.95,             // Very fast
+      costEfficiency: 0.92,    // Very cheap
+      recencyStrength: 0.72,   // Slightly older training
     },
   },
 
@@ -100,14 +57,33 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
     displayName: "Gemini 2.5 Flash",
     provider: "Google",
     capabilities: {
-      reasoning: 0.62,
-      codeGeneration: 0.68,
-      debugging: 0.58,
-      structuredOutput: 0.72,
-      instructionFollowing: 0.75,
-      speed: 0.92,
-      costEfficiency: 0.90,
-      recencyStrength: 0.82,
+      reasoning: 0.48,         // Slightly better than GPT-5 Mini
+      codeGeneration: 0.52,    // Adequate for straightforward code
+      debugging: 0.42,         // Basic error identification
+      structuredOutput: 0.68,  // Good format handling
+      instructionFollowing: 0.68, // Sometimes drifts on complex prompts
+      speed: 0.92,             // Very fast
+      costEfficiency: 0.90,    // Very cheap
+      recencyStrength: 0.85,   // Strong recency (Google advantage)
+    },
+  },
+
+  // ── Mid Tier ──────────────────────────────────────────────────
+  // Strong all-rounders. Best balance of quality, speed, and cost.
+
+  "claude-sonnet-4-5-20250929": {
+    id: "claude-sonnet-4-5-20250929",
+    displayName: "Claude Sonnet 4.5",
+    provider: "Anthropic",
+    capabilities: {
+      reasoning: 0.78,         // Strong reasoning for mid-tier
+      codeGeneration: 0.88,    // Excellent code quality
+      debugging: 0.75,         // Good error analysis
+      structuredOutput: 0.80,  // Reliable format compliance
+      instructionFollowing: 0.88, // Follows nuanced instructions
+      speed: 0.70,             // Moderate speed
+      costEfficiency: 0.55,    // Moderate cost
+      recencyStrength: 0.75,   // Decent recency
     },
   },
 
@@ -116,14 +92,50 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
     displayName: "Gemini 2.5 Pro",
     provider: "Google",
     capabilities: {
-      reasoning: 0.80,
-      codeGeneration: 0.78,
-      debugging: 0.75,
-      structuredOutput: 0.78,
-      instructionFollowing: 0.82,
-      speed: 0.65,
-      costEfficiency: 0.55,
-      recencyStrength: 0.88,
+      reasoning: 0.75,         // Strong reasoning
+      codeGeneration: 0.72,    // Good code, not as polished as Sonnet
+      debugging: 0.68,         // Solid debugging
+      structuredOutput: 0.75,  // Good format handling
+      instructionFollowing: 0.78, // Follows instructions well
+      speed: 0.58,             // Slower than Sonnet
+      costEfficiency: 0.45,    // More expensive
+      recencyStrength: 0.92,   // Strongest recency (Google advantage)
+    },
+  },
+
+  // ── Premium Tier ──────────────────────────────────────────────
+  // Maximum quality. Reserved for complex, high-stakes tasks.
+  // Speed and cost scores are low to prevent selection on trivial prompts.
+
+  "gpt-5.2": {
+    id: "gpt-5.2",
+    displayName: "GPT-5.2",
+    provider: "OpenAI",
+    capabilities: {
+      reasoning: 0.96,         // Best-in-class reasoning
+      codeGeneration: 0.90,    // Excellent code quality
+      debugging: 0.92,         // Excellent root-cause analysis
+      structuredOutput: 0.85,  // Strong format compliance
+      instructionFollowing: 0.88, // Follows complex instructions
+      speed: 0.30,             // Slow (reasoning overhead)
+      costEfficiency: 0.20,    // Expensive
+      recencyStrength: 0.85,   // Good recency
+    },
+  },
+
+  "claude-opus-4-5-20251101": {
+    id: "claude-opus-4-5-20251101",
+    displayName: "Claude Opus 4.5",
+    provider: "Anthropic",
+    capabilities: {
+      reasoning: 0.94,         // Near-best reasoning
+      codeGeneration: 0.85,    // Excellent code quality
+      debugging: 0.88,         // Strong debugging
+      structuredOutput: 0.82,  // Reliable format compliance
+      instructionFollowing: 0.92, // Best instruction following
+      speed: 0.25,             // Slowest
+      costEfficiency: 0.15,    // Most expensive
+      recencyStrength: 0.75,   // Decent recency
     },
   },
 };
@@ -135,78 +147,81 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
 export const TASK_WEIGHTS: Record<TaskType, TaskWeightProfile> = {
   code_gen: {
     reasoning: 0.20,
-    codeGeneration: 0.35,
+    codeGeneration: 0.40,          // Code quality is paramount
     debugging: 0.05,
     structuredOutput: 0.15,
     instructionFollowing: 0.15,
-    speed: 0.05,
-    costEfficiency: 0.03,
-    recencyStrength: 0.02,
+    speed: 0.03,                   // Reduced — quality over speed for code
+    costEfficiency: 0.01,
+    recencyStrength: 0.01,
   },
 
   debug: {
     reasoning: 0.30,
-    codeGeneration: 0.10,
-    debugging: 0.35,
+    codeGeneration: 0.08,
+    debugging: 0.40,               // Debugging ability is paramount
     structuredOutput: 0.05,
     instructionFollowing: 0.10,
-    speed: 0.05,
-    costEfficiency: 0.03,
+    speed: 0.03,                   // Reduced — accuracy matters more
+    costEfficiency: 0.02,
     recencyStrength: 0.02,
   },
 
   refactor: {
-    reasoning: 0.25,
-    codeGeneration: 0.25,
+    reasoning: 0.28,
+    codeGeneration: 0.28,
     debugging: 0.10,
     structuredOutput: 0.10,
     instructionFollowing: 0.20,
-    speed: 0.05,
-    costEfficiency: 0.03,
-    recencyStrength: 0.02,
+    speed: 0.02,
+    costEfficiency: 0.01,
+    recencyStrength: 0.01,
   },
 
   explain: {
-    reasoning: 0.30,
+    reasoning: 0.35,               // Understanding matters most
     codeGeneration: 0.05,
     debugging: 0.05,
     structuredOutput: 0.10,
     instructionFollowing: 0.25,
-    speed: 0.10,
-    costEfficiency: 0.10,
+    speed: 0.08,
+    costEfficiency: 0.07,
     recencyStrength: 0.05,
   },
 
   research: {
-    reasoning: 0.35,
-    codeGeneration: 0.05,
-    debugging: 0.05,
+    reasoning: 0.40,               // Deep reasoning is critical
+    codeGeneration: 0.03,
+    debugging: 0.03,
     structuredOutput: 0.10,
     instructionFollowing: 0.15,
-    speed: 0.05,
-    costEfficiency: 0.05,
-    recencyStrength: 0.20,
+    speed: 0.02,
+    costEfficiency: 0.02,
+    recencyStrength: 0.25,         // Research often needs current info
   },
 
   creative: {
     reasoning: 0.15,
-    codeGeneration: 0.05,
+    codeGeneration: 0.03,
     debugging: 0.02,
     structuredOutput: 0.08,
-    instructionFollowing: 0.30,
-    speed: 0.15,
-    costEfficiency: 0.15,
-    recencyStrength: 0.10,
+    instructionFollowing: 0.35,    // Following creative constraints is key
+    speed: 0.12,
+    costEfficiency: 0.12,
+    recencyStrength: 0.13,
   },
 
+  // General: when the classifier can't confidently categorize,
+  // lean toward quality (reasoning + instruction following) rather
+  // than speed/cost. Better to over-deliver than pick a cheap model.
   general: {
-    reasoning: 0.20,
+    reasoning: 0.28,               // Up from 0.20 — favor smarter models
     codeGeneration: 0.10,
     debugging: 0.05,
     structuredOutput: 0.10,
-    instructionFollowing: 0.20,
-    speed: 0.15,
-    costEfficiency: 0.15,
+    instructionFollowing: 0.27,    // Up from 0.20 — quality matters
+    speed: 0.08,                   // Down from 0.15 — don't favor budget models
+    costEfficiency: 0.07,          // Down from 0.15 — same reason
     recencyStrength: 0.05,
   },
 };

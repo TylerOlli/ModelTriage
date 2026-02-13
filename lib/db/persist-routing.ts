@@ -92,6 +92,7 @@ export async function persistAutoSelect(data: AutoSelectData): Promise<void> {
       data: {
         anonymousId: data.anonymousId,
         promptHash,
+        promptLength: data.prompt.length,
         mode: "auto",
 
         // Classification
@@ -175,6 +176,7 @@ export async function persistCompare(data: CompareData): Promise<void> {
       data: {
         anonymousId: data.anonymousId,
         promptHash,
+        promptLength: data.prompt.length,
         mode: "compare",
 
         // Classification (same classifier, same prompt)

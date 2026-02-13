@@ -73,36 +73,43 @@ function computeModelScore(
   let rawScore = totalWeight > 0 ? (weightedSum / totalWeight) * 100 : 50;
 
   // ── Signal-based adjustments ────────────────────────────────
+  // Larger magnitudes than v1 to create meaningful separation
+  // between models when specific signals are present.
   let adjustedScore = rawScore;
 
   // Bonus: code signals align with code-strong models
-  if (classification.inputSignals.hasCode && caps.codeGeneration >= 0.8) {
-    adjustedScore += 3;
+  if (classification.inputSignals.hasCode && caps.codeGeneration >= 0.75) {
+    adjustedScore += 5;
   }
 
   // Bonus: stack trace + strong debugging
-  if (classification.inputSignals.hasStackTrace && caps.debugging >= 0.8) {
-    adjustedScore += 4;
+  if (classification.inputSignals.hasStackTrace && caps.debugging >= 0.7) {
+    adjustedScore += 6;
   }
 
   // Bonus: strict format needs + strong structured output
-  if (classification.inputSignals.strictFormat && caps.structuredOutput >= 0.8) {
-    adjustedScore += 3;
+  if (classification.inputSignals.strictFormat && caps.structuredOutput >= 0.75) {
+    adjustedScore += 5;
   }
 
   // Bonus: recency requirement + strong recency
   if (classification.recencyRequirement && caps.recencyStrength >= 0.8) {
-    adjustedScore += 3;
+    adjustedScore += 5;
   }
 
   // Penalty: high stakes with weak reasoning
   if (classification.stakes === "high" && caps.reasoning < 0.7) {
-    adjustedScore -= 8;
+    adjustedScore -= 12;
+  }
+
+  // Penalty: medium stakes with weak reasoning
+  if (classification.stakes === "medium" && caps.reasoning < 0.6) {
+    adjustedScore -= 6;
   }
 
   // Penalty: recency needed but model is stale
   if (classification.recencyRequirement && caps.recencyStrength < 0.7) {
-    adjustedScore -= 5;
+    adjustedScore -= 8;
   }
 
   // Penalty: code task with weak code generation
@@ -110,22 +117,31 @@ function computeModelScore(
     (classification.taskType === "code_gen" || classification.taskType === "debug") &&
     caps.codeGeneration < 0.6
   ) {
-    adjustedScore -= 5;
+    adjustedScore -= 8;
   }
 
   // Penalty: concise request penalizes slow/expensive models
-  if (classification.inputSignals.concise && caps.speed < 0.6) {
-    adjustedScore -= 3;
+  if (classification.inputSignals.concise && caps.speed < 0.5) {
+    adjustedScore -= 5;
   }
 
   // Bonus: concise request rewards fast models
   if (classification.inputSignals.concise && caps.speed >= 0.85) {
-    adjustedScore += 2;
+    adjustedScore += 4;
   }
 
-  // Bonus: long-form request rewards strong reasoning
-  if (classification.inputSignals.longForm && caps.reasoning >= 0.85) {
+  // Bonus: long-form request rewards strong reasoning + instruction following
+  // Complex prompts benefit from premium models that can handle nuance.
+  if (classification.inputSignals.longForm && caps.reasoning >= 0.75) {
+    adjustedScore += 6;
+  }
+  if (classification.inputSignals.longForm && caps.instructionFollowing >= 0.85) {
     adjustedScore += 3;
+  }
+
+  // Penalty: long-form request with weak reasoning (budget models shouldn't handle complex tasks)
+  if (classification.inputSignals.longForm && caps.reasoning < 0.55) {
+    adjustedScore -= 6;
   }
 
   // Clamp 0–100
@@ -153,20 +169,22 @@ function computeConfidence(
   let confidencePoints = 0;
 
   // Score gap contribution (0–3 points)
-  if (gap >= 10) confidencePoints += 3;
-  else if (gap >= 5) confidencePoints += 2;
-  else if (gap >= 2) confidencePoints += 1;
+  // With wider model differentiation, gaps of 5+ are now common.
+  if (gap >= 12) confidencePoints += 3;
+  else if (gap >= 6) confidencePoints += 2;
+  else if (gap >= 3) confidencePoints += 1;
 
   // Classifier confidence contribution (0–2 points)
   if (classifierConf === "high") confidencePoints += 2;
   else if (classifierConf === "medium") confidencePoints += 1;
 
   // Absolute score contribution (0–1 point)
-  if (topScore >= 80) confidencePoints += 1;
+  if (topScore >= 70) confidencePoints += 1;
 
   // Map to confidence level
-  if (confidencePoints >= 5) return "High";
-  if (confidencePoints >= 3) return "Medium";
+  // Lowered from 5/3 to 4/2 — the old thresholds were nearly unreachable
+  if (confidencePoints >= 4) return "High";
+  if (confidencePoints >= 2) return "Medium";
   return "Low";
 }
 

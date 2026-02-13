@@ -50,6 +50,11 @@ model RoutingDecision {
   // and analytics without storing the raw prompt text.
   promptHash String @map("prompt_hash")
 
+  // Character count of the raw prompt. Used for analytics
+  // (complexity correlation, response time scaling) without
+  // storing the prompt itself. Privacy-safe.
+  promptLength Int? @map("prompt_length")
+
   // "auto" or "compare" — which mode the user was in.
   mode String // "auto" | "compare"
 
