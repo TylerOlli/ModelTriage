@@ -3,13 +3,22 @@
  * Server-side only to access LLM providers
  *
  * After generating the summary, persists the compare session
- * to the database (fire-and-forget) for future calibration.
+ * to the database (fire-and-forget) with full analytics:
+ *   - Prompt classification (same classifier as auto-select)
+ *   - Shadow routing (what auto-select *would have* chosen)
+ *   - Shadow scoring (Expected Success for the shadow pick)
+ *   - Response timing
+ *   - Diff summary with verdict
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { diffAnalyzer } from "@/lib/diff";
 import type { ModelResponse } from "@/lib/diff/types";
 import { persistCompare } from "@/lib/db/persist-routing";
+import { classifyPrompt } from "@/lib/llm/prompt-classifier";
+import { intentRouter } from "@/lib/llm/intent-router";
+import { scoreForModel } from "@/lib/llm/scoring-engine";
+import type { ModelId } from "@/lib/llm/types";
 
 export const runtime = "nodejs";
 
@@ -19,12 +28,14 @@ interface ComparisonRequest {
   anonymousId?: string;
   /** Raw prompt text (will be hashed, not stored raw) */
   prompt?: string;
+  /** Wall-clock time for all model streams to complete (ms) */
+  responseTimeMs?: number;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as ComparisonRequest;
-    const { responses, anonymousId, prompt } = body;
+    const { responses, anonymousId, prompt, responseTimeMs } = body;
 
     // Validate input
     if (!Array.isArray(responses) || responses.length < 2) {
@@ -48,13 +59,56 @@ export async function POST(request: NextRequest) {
     const summary = await diffAnalyzer.analyze(responses);
 
     // ── Fire-and-forget: persist compare session ──────────────
-    // Only persist if we have the anonymous ID and prompt.
+    // Now includes shadow classification, routing, and scoring
+    // so compare rows have the same data density as auto-select rows.
     if (anonymousId && prompt) {
+      // All of this is fast and deterministic (no LLM calls):
+      // - classifyPrompt: regex-based, microseconds
+      // - intentRouter.route: may involve LLM but we wrap in try/catch
+      // - scoreForModel: pure math, microseconds
+
+      let classification;
+      let shadowRouting;
+      let shadowScoring;
+
+      try {
+        // 1. Classify the prompt (deterministic, instant)
+        classification = classifyPrompt(prompt);
+
+        // 2. Shadow route — what would auto-select have picked?
+        const decision = await intentRouter.route(prompt, false);
+        shadowRouting = {
+          intent: decision.intent,
+          category: decision.category,
+          chosenModel: decision.chosenModel,
+          confidence: decision.confidence,
+        };
+
+        // 3. Shadow score — Expected Success for the router's pick
+        shadowScoring = scoreForModel(prompt, decision.chosenModel as ModelId);
+      } catch (err) {
+        // Non-fatal — shadow routing/scoring is best-effort.
+        // Classification alone is still valuable.
+        console.error("[DB] Shadow routing failed (non-fatal):", {
+          error: err instanceof Error ? err.message : err,
+        });
+      }
+
       persistCompare({
         prompt,
         anonymousId,
         modelsCompared: responses.map((r) => r.model),
         diffSummary: summary,
+        classification: classification
+          ? {
+              taskType: classification.taskType,
+              stakes: classification.stakes,
+              inputSignals: classification.inputSignals as unknown as Record<string, boolean>,
+            }
+          : null,
+        shadowRouting: shadowRouting ?? null,
+        shadowScoring: shadowScoring ?? null,
+        responseTimeMs: responseTimeMs ?? null,
       }).catch((err) => {
         console.error("[DB] Fire-and-forget compare persistence failed:", err);
       });

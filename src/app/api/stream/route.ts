@@ -547,6 +547,8 @@ ${prompt}`;
       const stream = new ReadableStream({
         async start(controller) {
           const encoder = new TextEncoder();
+          // Declared outside try so it's accessible in finally for persistence
+          let modelDispatchStart = Date.now();
           
           try {
             /**
@@ -722,6 +724,11 @@ ${prompt}`;
             // Track accumulated response for vision models (for image gist extraction)
             const visionModelResponses = new Map<string, string>();
             let imageGistExtracted = false;
+
+            // ── Response Time Tracking ──────────────────────────────
+            // Captures wall-clock time from model dispatch to all
+            // streams completing. Stored in the database for calibration.
+            modelDispatchStart = Date.now();
 
             // PHASE A: Stream all models in parallel — this is the critical path.
             // Model dispatch starts immediately; routing explanation (Phase B) runs concurrently.
@@ -965,6 +972,7 @@ ${prompt}`;
             // This runs AFTER the stream closes — zero latency impact.
             // Uses `routingMetadata` (outer scope) since `routingMetadataStream`
             // is a const alias inside the start() function body.
+            const responseTimeMs = Date.now() - modelDispatchStart;
             if (anonymousId && routingMetadata.mode === "auto") {
               const classification = classifyPrompt(prompt);
               persistAutoSelect({
@@ -982,6 +990,7 @@ ${prompt}`;
                   stakes: classification.stakes,
                   inputSignals: classification.inputSignals as unknown as Record<string, boolean>,
                 },
+                responseTimeMs,
               }).catch((err) => {
                 console.error("[DB] Fire-and-forget persistence failed:", err);
               });

@@ -5,6 +5,16 @@
  * Called after the SSE stream closes (auto-select) or after the
  * compare summary returns (compare mode).
  *
+ * Both modes now populate the full set of fields:
+ *   - Classification (taskType, stakes, inputSignals)
+ *   - Routing (selectedModel, intent, category, confidence)
+ *   - Scoring (expectedSuccess, confidence, keyFactors)
+ *   - Response time (responseTimeMs)
+ *
+ * For compare mode, routing + scoring fields represent "shadow routing" —
+ * what the system *would have* picked, used to calibrate auto-select
+ * against real compare verdicts.
+ *
  * These writes NEVER block the user-facing response. If a write
  * fails, it logs the error and moves on — dropped data points
  * are acceptable for analytics; added latency is not.
@@ -31,6 +41,23 @@ async function hashPrompt(prompt: string): Promise<string> {
     .digest("hex");
 }
 
+// ─── Shared Types ───────────────────────────────────────────────
+
+/** Classification data from the deterministic prompt classifier */
+export interface ClassificationData {
+  taskType?: string;
+  stakes?: string;
+  inputSignals?: Record<string, boolean>;
+}
+
+/** Routing metadata from the intent router */
+export interface RoutingData {
+  intent?: string;
+  category?: string;
+  chosenModel?: string;
+  confidence?: number;
+}
+
 // ─── Auto-Select Persistence ────────────────────────────────────
 
 export interface AutoSelectData {
@@ -39,20 +66,13 @@ export interface AutoSelectData {
   /** Anonymous browser UUID from localStorage */
   anonymousId: string;
   /** Routing metadata from the intent router */
-  routing: {
-    intent?: string;
-    category?: string;
-    chosenModel?: string;
-    confidence?: number;
-  };
+  routing: RoutingData;
   /** Output of the scoring engine */
   scoring?: ScoringResult | null;
   /** Output of the prompt classifier */
-  classification?: {
-    taskType?: string;
-    stakes?: string;
-    inputSignals?: Record<string, boolean>;
-  } | null;
+  classification?: ClassificationData | null;
+  /** Wall-clock response time in milliseconds */
+  responseTimeMs?: number | null;
 }
 
 /**
@@ -91,6 +111,9 @@ export async function persistAutoSelect(data: AutoSelectData): Promise<void> {
         keyFactors: data.scoring?.keyFactors
           ? (data.scoring.keyFactors as unknown as any)
           : undefined,
+
+        // Performance
+        responseTimeMs: data.responseTimeMs ?? null,
       },
     });
 
@@ -98,6 +121,7 @@ export async function persistAutoSelect(data: AutoSelectData): Promise<void> {
       promptHash: promptHash.substring(0, 12) + "...",
       model: data.routing.chosenModel,
       expectedSuccess: data.scoring?.expectedSuccess,
+      responseTimeMs: data.responseTimeMs,
     });
   } catch (err) {
     // Non-fatal — log and move on. The user's response is already delivered.
@@ -119,6 +143,14 @@ export interface CompareData {
   modelsCompared: string[];
   /** The structured comparison summary from the DiffAnalyzer */
   diffSummary: DiffSummary;
+  /** Shadow classification — what the classifier produces for this prompt */
+  classification?: ClassificationData | null;
+  /** Shadow routing — what the router *would have* picked */
+  shadowRouting?: RoutingData | null;
+  /** Shadow scoring — scoring for the router's pick */
+  shadowScoring?: ScoringResult | null;
+  /** Wall-clock response time in milliseconds (all model streams) */
+  responseTimeMs?: number | null;
 }
 
 /**
@@ -126,6 +158,11 @@ export interface CompareData {
  *
  * Call this AFTER the diff summary has been generated and
  * returned to the frontend.
+ *
+ * Now includes shadow routing/scoring — the system runs the
+ * classifier and router on the prompt even though the user
+ * picked models manually. This lets us compare "what auto-select
+ * would have done" against the compare verdict for calibration.
  *
  * Fire-and-forget:
  *   persistCompare(data).catch(err => console.error(err));
@@ -140,6 +177,27 @@ export async function persistCompare(data: CompareData): Promise<void> {
         promptHash,
         mode: "compare",
 
+        // Classification (same classifier, same prompt)
+        taskType: data.classification?.taskType ?? null,
+        stakes: data.classification?.stakes ?? null,
+        inputSignals: data.classification?.inputSignals ?? undefined,
+
+        // Shadow routing — what auto-select would have chosen
+        selectedModel: data.shadowRouting?.chosenModel ?? null,
+        routingIntent: data.shadowRouting?.intent ?? null,
+        routingCategory: data.shadowRouting?.category ?? null,
+        routingConfidence: data.shadowRouting?.confidence ?? null,
+
+        // Shadow scoring — scoring for the router's pick
+        expectedSuccess: data.shadowScoring?.expectedSuccess ?? null,
+        confidence: data.shadowScoring?.confidence ?? null,
+        keyFactors: data.shadowScoring?.keyFactors
+          ? (data.shadowScoring.keyFactors as unknown as any)
+          : undefined,
+
+        // Performance
+        responseTimeMs: data.responseTimeMs ?? null,
+
         // Compare-specific fields
         modelsCompared: data.modelsCompared,
         diffSummary: data.diffSummary as any, // Prisma Json type
@@ -150,7 +208,9 @@ export async function persistCompare(data: CompareData): Promise<void> {
     console.log("[DB] Persisted compare session:", {
       promptHash: promptHash.substring(0, 12) + "...",
       models: data.modelsCompared,
+      shadowModel: data.shadowRouting?.chosenModel,
       hasVerdict: !!data.diffSummary.verdict,
+      responseTimeMs: data.responseTimeMs,
     });
   } catch (err) {
     // Non-fatal — log and move on.

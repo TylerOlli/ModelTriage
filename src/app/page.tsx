@@ -158,6 +158,8 @@ export default function Home() {
   
   // Track if IMAGE_GIST has upgraded routing.reason (prevent overwrites)
   const imageGistUpgradedRef = useRef(false);
+  // Track model streaming start time for response time analytics
+  const streamingStartRef = useRef<number | null>(null);
 
   // Streaming stage tracking
   /**
@@ -377,7 +379,10 @@ export default function Home() {
             setDiffError(null);
             
             // Call server-side API to generate summary (can't call LLM providers from client)
-            // Include anonymousId and prompt for database persistence.
+            // Include anonymousId, prompt, and response timing for database persistence.
+            const responseTimeMs = streamingStartRef.current
+              ? Date.now() - streamingStartRef.current
+              : null;
             const res = await fetch("/api/compare", {
               method: "POST",
               headers: {
@@ -387,6 +392,7 @@ export default function Home() {
                 responses: finalResponses,
                 anonymousId: getAnonymousId(),
                 prompt: prompt,
+                responseTimeMs,
               }),
             });
 
@@ -618,6 +624,7 @@ export default function Home() {
     // Auto: single "selecting" state. Compare: multi-step pipeline.
     setStreamingStage(isCompare ? "routing" : "selecting");
     imageGistUpgradedRef.current = false;
+    streamingStartRef.current = Date.now();
 
     abortControllerRef.current = new AbortController();
 
@@ -2463,7 +2470,7 @@ export default function Home() {
                 {/* Content */}
                 <div className="p-6 space-y-6">
                   {/* Verdict Callout */}
-                  {(diffSummary.commonGround.length > 0 || diffSummary.keyDifferences.length > 0) && (
+                  {(diffSummary.verdict || diffSummary.commonGround.length > 0 || diffSummary.keyDifferences.length > 0) && (
                     <div className="bg-blue-50/50 border border-blue-200/50 rounded-lg p-4">
                       <div className="flex items-start gap-2.5">
                         <span className="text-blue-600 text-base flex-shrink-0 mt-0.5">💡</span>
@@ -2472,9 +2479,7 @@ export default function Home() {
                             Verdict
                           </h4>
                           <p className="text-sm text-blue-900 leading-relaxed">
-                            {diffSummary.commonGround.length > 0 && diffSummary.commonGround[0]}
-                            {diffSummary.keyDifferences.length > 0 && diffSummary.commonGround.length > 0 && ` However, ${diffSummary.keyDifferences[0].model} ${diffSummary.keyDifferences[0].points[0]?.toLowerCase()}`}
-                            {diffSummary.keyDifferences.length > 0 && diffSummary.commonGround.length === 0 && `${diffSummary.keyDifferences[0].model} ${diffSummary.keyDifferences[0].points[0]?.toLowerCase()}`}
+                            {diffSummary.verdict}
                           </p>
                         </div>
                       </div>

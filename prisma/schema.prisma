@@ -53,28 +53,36 @@ model RoutingDecision {
   // "auto" or "compare" — which mode the user was in.
   mode String // "auto" | "compare"
 
-  // ── Classification (auto-select only) ─────────────────────────
+  // ── Classification (both modes) ─────────────────────────────
   // Output of the deterministic prompt classifier.
-  // Null for compare-mode rows (no classification occurs).
+  // Populated for both auto-select and compare mode rows.
   taskType    String? @map("task_type")    // code_gen, debug, refactor, etc.
   stakes      String?                       // low, medium, high
   // Input signals as JSON: { hasCode, hasStackTrace, strictFormat, ... }
   inputSignals Json? @map("input_signals")
 
-  // ── Routing (auto-select only) ────────────────────────────────
-  // Which model was selected and why.
+  // ── Routing ────────────────────────────────────────────────────
+  // For auto-select: the actual routing decision.
+  // For compare: shadow routing — what the router *would have* chosen.
   selectedModel String? @map("selected_model") // e.g. "claude-sonnet-4-5-20250929"
   routingIntent String? @map("routing_intent") // coding, writing, analysis, vision
   routingCategory String? @map("routing_category") // coding_quick, writing_standard, etc.
   routingConfidence Float? @map("routing_confidence") // 0.0–1.0
 
-  // ── Scoring (auto-select only) ────────────────────────────────
-  // Output of the Expected Success scoring engine.
+  // ── Scoring (both modes) ──────────────────────────────────────
+  // For auto-select: scoring for the selected model.
+  // For compare: shadow scoring — what the router's pick would have scored.
   // Stored for future calibration of the capability matrix.
   expectedSuccess Int?    @map("expected_success") // 0–100
   confidence      String?                           // "Low", "Medium", "High"
   // Full key factors array as JSON
   keyFactors      Json?   @map("key_factors")
+
+  // ── Performance ───────────────────────────────────────────────
+  // Total wall-clock time for the model response(s) in milliseconds.
+  // Auto-select: time from model dispatch to stream completion.
+  // Compare: total time for all model streams to complete.
+  responseTimeMs Int? @map("response_time_ms")
 
   // ── Compare Mode Fields ───────────────────────────────────────
   // Which models were compared (JSON array of model IDs).
