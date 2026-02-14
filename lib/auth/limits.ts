@@ -86,6 +86,11 @@ export async function getCurrentUsage(
   role: UserRole | null,
   fingerprint: string | null
 ): Promise<{ used: number; limit: number; remaining: number }> {
+  // Dev bypass — show unlimited when AUTH_DISABLED is set
+  if (process.env.AUTH_DISABLED === "true") {
+    return { used: 0, limit: 999, remaining: 999 };
+  }
+
   if (userId && role) {
     const limit = getDailyLimit(role);
     const today = getToday();

@@ -164,14 +164,18 @@ modeltriage/
 │   ├── page.tsx              # Main UI
 │   └── layout.tsx            # Root layout (AuthProvider)
 ├── src/components/
-│   ├── auth/                 # Auth UI components
-│   │   ├── AuthProvider.tsx  # Auth context + usage state
-│   │   ├── LoginModal.tsx    # Email/password login/signup
-│   │   ├── UserMenu.tsx      # User dropdown + usage bar
-│   │   ├── AuthGate.tsx      # Limit-exceeded prompt
-│   │   └── UpgradeBanner.tsx # Approaching-limit warning
-│   └── ...                   # Other UI components
-├── lib/
+  │   ├── auth/                 # Auth UI components
+  │   │   ├── AuthProvider.tsx  # Auth context + usage state
+  │   │   ├── LoginModal.tsx    # Email/password login/signup
+  │   │   ├── UserMenu.tsx      # User dropdown + usage bar
+  │   │   ├── AuthGate.tsx      # Limit-exceeded prompt
+  │   │   └── UpgradeBanner.tsx # Approaching-limit warning
+  │   ├── PromptComposer.tsx    # Prompt input, files, history, model chips
+  │   ├── AutoResponseView.tsx  # Auto-select mode response display
+  │   ├── CompareResponseView.tsx # Compare mode grid + diff summary
+  │   ├── ConversationHistory.tsx # Previous turns accordion
+  │   └── ...                   # Other UI components
+  ├── lib/
 │   ├── auth/                 # Auth utilities
 │   │   ├── session.ts        # JWT validation + profile cache
 │   │   ├── gates.ts          # Feature flags + limit config
@@ -182,9 +186,10 @@ modeltriage/
 │   │   ├── prisma.ts         # Prisma client singleton
 │   │   └── persist-routing.ts # Analytics persistence
 │   ├── llm/                  # LLM providers + routing
-│   ├── diff/                 # Diff analyzer
-│   ├── attachments/          # File attachment processing
-│   └── errors.ts             # Centralized error reporting
+  │   ├── diff/                 # Diff analyzer
+  │   ├── attachments/          # File attachment processing
+  │   ├── models.ts             # Model definitions + display utilities
+  │   └── errors.ts             # Centralized error reporting
 ├── prisma/
 │   └── schema.prisma         # Database schema
 ├── supabase/
