@@ -331,8 +331,9 @@ export default function Home() {
     localStorage.setItem("selectedModels", JSON.stringify(selectedModels));
   }, [selectedModels]);
 
-  // Load prompt history
+  // Load prompt history (only for logged-in users)
   useEffect(() => {
+    if (!user) return;
     const savedHistory = localStorage.getItem("promptHistory");
     if (savedHistory) {
       try {
@@ -340,16 +341,24 @@ export default function Home() {
         if (Array.isArray(parsed)) {
           setPromptHistory(parsed);
         }
-      } catch (e) {
+      } catch {
         // Ignore parse errors
       }
     }
-  }, []);
+  }, [user]);
 
-  // Persist prompt history
+  // Persist prompt history (only for logged-in users)
   useEffect(() => {
+    if (!user) return;
     localStorage.setItem("promptHistory", JSON.stringify(promptHistory));
-  }, [promptHistory]);
+  }, [promptHistory, user]);
+
+  // Clear history state when user signs out
+  useEffect(() => {
+    if (!user) {
+      setPromptHistory([]);
+    }
+  }, [user]);
 
   // Persist prompt (debounced to avoid excessive writes)
   // ONLY saves draft if "Remember drafts" toggle is enabled (default OFF for production)
@@ -441,7 +450,9 @@ export default function Home() {
   }, [isStreaming, modelPanels]);
 
   // Add prompt to history (dedupe consecutive duplicates, keep last 10)
+  // Only saves for logged-in users — anonymous users see a disabled hint instead.
   const addToHistory = (submittedPrompt: string) => {
+    if (!user) return; // Anonymous users don't get history
     const trimmed = submittedPrompt.trim();
     if (!trimmed) return;
 
@@ -1507,8 +1518,22 @@ export default function Home() {
                   <span className="hidden sm:inline">Attach</span>
                 </button>
 
-                {/* History */}
-                {promptHistory.length > 0 && (
+                {/* History — disabled teaser for anonymous, functional for logged-in */}
+                {!user ? (
+                  <div className="relative group/history">
+                    <button
+                      type="button"
+                      disabled
+                      className="text-sm text-neutral-300 cursor-not-allowed flex items-center gap-1.5"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      <span className="hidden sm:inline">History</span>
+                    </button>
+                    <div className="absolute bottom-full left-0 mb-2 px-3 py-1.5 bg-neutral-800 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover/history:opacity-100 transition-opacity pointer-events-none">
+                      Sign in to save prompt history
+                    </div>
+                  </div>
+                ) : promptHistory.length > 0 ? (
                   <button
                     type="button"
                     onClick={() => setShowHistory(!showHistory)}
@@ -1517,7 +1542,7 @@ export default function Home() {
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     <span className="hidden sm:inline">History</span>
                   </button>
-                )}
+                ) : null}
 
                 {/* Reset */}
                 {prompt.trim() && (
