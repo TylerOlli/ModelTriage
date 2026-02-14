@@ -31,6 +31,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
+  // Skip middleware for API routes — they validate auth independently
+  // using local JWT validation (getSession). No need to refresh the
+  // session twice. This saves ~100-200ms on every API call.
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

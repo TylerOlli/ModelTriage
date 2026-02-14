@@ -15,7 +15,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
+import { getSessionSecure, invalidateProfileCache } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { createClient } from "@supabase/supabase-js";
 import { reportError } from "@/lib/errors";
@@ -24,7 +24,7 @@ export const runtime = "nodejs";
 
 export async function DELETE() {
   try {
-    const sessionUser = await getSession();
+    const sessionUser = await getSessionSecure();
 
     if (!sessionUser) {
       return NextResponse.json(
@@ -34,6 +34,9 @@ export async function DELETE() {
     }
 
     const userId = sessionUser.id;
+
+    // Invalidate cached profile before deletion
+    invalidateProfileCache(userId);
 
     // ── 1. Delete app data ───────────────────────────────────────
     // UserProfile has onDelete: Cascade for DailyUsage,

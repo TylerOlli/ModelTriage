@@ -174,26 +174,29 @@ export async function POST(request: Request) {
     // 3. Check usage limits (DB-backed, atomic increment)
     // All enforcement happens here — streaming code is untouched.
     const clientIP = getClientIP(request);
-    const sessionUser = await getSession();
-    let userRole: UserRole | null = null;
-    let userId: string | null = null;
 
-    if (sessionUser) {
-      userId = sessionUser.id;
-      const profile = await getUserProfile(sessionUser.id);
-      userRole = (profile?.role as UserRole) ?? "free";
-    }
+    // Run auth check and request parsing in parallel — they're independent
+    const [sessionUser, parsedRequest] = await Promise.all([
+      getSession(),
+      parseInferenceRequest(request),
+    ]);
 
-    // Parse request (supports both JSON and multipart/form-data)
-    const parsedRequest = await parseInferenceRequest(request);
     const { prompt, models, temperature, previousPrompt, previousResponse, files, stream, anonymousId } = parsedRequest;
     const isFollowUp = (parsedRequest as any).isFollowUp === true || (parsedRequest as any).isFollowUp === "true";
     let { maxTokens } = parsedRequest;
 
-    // Build anonymous fingerprint for usage tracking (only if not authenticated)
-    const fingerprint = !userId && anonymousId
-      ? await createFingerprint(clientIP, anonymousId)
-      : null;
+    let userRole: UserRole | null = null;
+    let userId: string | null = null;
+    let fingerprint: string | null = null;
+
+    if (sessionUser) {
+      userId = sessionUser.id;
+      // getUserProfile is cached (5-min TTL) so this is fast after first call
+      const profile = await getUserProfile(sessionUser.id);
+      userRole = (profile?.role as UserRole) ?? "free";
+    } else if (anonymousId) {
+      fingerprint = await createFingerprint(clientIP, anonymousId);
+    }
 
     // Check usage limits (atomic increment — prevents race conditions)
     const usageCheck = await checkUsageLimit(userId, userRole, fingerprint);
