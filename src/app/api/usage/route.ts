@@ -7,16 +7,25 @@
  *
  * GET /api/usage
  *   - Authenticated: returns daily usage + limit for their role
- *   - Anonymous (with ?fingerprint=): returns lifetime usage + limit
+ *   - Anonymous (with ?anonymousId=): hashes IP + anonymousId server-side,
+ *     then looks up lifetime usage
  *   - No identity: returns zeroed-out response
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, getUserProfile } from "@/lib/auth/session";
-import { getCurrentUsage } from "@/lib/auth/limits";
+import { getCurrentUsage, createFingerprint } from "@/lib/auth/limits";
 import { getUsageLimitInfo, type UserRole } from "@/lib/auth/gates";
 
 export const runtime = "nodejs";
+
+function getClientIP(request: NextRequest): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  const realIP = request.headers.get("x-real-ip");
+  if (forwarded) return forwarded.split(",")[0].trim();
+  if (realIP) return realIP;
+  return "unknown";
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,8 +39,15 @@ export async function GET(request: NextRequest) {
       role = (profile?.role as UserRole) ?? "free";
     }
 
-    // For anonymous users, fingerprint comes from query param
-    const fingerprint = request.nextUrl.searchParams.get("fingerprint");
+    // For anonymous users, build fingerprint server-side from IP + anonymousId
+    let fingerprint: string | null = null;
+    if (!userId) {
+      const anonymousId = request.nextUrl.searchParams.get("anonymousId");
+      if (anonymousId) {
+        const ip = getClientIP(request);
+        fingerprint = await createFingerprint(ip, anonymousId);
+      }
+    }
 
     const usage = await getCurrentUsage(userId, role, fingerprint);
     const limitInfo = getUsageLimitInfo(role);

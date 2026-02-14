@@ -17,6 +17,7 @@ import {
   useEffect,
   useState,
   useCallback,
+  useMemo,
   type ReactNode,
 } from "react";
 import { createSupabaseBrowser } from "@/lib/auth/supabase-browser";
@@ -35,6 +36,8 @@ interface AuthContextValue {
   role: "free" | "pro" | null;
   usage: UsageInfo | null;
   loading: boolean;
+  /** Toast message to display (auto-clears) */
+  toast: string | null;
   /** Refresh usage info from the server */
   refreshUsage: () => Promise<void>;
   /** Sign out the current user */
@@ -46,6 +49,7 @@ const AuthContext = createContext<AuthContextValue>({
   role: null,
   usage: null,
   loading: true,
+  toast: null,
   refreshUsage: async () => {},
   signOut: async () => {},
 });
@@ -59,23 +63,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<"free" | "pro" | null>(null);
   const [usage, setUsage] = useState<UsageInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<string | null>(null);
 
-  const supabase = createSupabaseBrowser();
+  // Memoize so we don't recreate the client on every render
+  const supabase = useMemo(() => createSupabaseBrowser(), []);
 
   // Fetch usage info from the API
   const refreshUsage = useCallback(async () => {
     try {
-      // Build fingerprint for anonymous users
       let url = "/api/usage";
+
+      // For anonymous users, pass anonymousId so the server can hash it with IP
       if (!user) {
         const anonymousId = localStorage.getItem("mt_anonymous_id");
         if (anonymousId) {
-          // We can't hash client-side the same way as the server,
-          // so we pass the anonymousId and let the server handle fingerprinting
-          // Actually, the usage API expects a pre-hashed fingerprint.
-          // For simplicity, we'll pass the raw anonymousId as a query param
-          // and create a separate endpoint or adjust usage route.
-          // For now, skip anonymous usage display — the API enforces it anyway.
+          url += `?anonymousId=${encodeURIComponent(anonymousId)}`;
         }
       }
 
@@ -111,17 +113,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Listen for auth state changes (login, logout, token refresh)
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
       if (!session?.user) {
         setRole(null);
         setUsage(null);
+      }
+      // Show toast on sign-in
+      if (event === "SIGNED_IN" && session?.user) {
+        setToast("Signed in successfully");
       }
     });
 
     return () => subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-clear toast after 3 seconds
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   // Fetch usage whenever user changes
   useEffect(() => {
@@ -139,7 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, role, usage, loading, refreshUsage, signOut }}
+      value={{ user, role, usage, loading, toast, refreshUsage, signOut }}
     >
       {children}
     </AuthContext.Provider>

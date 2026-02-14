@@ -147,7 +147,7 @@ export default function Home() {
   const [comparisonMode, setComparisonMode] = useState(false);
   
   // ── Auth & Usage State ────────────────────────────────────
-  const { refreshUsage } = useAuth();
+  const { user, usage, toast, refreshUsage } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginModalMessage, setLoginModalMessage] = useState<string | undefined>();
   // Usage limit exceeded state — shown via AuthGate component
@@ -156,6 +156,13 @@ export default function Home() {
     used: number;
     limit: number;
   } | null>(null);
+
+  // Clear limit-exceeded gate when user signs in (e.g., after anonymous wall)
+  useEffect(() => {
+    if (user && usageLimitExceeded?.requiresAuth) {
+      setUsageLimitExceeded(null);
+    }
+  }, [user, usageLimitExceeded?.requiresAuth]);
 
   // Unified follow-up input (shared between both modes)
   const [followUpInput, setFollowUpInput] = useState("");
@@ -1531,6 +1538,13 @@ export default function Home() {
 
               {/* Right: char count + submit */}
               <div className="flex items-center gap-3">
+                {/* Anonymous usage indicator */}
+                {!user && usage && usage.limit > 0 && (
+                  <span className={`text-xs tabular-nums ${usage.remaining <= 1 ? "text-amber-500 font-medium" : "text-neutral-400"}`}>
+                    {usage.remaining}/{usage.limit} free
+                  </span>
+                )}
+
                 <span
                   id="character-count"
                   className={`text-sm tabular-nums ${isOverLimit ? "text-red-500 font-medium" : "text-neutral-400"}`}
@@ -1556,16 +1570,23 @@ export default function Home() {
                   </button>
                 ) : null}
 
-                <button
-                  type="submit"
-                  disabled={isStreaming || !prompt.trim() || isOverLimit}
-                  className="flex-shrink-0 w-9 h-9 flex items-center justify-center bg-neutral-900 text-white rounded-xl hover:bg-neutral-800 active:scale-95 disabled:bg-neutral-200 disabled:text-neutral-400 disabled:cursor-not-allowed transition-all duration-150"
-                  aria-label="Submit prompt"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
-                  </svg>
-                </button>
+                <div className="relative group/submit">
+                  <button
+                    type="submit"
+                    disabled={isStreaming || !prompt.trim() || isOverLimit || (usage !== null && usage.remaining <= 0)}
+                    className="flex-shrink-0 w-9 h-9 flex items-center justify-center bg-neutral-900 text-white rounded-xl hover:bg-neutral-800 active:scale-95 disabled:bg-neutral-200 disabled:text-neutral-400 disabled:cursor-not-allowed transition-all duration-150"
+                    aria-label="Submit prompt"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                  {usage !== null && usage.remaining <= 0 && (
+                    <div className="absolute bottom-full right-0 mb-2 px-3 py-1.5 bg-neutral-800 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover/submit:opacity-100 transition-opacity pointer-events-none">
+                      {user ? "Daily limit reached" : "Free requests used — sign up to continue"}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -2162,6 +2183,13 @@ export default function Home() {
           </>
         )}
       </div>
+
+      {/* Auth toast */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-neutral-900 text-white text-sm rounded-xl shadow-lg animate-enter">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

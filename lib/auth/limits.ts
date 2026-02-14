@@ -52,6 +52,11 @@ export async function checkUsageLimit(
   role: UserRole | null,
   fingerprint: string | null
 ): Promise<UsageLimitResult> {
+  // Dev bypass — skip all limits when AUTH_DISABLED is set
+  if (process.env.AUTH_DISABLED === "true") {
+    return { allowed: true, remaining: 999, limit: 999, used: 0 };
+  }
+
   // Authenticated user — daily limit
   if (userId && role) {
     return checkAuthenticatedUsage(userId, role);

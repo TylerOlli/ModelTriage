@@ -25,6 +25,12 @@ const supabaseAnonKey =
   "";
 
 export async function middleware(request: NextRequest) {
+  // Dev bypass — skip auth session refresh entirely when auth is disabled.
+  // Avoids a wasted round-trip to Supabase on every request during development.
+  if (process.env.AUTH_DISABLED === "true") {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

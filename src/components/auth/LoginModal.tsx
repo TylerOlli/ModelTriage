@@ -3,14 +3,14 @@
 /**
  * Login / Sign Up Modal
  *
- * Email/password authentication.
+ * Email/password authentication with forgot-password support.
  * Matches the existing ModelTriage design language:
  *   - White card with neutral borders
  *   - Blue accent for primary actions
  *   - Clean, minimal typography
  */
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createSupabaseBrowser } from "@/lib/auth/supabase-browser";
 
 interface LoginModalProps {
@@ -21,14 +21,48 @@ interface LoginModalProps {
 }
 
 export function LoginModal({ open, onClose, message }: LoginModalProps) {
-  const [mode, setMode] = useState<"login" | "signup">("signup");
+  const [mode, setMode] = useState<"login" | "signup" | "forgot">("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   const supabase = createSupabaseBrowser();
+  const emailInputRef = useRef<HTMLInputElement>(null);
+
+  // Close on Escape key
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        resetState();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (!open) return;
+    const original = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = original;
+    };
+  }, [open]);
+
+  // Autofocus email input when modal opens
+  useEffect(() => {
+    if (open) {
+      // Small delay to let the modal animate in
+      const timer = setTimeout(() => emailInputRef.current?.focus(), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [open, mode]);
 
   if (!open) return null;
 
@@ -39,7 +73,7 @@ export function LoginModal({ open, onClose, message }: LoginModalProps) {
 
     try {
       if (mode === "signup") {
-        const { error: signUpError } = await supabase.auth.signUp({
+        const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -47,19 +81,55 @@ export function LoginModal({ open, onClose, message }: LoginModalProps) {
           },
         });
         if (signUpError) throw signUpError;
-        setEmailSent(true);
+
+        // If the session exists immediately, email confirmation is disabled —
+        // close the modal directly instead of showing "check your email".
+        if (data.session) {
+          resetState();
+          onClose();
+        } else {
+          setEmailSent(true);
+        }
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (signInError) throw signInError;
+        resetState();
         onClose();
       }
     } catch (err: unknown) {
-      const message =
+      let errMessage =
         err instanceof Error ? err.message : "Authentication failed";
-      setError(message);
+
+      // Friendlier message for "already registered" edge case
+      if (mode === "signup" && errMessage.toLowerCase().includes("already registered")) {
+        errMessage = "This email is already registered. Try signing in instead.";
+      }
+
+      setError(errMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+        email,
+        { redirectTo: `${window.location.origin}/auth/callback` }
+      );
+      if (resetError) throw resetError;
+      setResetSent(true);
+    } catch (err: unknown) {
+      const errMessage =
+        err instanceof Error ? err.message : "Failed to send reset email";
+      setError(errMessage);
     } finally {
       setLoading(false);
     }
@@ -70,6 +140,7 @@ export function LoginModal({ open, onClose, message }: LoginModalProps) {
     setPassword("");
     setError(null);
     setEmailSent(false);
+    setResetSent(false);
   };
 
   return (
@@ -102,20 +173,27 @@ export function LoginModal({ open, onClose, message }: LoginModalProps) {
         {/* Header */}
         <div className="text-center mb-6">
           <h2 className="text-xl font-semibold text-neutral-900">
-            {mode === "signup" ? "Create your account" : "Welcome back"}
+            {mode === "forgot"
+              ? "Reset your password"
+              : mode === "signup"
+                ? "Create your account"
+                : "Welcome back"}
           </h2>
           {message && (
             <p className="text-sm text-neutral-500 mt-2">{message}</p>
           )}
           {!message && (
             <p className="text-sm text-neutral-500 mt-2">
-              {mode === "signup"
-                ? "Sign up to continue using ModelTriage"
-                : "Sign in to your account"}
+              {mode === "forgot"
+                ? "Enter your email and we\u2019ll send a reset link"
+                : mode === "signup"
+                  ? "Sign up to continue using ModelTriage"
+                  : "Sign in to your account"}
             </p>
           )}
         </div>
 
+        {/* Email confirmation sent */}
         {emailSent ? (
           <div className="text-center py-4">
             <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -137,12 +215,82 @@ export function LoginModal({ open, onClose, message }: LoginModalProps) {
               Close
             </button>
           </div>
+
+        /* Password reset sent */
+        ) : resetSent ? (
+          <div className="text-center py-4">
+            <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-3">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                <polyline points="22,6 12,13 2,6" />
+              </svg>
+            </div>
+            <p className="text-sm text-neutral-700 font-medium">Reset link sent</p>
+            <p className="text-sm text-neutral-500 mt-1">
+              Check <strong>{email}</strong> for a password reset link
+            </p>
+            <button
+              onClick={() => {
+                resetState();
+                setMode("login");
+              }}
+              className="mt-4 text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Back to sign in
+            </button>
+          </div>
+
+        /* Forgot password form */
+        ) : mode === "forgot" ? (
+          <>
+            <form onSubmit={handleForgotPassword} className="space-y-3">
+              <div>
+                <input
+                  ref={emailInputRef}
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email address"
+                  required
+                  className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all"
+                />
+              </div>
+
+              {error && (
+                <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
+                  {error}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? "Sending..." : "Send reset link"}
+              </button>
+            </form>
+
+            <p className="text-center text-sm text-neutral-500 mt-5">
+              <button
+                onClick={() => {
+                  setMode("login");
+                  setError(null);
+                }}
+                className="text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Back to sign in
+              </button>
+            </p>
+          </>
+
+        /* Login / Signup form */
         ) : (
           <>
-            {/* Email form */}
             <form onSubmit={handleEmailAuth} className="space-y-3">
               <div>
                 <input
+                  ref={emailInputRef}
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -181,6 +329,21 @@ export function LoginModal({ open, onClose, message }: LoginModalProps) {
                     : "Sign in"}
               </button>
             </form>
+
+            {/* Forgot password (login mode only) */}
+            {mode === "login" && (
+              <p className="text-center text-sm mt-3">
+                <button
+                  onClick={() => {
+                    setMode("forgot");
+                    setError(null);
+                  }}
+                  className="text-neutral-400 hover:text-neutral-600 transition-colors"
+                >
+                  Forgot password?
+                </button>
+              </p>
+            )}
 
             {/* Toggle mode */}
             <p className="text-center text-sm text-neutral-500 mt-5">
