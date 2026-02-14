@@ -3,9 +3,10 @@
 //
 // Database: Supabase Postgres (transaction pooler on port 6543)
 //
-// This schema defines the persistence layer for routing analytics.
-// Phase 1: Store every routing decision and compare session for
-// future calibration of the model capability matrix.
+// This schema defines the persistence layer for:
+//   1. Routing analytics (RoutingDecision)
+//   2. User profiles & roles (UserProfile)
+//   3. Usage tracking & monetization (DailyUsage, AnonymousUsage)
 //
 // Two connection URLs:
 //   DATABASE_URL  — Transaction pooler (port 6543, pgbouncer=true)
@@ -13,6 +14,10 @@
 //   DIRECT_URL    — Direct connection (port 5432)
 //                   Used only by Prisma Migrate for DDL operations,
 //                   since pgbouncer cannot handle migration commands.
+//
+// Auth: Supabase Auth manages auth.users. A Postgres trigger
+// creates a UserProfile row on signup. Prisma manages all
+// tables in the public schema.
 // ─────────────────────────────────────────────────────────────────
 
 generator client {
@@ -23,6 +28,67 @@ datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
+}
+
+// ─── User Profile ─────────────────────────────────────────────
+//
+// App-specific user data. The `id` matches auth.users.id from
+// Supabase Auth. A database trigger creates this row automatically
+// when a new user signs up via Supabase Auth.
+//
+// Role determines feature access and usage limits.
+// stripeCustomerId is reserved for Phase 2 Stripe integration.
+
+model UserProfile {
+  id               String   @id // matches Supabase auth.users.id
+  role             String   @default("free") // "free" | "pro"
+  stripeCustomerId String?  @map("stripe_customer_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  dailyUsage DailyUsage[]
+
+  @@map("user_profiles")
+}
+
+// ─── Daily Usage ──────────────────────────────────────────────
+//
+// Tracks per-user, per-day request counts for limit enforcement.
+// Uses atomic upsert + increment to prevent race conditions when
+// a user fires multiple requests concurrently.
+//
+// The unique constraint on (userId, date) enables efficient
+// upsert: one row per user per day, atomically incremented.
+
+model DailyUsage {
+  id     String   @id @default(uuid())
+  userId String   @map("user_id")
+  date   DateTime @db.Date // truncated to calendar day
+  count  Int      @default(0)
+
+  user UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@map("daily_usage")
+}
+
+// ─── Anonymous Usage ──────────────────────────────────────────
+//
+// Tracks lifetime usage for anonymous (not logged in) visitors.
+// The fingerprint is a hash of IP + anonymousId to correlate
+// requests without storing PII.
+//
+// This is soft enforcement — a friction nudge toward signup,
+// not a security boundary. Determined users can reset localStorage
+// or change IP. That's acceptable for Phase 1.
+
+model AnonymousUsage {
+  id          String   @id @default(uuid())
+  fingerprint String   @unique // hash(IP + anonymousId)
+  count       Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("anonymous_usage")
 }
 
 // ─── Routing Decision ───────────────────────────────────────────
@@ -43,6 +109,11 @@ model RoutingDecision {
   // Not linked to any account — just correlates decisions
   // from the same browser session for outcome analysis.
   anonymousId String @map("anonymous_id")
+
+  // Authenticated user ID (nullable). When set, links this
+  // decision to a UserProfile for per-user analytics.
+  // Null for anonymous requests.
+  userId String? @map("user_id")
 
   // ── Request ───────────────────────────────────────────────────
   // SHA-256 hash of the normalized prompt. Used for deduplication
@@ -98,6 +169,7 @@ model RoutingDecision {
 
   // ── Indexes ───────────────────────────────────────────────────
   @@index([anonymousId])
+  @@index([userId])
   @@index([mode])
   @@index([selectedModel])
   @@index([taskType])

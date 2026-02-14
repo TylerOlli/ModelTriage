@@ -12,6 +12,11 @@ import type {
   ModelPanelData,
 } from "@/lib/session-types";
 import { createTurnId, createSessionId } from "@/lib/session-types";
+import { useAuth } from "../components/auth/AuthProvider";
+import { UserMenu } from "../components/auth/UserMenu";
+import { LoginModal } from "../components/auth/LoginModal";
+import { AuthGate } from "../components/auth/AuthGate";
+import { UpgradeBanner } from "../components/auth/UpgradeBanner";
 
 /**
  * Map model ID to provider name
@@ -141,6 +146,17 @@ export default function Home() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [comparisonMode, setComparisonMode] = useState(false);
   
+  // ── Auth & Usage State ────────────────────────────────────
+  const { refreshUsage } = useAuth();
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginModalMessage, setLoginModalMessage] = useState<string | undefined>();
+  // Usage limit exceeded state — shown via AuthGate component
+  const [usageLimitExceeded, setUsageLimitExceeded] = useState<{
+    requiresAuth: boolean;
+    used: number;
+    limit: number;
+  } | null>(null);
+
   // Unified follow-up input (shared between both modes)
   const [followUpInput, setFollowUpInput] = useState("");
 
@@ -584,6 +600,7 @@ export default function Home() {
     setFollowUpInput("");
     setExpandedTurns({});
     setActiveFollowUpPrompt(null);
+    setUsageLimitExceeded(null); // Clear any previous limit-exceeded state
 
     await handleStreamSubmit();
   };
@@ -651,6 +668,19 @@ export default function Home() {
 
       if (!res.ok) {
         const errorData = await res.json();
+        
+        // Handle usage limit exceeded — show AuthGate instead of error
+        if (errorData.error === "usage_limit_exceeded") {
+          setUsageLimitExceeded({
+            requiresAuth: errorData.requiresAuth ?? false,
+            used: errorData.used ?? 0,
+            limit: errorData.limit ?? 0,
+          });
+          setIsStreaming(false);
+          setStreamingStage(null);
+          return;
+        }
+        
         throw new Error(errorData.error || "Request failed");
       }
 
@@ -994,6 +1024,8 @@ export default function Home() {
       setIsStreaming(false);
       setStreamingStage(null);
       abortControllerRef.current = null;
+      // Refresh usage counter after request completes
+      refreshUsage();
     }
   };
 
@@ -1303,15 +1335,36 @@ export default function Home() {
       <div className="max-w-3xl mx-auto px-4 pt-12 pb-16 transition-all duration-300" style={{ maxWidth: comparisonMode && hasResults ? '80rem' : '48rem' }}>
         {/* Identity Bar */}
         <header className={`mb-10 transition-all duration-300 ${hasResults ? 'text-left' : 'text-center pt-8'}`}>
-          <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
-            Model<span className="text-blue-600">Triage</span>
-          </h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
+              Model<span className="text-blue-600">Triage</span>
+            </h1>
+            <UserMenu onSignInClick={() => {
+              setLoginModalMessage(undefined);
+              setShowLoginModal(true);
+            }} />
+          </div>
           {!hasResults && !isStreaming && (
-            <p className="text-base text-neutral-500 mt-1">
+            <p className={`text-base text-neutral-500 mt-1 ${hasResults ? '' : 'text-center'}`}>
               Right LLM. Every time.
             </p>
           )}
         </header>
+
+        {/* Usage limit warning banner */}
+        <UpgradeBanner />
+
+        {/* Login / Sign Up Modal */}
+        <LoginModal
+          open={showLoginModal}
+          onClose={() => {
+            setShowLoginModal(false);
+            setLoginModalMessage(undefined);
+            // Refresh usage after login in case user just signed up
+            refreshUsage();
+          }}
+          message={loginModalMessage}
+        />
 
         {/* Prompt Composer */}
         <form onSubmit={handleSubmit} className="mb-10">
@@ -1731,6 +1784,23 @@ export default function Home() {
               <span className="text-sm font-medium text-blue-600">Follow-up</span>
               <p className="text-sm text-neutral-700 leading-relaxed mt-0.5">{activeFollowUpPrompt}</p>
             </div>
+          </div>
+        )}
+
+        {/* Usage Limit Exceeded Gate */}
+        {usageLimitExceeded && (
+          <div className="mb-8">
+            <AuthGate
+              requiresAuth={usageLimitExceeded.requiresAuth}
+              used={usageLimitExceeded.used}
+              limit={usageLimitExceeded.limit}
+              onSignIn={() => {
+                setLoginModalMessage(
+                  "Create a free account to get 15 requests per day."
+                );
+                setShowLoginModal(true);
+              }}
+            />
           </div>
         )}
 
