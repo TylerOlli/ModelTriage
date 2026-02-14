@@ -10,14 +10,47 @@
  *   - Anonymous (with ?anonymousId=): hashes IP + anonymousId server-side,
  *     then looks up lifetime usage
  *   - No identity: returns zeroed-out response
+ *
+ * Rate-limited to prevent abuse (60 requests per minute per IP).
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, getUserProfile } from "@/lib/auth/session";
 import { getCurrentUsage, createFingerprint } from "@/lib/auth/limits";
 import { getUsageLimitInfo, type UserRole } from "@/lib/auth/gates";
+import { reportError } from "@/lib/errors";
 
 export const runtime = "nodejs";
+
+// ─── Simple in-memory rate limiter for this read-only endpoint ──
+// This is acceptable here (unlike the old usage tracking) because:
+//   1. It protects a read-only endpoint, not a billing boundary
+//   2. Worst case on cache miss = extra DB reads, not free usage
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT_MAX = 60; // 60 requests per minute per IP
+
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  entry.count++;
+  return entry.count <= RATE_LIMIT_MAX;
+}
+
+// Periodically clean up stale entries (every 5 minutes)
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateLimitMap) {
+    if (now > entry.resetAt) rateLimitMap.delete(ip);
+  }
+}, 5 * 60_000);
 
 function getClientIP(request: NextRequest): string {
   const forwarded = request.headers.get("x-forwarded-for");
@@ -29,6 +62,15 @@ function getClientIP(request: NextRequest): string {
 
 export async function GET(request: NextRequest) {
   try {
+    // Rate limit check
+    const ip = getClientIP(request);
+    if (!checkRateLimit(ip)) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429 }
+      );
+    }
+
     const sessionUser = await getSession();
     let userId: string | null = null;
     let role: UserRole | null = null;
@@ -44,7 +86,6 @@ export async function GET(request: NextRequest) {
     if (!userId) {
       const anonymousId = request.nextUrl.searchParams.get("anonymousId");
       if (anonymousId) {
-        const ip = getClientIP(request);
         fingerprint = await createFingerprint(ip, anonymousId);
       }
     }
@@ -61,7 +102,7 @@ export async function GET(request: NextRequest) {
       label: limitInfo.label,
     });
   } catch (err) {
-    console.error("Usage API error:", err);
+    reportError(err, { context: "usage-api" });
     return NextResponse.json(
       { error: "Failed to fetch usage info" },
       { status: 500 }

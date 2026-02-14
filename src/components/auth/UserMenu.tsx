@@ -19,6 +19,8 @@ interface UserMenuProps {
 export function UserMenu({ onSignInClick }: UserMenuProps) {
   const { user, role, usage, loading, signOut } = useAuth();
   const [open, setOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close menu when clicking outside or pressing Escape
@@ -141,6 +143,57 @@ export function UserMenu({ onSignInClick }: UserMenuProps) {
             >
               Sign out
             </button>
+
+            {/* Delete account */}
+            {!confirmDelete ? (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="w-full text-left px-3 py-2 text-sm text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                Delete account
+              </button>
+            ) : (
+              <div className="px-3 py-2 space-y-2">
+                <p className="text-xs text-red-600 font-medium">
+                  This will permanently delete your account and all data. This cannot be undone.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      setDeleting(true);
+                      try {
+                        const res = await fetch("/api/account/delete", {
+                          method: "DELETE",
+                        });
+                        if (res.ok) {
+                          setOpen(false);
+                          setConfirmDelete(false);
+                          await signOut();
+                        } else {
+                          const data = await res.json();
+                          alert(data.error || "Failed to delete account");
+                        }
+                      } catch {
+                        alert("Failed to delete account. Please try again.");
+                      } finally {
+                        setDeleting(false);
+                      }
+                    }}
+                    disabled={deleting}
+                    className="flex-1 px-2 py-1.5 text-xs font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                  >
+                    {deleting ? "Deleting..." : "Confirm delete"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    disabled={deleting}
+                    className="flex-1 px-2 py-1.5 text-xs font-medium text-neutral-600 bg-neutral-100 rounded-lg hover:bg-neutral-200 disabled:opacity-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -20,6 +20,24 @@ interface LoginModalProps {
   message?: string;
 }
 
+// ─── Password Strength ────────────────────────────────────────
+interface PasswordCheck {
+  label: string;
+  met: boolean;
+}
+
+function getPasswordChecks(password: string): PasswordCheck[] {
+  return [
+    { label: "At least 8 characters", met: password.length >= 8 },
+    { label: "Contains a number", met: /\d/.test(password) },
+    { label: "Contains uppercase & lowercase", met: /[a-z]/.test(password) && /[A-Z]/.test(password) },
+  ];
+}
+
+function isPasswordStrong(password: string): boolean {
+  return getPasswordChecks(password).every((c) => c.met);
+}
+
 export function LoginModal({ open, onClose, message }: LoginModalProps) {
   const [mode, setMode] = useState<"login" | "signup" | "forgot">("signup");
   const [email, setEmail] = useState("");
@@ -72,6 +90,13 @@ export function LoginModal({ open, onClose, message }: LoginModalProps) {
     setLoading(true);
 
     try {
+      // Enforce password strength on signup
+      if (mode === "signup" && !isPasswordStrong(password)) {
+        setError("Please meet all password requirements before continuing.");
+        setLoading(false);
+        return;
+      }
+
       if (mode === "signup") {
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
@@ -306,10 +331,37 @@ export function LoginModal({ open, onClose, message }: LoginModalProps) {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Password"
                   required
-                  minLength={6}
+                  minLength={8}
                   className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all"
                 />
               </div>
+
+              {/* Password strength indicator (signup only) */}
+              {mode === "signup" && password.length > 0 && (
+                <div className="space-y-1 px-1">
+                  {getPasswordChecks(password).map((check) => (
+                    <div key={check.label} className="flex items-center gap-2 text-xs">
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke={check.met ? "#22c55e" : "#d4d4d4"}
+                        strokeWidth="2.5"
+                      >
+                        {check.met ? (
+                          <path d="M20 6L9 17l-5-5" />
+                        ) : (
+                          <circle cx="12" cy="12" r="8" />
+                        )}
+                      </svg>
+                      <span className={check.met ? "text-green-600" : "text-neutral-400"}>
+                        {check.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {error && (
                 <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
@@ -319,7 +371,7 @@ export function LoginModal({ open, onClose, message }: LoginModalProps) {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || (mode === "signup" && !isPasswordStrong(password))}
                 className="w-full px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {loading

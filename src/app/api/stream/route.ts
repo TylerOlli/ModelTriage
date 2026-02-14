@@ -27,6 +27,7 @@ import { classifyPrompt } from "@/lib/llm/prompt-classifier";
 import { getSession, getUserProfile } from "@/lib/auth/session";
 import { checkUsageLimit, createFingerprint } from "@/lib/auth/limits";
 import type { UserRole } from "@/lib/auth/gates";
+import { reportError } from "@/lib/errors";
 
 /**
  * Check if a routing reason is a placeholder (not final)
@@ -1086,7 +1087,7 @@ ${prompt}`;
       }
     );
   } catch (error) {
-    console.error("Error in inference route:", error);
+    reportError(error, { context: "stream-api" });
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : "Internal server error",

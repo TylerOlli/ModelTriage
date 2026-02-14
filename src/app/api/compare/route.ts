@@ -24,6 +24,7 @@ import { intentRouter } from "@/lib/llm/intent-router";
 import { scoreForModel } from "@/lib/llm/scoring-engine";
 import type { ModelId } from "@/lib/llm/types";
 import { getSession } from "@/lib/auth/session";
+import { reportError } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -138,7 +139,7 @@ export async function POST(request: NextRequest) {
       summary,
     });
   } catch (err) {
-    console.error("Comparison summary API error:", err);
+    reportError(err, { context: "compare-api" });
     return NextResponse.json(
       {
         error:
