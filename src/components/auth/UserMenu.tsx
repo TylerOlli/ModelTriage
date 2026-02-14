@@ -77,7 +77,7 @@ export function UserMenu({ onSignInClick }: UserMenuProps) {
         </div>
         {usage && (
           <span className="text-xs text-neutral-500 hidden sm:inline">
-            {usage.remaining}/{usage.limit}
+            {Math.max(0, usage.remaining)}/{usage.limit}
           </span>
         )}
       </button>
@@ -102,7 +102,10 @@ export function UserMenu({ onSignInClick }: UserMenuProps) {
               </span>
               {usage && (
                 <span className="text-xs text-neutral-500">
-                  {usage.remaining} requests remaining {usage.period === "daily" ? "today" : ""}
+                  {usage.remaining > 0 
+                    ? `${usage.remaining} requests remaining ${usage.period === "daily" ? "today" : ""}`
+                    : `Daily limit reached`
+                  }
                 </span>
               )}
             </div>
@@ -114,7 +117,7 @@ export function UserMenu({ onSignInClick }: UserMenuProps) {
               <div className="flex justify-between text-xs text-neutral-500 mb-1">
                 <span>Usage</span>
                 <span>
-                  {usage.used} / {usage.limit}
+                  {Math.min(usage.used, usage.limit)} / {usage.limit}
                 </span>
               </div>
               <div className="w-full h-1.5 bg-neutral-100 rounded-full overflow-hidden">

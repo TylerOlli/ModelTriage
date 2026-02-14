@@ -69,7 +69,7 @@ export function AuthGate({
             Daily limit reached
           </h3>
           <p className="text-sm text-neutral-500 mb-6 max-w-sm mx-auto">
-            You&apos;ve used {used} of {limit} requests today.
+            You&apos;ve reached your daily limit of {limit} requests.
             Your limit resets at midnight UTC.
           </p>
           <div className="text-sm text-neutral-500">

@@ -17,9 +17,9 @@ export function FollowUpComposer({
   onChange,
   onSubmit,
   isLoading = false,
-  placeholder = "Ask a follow-up question\u2026",
+  placeholder = "Ask a follow-up question…",
   disabled = false,
-  helperText = "Press Enter to submit \u00b7 Shift+Enter for new line",
+  helperText = "Press Enter to submit · Shift+Enter for new line",
 }: FollowUpComposerProps) {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {

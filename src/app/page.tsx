@@ -663,9 +663,10 @@ export default function Home() {
 
     abortControllerRef.current = new AbortController();
 
-    // Follow-up context
+    // Follow-up context - only use if activeFollowUpPrompt is set
+    // This ensures we only treat it as a follow-up when user uses the continue prompt box
     const followUpCtx = getFollowUpContext();
-    const isFollowUp = !!(followUpCtx.previousPrompt && followUpCtx.previousResponse);
+    const isFollowUp = !!activeFollowUpPrompt && !!(followUpCtx.previousPrompt && followUpCtx.previousResponse);
 
     try {
       const { body, headers } = buildRequest({
@@ -1930,7 +1931,7 @@ export default function Home() {
                         onChange={setFollowUpInput}
                         onSubmit={handleFollowUpSubmit}
                         isLoading={isStreaming}
-                        placeholder="Ask a follow-up question\u2026"
+                        placeholder="Ask a follow-up question…"
                       />
                     )}
                   </div>
