@@ -53,8 +53,8 @@ export function AuthGate({
             You&apos;ve used all {limit} free requests
           </h3>
           <p className="text-sm text-neutral-500 mb-6 max-w-sm mx-auto">
-            Create a free account to continue using ModelTriage. You&apos;ll get{" "}
-            15 requests per day — no credit card required.
+            Create a free account to continue using ModelTriage.
+            Free accounts get more requests daily — no credit card required.
           </p>
           <button
             onClick={onSignIn}

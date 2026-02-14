@@ -9,9 +9,9 @@
  * This lets you tune limits without redeploying.
  *
  * Usage:
- *   import { getUsageLimit, canAccessFeature } from "@/lib/auth/gates";
- *   const limit = getUsageLimit(role);
- *   const allowed = canAccessFeature(role, "compare_mode");
+ *   import { getDailyLimit, getUsageLimitInfo } from "@/lib/auth/gates";
+ *   const limit = getDailyLimit(role);
+ *   const info = getUsageLimitInfo(role);
  */
 
 export type UserRole = "free" | "pro";

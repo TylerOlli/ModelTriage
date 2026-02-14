@@ -10,7 +10,7 @@
  *   - Clean, minimal typography
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { createSupabaseBrowser } from "@/lib/auth/supabase-browser";
 
 interface LoginModalProps {
@@ -47,7 +47,7 @@ export function LoginModal({ open, onClose, message }: LoginModalProps) {
   const [emailSent, setEmailSent] = useState(false);
   const [resetSent, setResetSent] = useState(false);
 
-  const supabase = createSupabaseBrowser();
+  const supabase = useMemo(() => createSupabaseBrowser(), []);
   const emailInputRef = useRef<HTMLInputElement>(null);
 
   // Close on Escape key

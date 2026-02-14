@@ -1,13 +1,13 @@
 /**
  * Supabase Client — Browser (Client Components)
  *
- * Singleton Supabase client for use in React client components.
+ * Creates a Supabase client for use in React client components.
  * Uses `createBrowserClient` from @supabase/ssr which automatically
  * manages auth cookies in the browser environment.
  *
  * Usage:
- *   import { supabaseBrowser } from "@/lib/auth/supabase-browser";
- *   const { data: { user } } = await supabaseBrowser.auth.getUser();
+ *   import { createSupabaseBrowser } from "@/lib/auth/supabase-browser";
+ *   const supabase = createSupabaseBrowser();
  */
 
 import { createBrowserClient } from "@supabase/ssr";

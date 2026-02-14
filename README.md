@@ -4,11 +4,9 @@
 
 ModelTriage is an LLM decision and verification layer that intelligently routes prompts to the most appropriate model and optionally runs multiple models in parallel for comparison. Instead of guessing which model to use, ModelTriage analyzes your prompt and explains why it selected a particular model (e.g., analytical tasks get routed to quality-focused models, code tasks to code-specialized models). Comparison Mode allows side-by-side comparison of 2-3 models with automatic diff analysis to highlight agreements, disagreements, and conflicting assumptions. The system streams responses progressively using Server-Sent Events (SSE) for a responsive, real-time experience.
 
-## MVP v1 Features
+## Features
 
-This is the **MVP (Minimum Viable Product)** implementation. The following features are **fully implemented**:
-
-### ✅ Single-Answer Mode
+### Single-Answer Mode
 - Smart rules-based routing with human-readable explanation
 - Real-time SSE streaming (no buffering)
 - Loading states and partial output preservation
@@ -19,7 +17,7 @@ This is the **MVP (Minimum Viable Product)** implementation. The following featu
 - Input validation (4,000 character max)
 - **File attachments** (text + images) with strict token/cost guardrails
 
-### ✅ Comparison Mode
+### Comparison Mode
 - Toggle to enable multi-model comparison (default: OFF)
 - Parallel execution of 2-3 models simultaneously
 - Side-by-side streaming panels (each model streams independently)
@@ -28,20 +26,22 @@ This is the **MVP (Minimum Viable Product)** implementation. The following featu
 - Cost warning displayed only when Comparison Mode is ON
 - localStorage persistence for Comparison Mode settings and last prompt
 
-### ✅ Routing Explanation
-- Every request shows which model was selected and why
-- Priority order: analytical → code → creative → long prompts → short prompts → general (fallback)
-- Example: "Compare React and Vue" routes to `mock-quality-1` because it's an analytical task
+### Authentication & Monetization (Phase 1)
+- **Supabase Auth** with email/password signup and login
+- **Role-based access control** — free and pro tiers
+- **Database-backed usage tracking** with atomic increments (no race conditions)
+  - Anonymous users: lifetime cap (default 3 requests)
+  - Free users: daily cap (default 15 requests/day)
+  - Pro users: higher daily cap (default 200 requests/day)
+- **API-level enforcement** — limits checked before streaming begins
+- **Auth UI** — login modal, user menu with usage bar, auth gate, upgrade banner
+- **Account deletion** — full data removal with Supabase admin API
+- **Password strength requirements** — 8+ chars, uppercase/lowercase, number
+- Configurable limits via environment variables (no redeploy needed)
+- `AUTH_DISABLED=true` env var for local development bypass
+- Designed for future Stripe integration (`stripeCustomerId` in schema)
 
-### ✅ Diff Summary
-- Automatically compares outputs from multiple models in Comparison Mode
-- Highlights:
-  - Agreement (what all models agree on)
-  - Disagreement (where models differ)
-  - Omissions (what some models include that others don't)
-  - Conflicting assumptions (different foundational approaches)
-
-### ✅ File Attachments with Smart Routing
+### File Attachments with Smart Routing
 - Attach up to **3 files** per request (text or images)
 - **Supported text files**: `.txt`, `.log`, `.json`, `.md`, `.ts`, `.js`, `.env`, `.yml`
 - **Supported images**: `.png`, `.jpg`, `.webp` (auto-resized for vision models)
@@ -50,31 +50,23 @@ This is the **MVP (Minimum Viable Product)** implementation. The following featu
   - Images: 5MB max per file, 2 images max per request
   - Automatic truncation and summarization to prevent cost overruns
 - **Smart routing**:
-  - Screenshots → **Gemini 3 Pro** (vision-optimized, 92% cost reduction vs Opus)
-  - Code/text files → **Claude Sonnet 4.5** (coding workhorse, 80% cost reduction vs Opus)
+  - Screenshots → **Gemini 3 Pro** (vision-optimized)
+  - Code/text files → **Claude Sonnet 4.5** (coding workhorse)
   - Deep reasoning (Opus, GPT-5.2) only on complexity signals
   - Fast models (Gemini Flash, GPT-5-mini) for lightweight requests
 - See [docs/file-attachments.md](docs/file-attachments.md) and [docs/attachment-aware-routing.md](docs/attachment-aware-routing.md) for details
 
-## What is NOT Implemented (Intentional)
-
-The following are **explicitly out of scope** for MVP v1:
-
-- ❌ Real LLM providers (OpenAI, Anthropic, Google) - using MockProvider only
-- ❌ Database persistence (no user accounts, no saved sessions)
-- ❌ Feedback/rating system
-- ❌ Rate limiting UI
-- ❌ Retry logic (errors require manual "Try again")
-- ❌ Authentication or user management
-- ❌ Cost tracking or billing
-- ❌ Advanced diff features (semantic analysis, syntax highlighting)
-- ❌ Model performance benchmarking
-- ❌ Export/share functionality
+### Routing Analytics
+- Every routing decision is persisted to PostgreSQL
+- Prompt classification, scoring, and model selection recorded
+- Compare mode includes diff summary and verdict
+- Privacy-safe: only prompt hashes stored, never raw prompts
 
 ## Local Setup
 
 ### Prerequisites
 - Node.js 18+ and npm
+- A Supabase project (for auth and database)
 
 ### Installation
 
@@ -86,163 +78,66 @@ The following are **explicitly out of scope** for MVP v1:
 2. **Set up environment variables:**
    Create a `.env.local` file in the root directory:
    ```bash
-   OPENAI_API_KEY=your_openai_api_key_here
-   ANTHROPIC_API_KEY=your_anthropic_api_key_here
-   GEMINI_API_KEY=your_gemini_api_key_here
-   ```
-   
-   **Note:** All three API keys are required for the app to function properly.
+   # LLM Provider API Keys (Required)
+   OPENAI_API_KEY=sk-...
+   ANTHROPIC_API_KEY=sk-ant-...
+   GEMINI_API_KEY=...
 
-3. **Run the development server:**
+   # Supabase (Required)
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+   SUPABASE_SERVICE_ROLE_KEY=eyJ...
+
+   # Database (Required)
+   DATABASE_URL=postgresql://...?pgbouncer=true
+   DIRECT_URL=postgresql://...
+
+   # Dev Bypass (Optional)
+   AUTH_DISABLED=true
+   ```
+
+   See `env.example` for the full list of variables.
+
+3. **Set up the database:**
+   ```bash
+   npx prisma migrate dev
+   ```
+
+4. **Run the Supabase setup SQL:**
+   Open Supabase Dashboard → SQL Editor → paste contents of `supabase/setup.sql` → Run.
+   This creates the auto-profile trigger and enables Row Level Security.
+
+5. **Run the development server:**
    ```bash
    npm run dev
    ```
 
-4. **Open the app:**
-   - Navigate to [http://localhost:3000](http://localhost:3000) in your browser
-
-### Testing
-
-Run unit tests:
-```bash
-npm run test:mock     # Test MockProvider
-npm run test:routing  # Test routing logic
-```
-
-Run integration tests (requires dev server running):
-```bash
-npm run test:stream   # Test streaming API
-```
+6. **Open the app:**
+   Navigate to [http://localhost:3000](http://localhost:3000)
 
 ## Deploy to Vercel
 
-ModelTriage is ready for zero-config deployment on Vercel.
-
 ### Quick Deploy
 
-1. **Import your repository:**
-   - Go to [vercel.com](https://vercel.com)
-   - Click "New Project"
-   - Import your Git repository
+1. **Import your repository** at [vercel.com](https://vercel.com)
 
 2. **Configure environment variables:**
-   - Framework Preset: **Next.js** (auto-detected)
-   - Build Command: `npm run build` (default)
-   - Output Directory: `.next` (default)
-   - **Environment Variables (Required):**
-     - `OPENAI_API_KEY` - Your OpenAI API key (for GPT models)
-     - `ANTHROPIC_API_KEY` - Your Anthropic API key (for Claude models)
-     - `GEMINI_API_KEY` - Your Google Gemini API key (for Gemini models)
-   
-   **Note:** All three API keys are required for the app to build and run successfully.
+   - `OPENAI_API_KEY` — OpenAI API key
+   - `ANTHROPIC_API_KEY` — Anthropic API key
+   - `GEMINI_API_KEY` — Google Gemini API key
+   - `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase anon/public key
+   - `SUPABASE_SERVICE_ROLE_KEY` — Supabase service role key (server-side only)
+   - `DATABASE_URL` — Supabase connection pooler URL
+   - `DIRECT_URL` — Supabase direct connection URL
 
-3. **Deploy:**
-   - Click "Deploy"
-   - Wait for build to complete (~2-3 minutes)
+3. **Deploy** and wait for build to complete
 
-### Verify Deployment
+### Post-Deploy
 
-After deployment, test the following:
-
-**✅ Single-Answer Mode:**
-1. Enter a prompt (e.g., "Explain React hooks")
-2. Verify response streams progressively (not all at once)
-3. Check routing explanation displays correctly
-4. Verify metadata shows (model, latency, tokens)
-
-**✅ Comparison Mode:**
-1. Enable Comparison Mode toggle
-2. Select 2 or 3 models
-3. Enter a prompt
-4. Verify both/all panels stream independently
-5. Check diff summary appears after streaming completes
-
-**✅ Error Handling:**
-1. Test empty prompt (should show validation)
-2. Test prompt > 4,000 characters (should show error)
-3. Cancel a streaming request (should preserve partial output)
-
-### Deployment Notes
-
-**Runtime:**
-- The `/api/stream` endpoint uses Node.js runtime (not Edge) for optimal SSE streaming
-- This is configured in `src/app/api/stream/route.ts` with `export const runtime = "nodejs"`
-
-**MockProvider:**
-- The app uses MockProvider by default (zero external API calls)
-- No API keys or secrets required
-- All responses are deterministic and work offline
-
-**Environment Variables:**
-- None required for MVP
-- Future flags (`USE_LIVE_PROVIDERS`, `ENABLE_DB_WRITES`) are not yet implemented
-
-**Streaming:**
-- SSE streaming works out-of-the-box on Vercel
-- No additional configuration needed
-- Chunks are not buffered (progressive rendering confirmed)
-
-**Limitations:**
-- Serverless function timeout: 10 seconds on free tier (sufficient for MockProvider)
-- Concurrent executions: 100 on free tier (ample for testing)
-
-### Troubleshooting Deployment
-
-**Problem: Streaming appears buffered**
-- **Cause:** Browser caching or CDN edge caching
-- **Solution:** Hard refresh (Cmd+Shift+R / Ctrl+Shift+R)
-- **Verification:** Open DevTools → Network → check EventStream tab
-
-**Problem: Build fails with TypeScript errors**
-- **Cause:** Type errors in code
-- **Solution:** Run `npm run build` locally to identify issues
-- **Fix:** Run `npm run lint` and resolve errors
-
-**Problem: 404 on API routes**
-- **Cause:** Incorrect file structure
-- **Solution:** Verify `src/app/api/stream/route.ts` exists
-- **Verification:** Check deployment logs for file tree
-
-**Problem: Application crashes**
-- **Cause:** Missing dependencies
-- **Solution:** Verify `package.json` includes all dependencies
-- **Check:** Deployment logs for "Module not found" errors
-
-## How It Works
-
-### Streaming (High-Level)
-
-ModelTriage uses **Server-Sent Events (SSE)** to stream LLM responses in real-time:
-
-1. **Client sends prompt** → `POST /api/stream` with prompt text
-2. **Server routes request** → Rules-based router selects appropriate model
-3. **Provider streams chunks** → MockProvider generates response chunks asynchronously
-4. **SSE delivers chunks** → Server forwards chunks to client as `data: {...}` events
-5. **UI renders progressively** → Client appends each chunk to the display in real-time
-6. **Metadata sent on completion** → Final event includes latency, tokens, and cost
-
-**Key benefits:**
-- No buffering delays (chunks appear immediately)
-- Partial output preserved if stream is cancelled or errors
-- Clean stream closure on completion
-- Multiple models can stream in parallel (Comparison Mode)
-
-### Comparison Mode (High-Level)
-
-When Comparison Mode is enabled, the workflow changes:
-
-1. **Client sends prompt with model list** → `POST /api/stream` with `models: ["model-1", "model-2"]`
-2. **Server starts parallel streams** → Each model gets its own provider instance
-3. **Events are multiplexed** → SSE events include `modelId` to identify the source panel
-4. **Panels stream independently** → Each panel updates as its model streams
-5. **Error isolation** → If one model fails, others continue (failed panel shows error card)
-6. **Diff analysis runs after completion** → Compares successful outputs to generate summary
-
-**Key benefits:**
-- See how different models approach the same prompt
-- Identify which model provides the most complete or accurate answer
-- Catch hallucinations or omissions by comparing outputs
-- Understand trade-offs between speed, quality, and cost
+- Run `npx prisma migrate deploy` against your production database
+- Run `supabase/setup.sql` in the Supabase SQL Editor (if not already done)
+- Configure Supabase Auth redirect URLs for your production domain
 
 ## Architecture
 
@@ -250,93 +145,63 @@ When Comparison Mode is enabled, the workflow changes:
 - **Framework:** Next.js 15 (App Router)
 - **Language:** TypeScript
 - **Styling:** Tailwind CSS
+- **Database:** PostgreSQL (Supabase)
+- **ORM:** Prisma
+- **Auth:** Supabase Auth
 - **Runtime:** Node.js (SSE streaming)
-- **Testing:** Jest + ts-jest
 
 ### Project Structure
 
 ```
 modeltriage/
-├── src/app/              # Next.js App Router
-│   ├── api/stream/       # SSE streaming endpoint
-│   ├── page.tsx          # Main UI with Comparison Mode
-│   ├── layout.tsx        # Root layout
-│   └── globals.css       # Global styles
-├── lib/                  # Core library modules
-│   ├── providers/        # Provider interface + MockProvider
-│   ├── routing/          # Rules-based router
-│   └── diff/             # Diff analyzer for Comparison Mode
-├── __tests__/            # Unit tests
-├── docs/                 # Technical documentation
-├── .specify/             # Product specifications (source of truth)
-└── package.json          # Dependencies and scripts
+├── src/app/                  # Next.js App Router
+│   ├── api/
+│   │   ├── stream/           # SSE streaming endpoint
+│   │   ├── compare/          # Comparison summary endpoint
+│   │   ├── usage/            # Usage stats endpoint
+│   │   └── account/delete/   # Account deletion endpoint
+│   ├── auth/callback/        # Supabase auth callback
+│   ├── page.tsx              # Main UI
+│   └── layout.tsx            # Root layout (AuthProvider)
+├── src/components/
+│   ├── auth/                 # Auth UI components
+│   │   ├── AuthProvider.tsx  # Auth context + usage state
+│   │   ├── LoginModal.tsx    # Email/password login/signup
+│   │   ├── UserMenu.tsx      # User dropdown + usage bar
+│   │   ├── AuthGate.tsx      # Limit-exceeded prompt
+│   │   └── UpgradeBanner.tsx # Approaching-limit warning
+│   └── ...                   # Other UI components
+├── lib/
+│   ├── auth/                 # Auth utilities
+│   │   ├── session.ts        # JWT validation + profile cache
+│   │   ├── gates.ts          # Feature flags + limit config
+│   │   ├── limits.ts         # Usage tracking (atomic upserts)
+│   │   ├── supabase-server.ts
+│   │   └── supabase-browser.ts
+│   ├── db/                   # Database utilities
+│   │   ├── prisma.ts         # Prisma client singleton
+│   │   └── persist-routing.ts # Analytics persistence
+│   ├── llm/                  # LLM providers + routing
+│   ├── diff/                 # Diff analyzer
+│   ├── attachments/          # File attachment processing
+│   └── errors.ts             # Centralized error reporting
+├── prisma/
+│   └── schema.prisma         # Database schema
+├── supabase/
+│   └── setup.sql             # Trigger + RLS setup
+├── docs/                     # Technical documentation
+└── env.example               # Environment variable reference
 ```
-
-### Key Modules
-
-**Provider Interface (`lib/providers/`):**
-- Defines the contract for all LLM providers
-- `MockProvider` implements this interface for development
-- Real providers (OpenAI, Anthropic) will implement the same interface
-
-**Router (`lib/routing/`):**
-- Rules-based model selection
-- Returns model name, reason, and confidence
-- Prioritizes analytical intents over code keyword matches
-
-**Diff Analyzer (`lib/diff/`):**
-- Compares outputs from multiple models
-- Identifies agreement, disagreement, omissions, and conflicts
-- Runs client-side to avoid blocking streaming
-
-**Streaming API (`src/app/api/stream/`):**
-- Single endpoint for both single-answer and Comparison Mode
-- Validates input (prompt length, model count)
-- Streams SSE events with proper multiplexing for Comparison Mode
-- Per-model error isolation (uses `Promise.allSettled`)
-
-## Future Flags (Not Yet Implemented)
-
-The following environment variables are **reserved for future use** but do NOT currently work:
-
-### `USE_LIVE_PROVIDERS=true` (Future)
-When implemented, this will:
-- Enable OpenAI, Anthropic, and Google providers
-- Require API keys in environment variables
-- Incur real API costs
-
-**Current behavior:** Only MockProvider is available regardless of this flag.
-
-### `ENABLE_DB_WRITES=true` (Future)
-When implemented, this will:
-- Enable session persistence to database
-- Save prompts, responses, and user ratings
-- Require database connection string
-
-**Current behavior:** No database writes occur regardless of this flag. Only localStorage is used for UI settings.
-
-## Cost Control
-
-By default, the application uses `MockProvider` to ensure:
-- ✅ No accidental API costs during development
-- ✅ Deterministic, reproducible testing
-- ✅ Offline development capability
-- ✅ Fast response times
 
 ## Documentation
 
 ### Technical Documentation
 See `docs/` folder for comprehensive technical documentation:
-- **[Documentation Index](./docs/README.md)** - Complete guide to all documentation
-- **Architecture & System Design** - How the system works
-- **Feature Guides** - Implementation details for all features
-- **Testing Guides** - How to test features
-- **Operations** - Deployment and development workflows
+- **[Documentation Index](./docs/README.md)** — Complete guide to all documentation
+- **Architecture & System Design** — How the system works
+- **Feature Guides** — Implementation details for all features
 
 ### Product Specifications
 The `.specify/` folder contains product strategy and feature planning:
 - Used for **major feature planning** (auth, billing, APIs)
-- Updated periodically to reflect shipped features
-- See [.specify/README.md](./.specify/README.md) for when to use SpecKit
-
-**Source of truth**: The code and technical docs in `docs/`, not the specs.
+- See [.specify/README.md](./.specify/README.md) for details

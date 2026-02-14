@@ -87,8 +87,6 @@ function getClientIP(request: Request): string {
   return "unknown";
 }
 
-// checkRateLimit removed — replaced by database-backed checkUsageLimit()
-
 /**
  * Run model with timeout
  */
