@@ -5,12 +5,12 @@
  *
  * The main input area for submitting prompts. Contains:
  *   - Textarea with drag-and-drop file attachment
- *   - Action bar (mode toggle, attach, history, reset, char count, submit)
+ *   - Action bar (mode toggle, attach, history, char count, submit)
  *   - Model selection chips (compare mode)
  *   - Prompt history popover
  *
  * All business logic (streaming, API calls) stays in the parent.
- * This component only manages its own UI state (drag, history menu, reset confirm).
+ * This component only manages its own UI state (drag, history menu).
  */
 
 import { useState, useRef, type RefObject, type FormEvent } from "react";
@@ -87,10 +87,6 @@ export function PromptComposer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
-  const [resetConfirming, setResetConfirming] = useState(false);
-  const [lastClearedPrompt, setLastClearedPrompt] = useState("");
-  const [showUndoToast, setShowUndoToast] = useState(false);
-  const resetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const characterCount = prompt.length;
   const isOverLimit = characterCount > 4000;
@@ -147,28 +143,6 @@ export function PromptComposer({
       return;
     }
     if (validFiles.length > 0) onFilesChange([...attachedFiles, ...validFiles]);
-  };
-
-  // ── Reset prompt ───────────────────────────────────────────
-  const handleResetPrompt = () => {
-    if (!prompt.trim()) return;
-    if (!resetConfirming) {
-      setResetConfirming(true);
-      if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
-      resetTimeoutRef.current = setTimeout(() => setResetConfirming(false), 2000);
-    } else {
-      setLastClearedPrompt(prompt);
-      setPrompt("");
-      setResetConfirming(false);
-      if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
-      setShowUndoToast(true);
-      setTimeout(() => setShowUndoToast(false), 5000);
-    }
-  };
-
-  const handleUndoClear = () => {
-    setPrompt(lastClearedPrompt);
-    setShowUndoToast(false);
   };
 
   return (
@@ -331,22 +305,6 @@ export function PromptComposer({
                   <span className="hidden sm:inline">History</span>
                 </button>
               ) : null}
-
-              {/* Reset */}
-              {prompt.trim() && (
-                <button
-                  type="button"
-                  onClick={handleResetPrompt}
-                  disabled={isStreaming}
-                  className={`text-sm transition-colors duration-150 ${
-                    resetConfirming
-                      ? "text-amber-600 font-medium"
-                      : "text-neutral-400 hover:text-neutral-600"
-                  }`}
-                >
-                  {resetConfirming ? "Confirm clear" : "Reset"}
-                </button>
-              )}
             </div>
 
             {/* Right: char count + submit */}
@@ -512,16 +470,6 @@ export function PromptComposer({
           </>
         )}
       </form>
-
-      {/* Undo Toast */}
-      {showUndoToast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-enter">
-          <div className="bg-neutral-900 text-white rounded-xl shadow-xl px-4 py-3 flex items-center gap-3">
-            <span className="text-sm">Prompt cleared</span>
-            <button type="button" onClick={handleUndoClear} className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors">Undo</button>
-          </div>
-        </div>
-      )}
     </>
   );
 }

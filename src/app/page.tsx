@@ -873,21 +873,23 @@ export default function Home() {
     <div className="min-h-screen bg-[#fafafa]">
       <div className="max-w-3xl mx-auto px-4 pt-12 pb-16 transition-all duration-300" style={{ maxWidth: comparisonMode && hasResults ? '80rem' : '48rem' }}>
         {/* Identity Bar */}
-        <header className={`mb-10 transition-all duration-300 ${hasResults ? 'text-left' : 'text-center pt-8'}`}>
+        <header className={`mb-10 transition-all duration-300 ${hasResults ? 'text-left' : 'pt-8'}`}>
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
-              Model<span className="text-blue-600">Triage</span>
-            </h1>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
+                Model<span className="text-blue-600">Triage</span>
+              </h1>
+              {!hasResults && !isStreaming && (
+                <p className="text-base text-neutral-500 mt-1">
+                  Right LLM. Every time.
+                </p>
+              )}
+            </div>
             <UserMenu onSignInClick={() => {
               setLoginModalMessage(undefined);
               setShowLoginModal(true);
             }} />
           </div>
-          {!hasResults && !isStreaming && (
-            <p className={`text-base text-neutral-500 mt-1 ${hasResults ? '' : 'text-center'}`}>
-              Right LLM. Every time.
-            </p>
-          )}
         </header>
 
         {/* Usage limit warning banner */}
