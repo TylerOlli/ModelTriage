@@ -8,10 +8,12 @@
  */
 
 import { useState, useEffect, useCallback, Fragment } from "react";
+import { useRouter } from "next/navigation";
 import { Nav } from "../../components/Nav";
 import { LoginModal } from "../../components/auth/LoginModal";
 import { RequireAuth } from "../../components/auth/RequireAuth";
 import { getFriendlyModelName } from "@/lib/models";
+import { loadCache, lookupPrompt } from "@/lib/prompt-cache";
 
 interface DashboardData {
   todayUsage: { used: number; limit: number; remaining: number };
@@ -25,6 +27,7 @@ interface DashboardData {
 interface RoutingDecision {
   id: string;
   createdAt: string;
+  promptHash: string;
   mode: string;
   taskType: string | null;
   stakes: string | null;
@@ -35,7 +38,7 @@ interface RoutingDecision {
   routingConfidence: number | null;
   expectedSuccess: number | null;
   confidence: string | null;
-  keyFactors: unknown[] | null;
+  keyFactors: { label: string; score: number; shortReason: string }[] | null;
   responseTimeMs: number | null;
   modelsCompared: string[] | null;
   verdict: string | null;
@@ -56,6 +59,28 @@ function formatShortDate(dateStr: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function formatRelativeTime(iso: string): string {
+  const now = Date.now();
+  const then = new Date(iso).getTime();
+  const diffMs = now - then;
+  const diffMins = Math.floor(diffMs / 60_000);
+  const diffHours = Math.floor(diffMs / 3_600_000);
+  const diffDays = Math.floor(diffMs / 86_400_000);
+
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  return `${Math.floor(diffDays / 30)}mo ago`;
+}
+
+function getSuccessColor(score: number): { bar: string; text: string; bg: string } {
+  if (score >= 80) return { bar: "bg-green-500", text: "text-green-700", bg: "bg-green-50" };
+  if (score >= 60) return { bar: "bg-amber-500", text: "text-amber-700", bg: "bg-amber-50" };
+  return { bar: "bg-red-500", text: "text-red-700", bg: "bg-red-50" };
+}
+
 export default function DashboardPage() {
   return (
     <RequireAuth>
@@ -71,6 +96,12 @@ function DashboardContent() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [promptCache, setPromptCache] = useState<Record<string, { text: string; timestamp: number }>>({});
+
+  // Load prompt cache from localStorage on mount
+  useEffect(() => {
+    setPromptCache(loadCache());
+  }, []);
 
   const fetchData = useCallback(async (pageNum: number) => {
     try {
@@ -215,58 +246,67 @@ function DashboardContent() {
                     <thead>
                       <tr className="bg-neutral-50 text-left">
                         <th className="px-4 py-2.5 text-xs font-medium text-neutral-500">Date</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-neutral-500">Prompt</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-neutral-500">Mode</th>
-                        <th className="px-4 py-2.5 text-xs font-medium text-neutral-500">Task Type</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-neutral-500">Model</th>
-                        <th className="px-4 py-2.5 text-xs font-medium text-neutral-500">Confidence</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-neutral-500">Task Type</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-neutral-500">Latency</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {data.recentDecisions.map((d) => (
-                        <Fragment key={d.id}>
-                          <tr
-                            onClick={() => setExpandedRow(expandedRow === d.id ? null : d.id)}
-                            className="border-t border-neutral-100 hover:bg-neutral-50 cursor-pointer transition-colors"
-                          >
-                            <td className="px-4 py-2.5 text-neutral-600 whitespace-nowrap">
-                              {formatDate(d.createdAt)}
-                            </td>
-                            <td className="px-4 py-2.5">
-                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                                d.mode === "compare"
-                                  ? "bg-purple-50 text-purple-700"
-                                  : "bg-blue-50 text-blue-700"
-                              }`}>
-                                {d.mode}
-                              </span>
-                            </td>
-                            <td className="px-4 py-2.5 text-neutral-600">
-                              {d.taskType?.replace(/_/g, " ") || "—"}
-                            </td>
-                            <td className="px-4 py-2.5 text-neutral-900 font-medium whitespace-nowrap">
-                              {d.selectedModel ? getFriendlyModelName(d.selectedModel) : "—"}
-                            </td>
-                            <td className="px-4 py-2.5 text-neutral-600">
-                              {d.routingConfidence != null
-                                ? `${Math.round(d.routingConfidence * 100)}%`
-                                : "—"}
-                            </td>
-                            <td className="px-4 py-2.5 text-neutral-600 whitespace-nowrap">
-                              {d.responseTimeMs != null
-                                ? `${(d.responseTimeMs / 1000).toFixed(1)}s`
-                                : "—"}
-                            </td>
-                          </tr>
-                          {expandedRow === d.id && (
-                            <tr className="border-t border-neutral-100">
-                              <td colSpan={6} className="px-4 py-4 bg-neutral-50">
-                                <DecisionDetail decision={d} />
+                      {data.recentDecisions.map((d) => {
+                        const promptText = lookupPrompt(promptCache, d.promptHash);
+                        return (
+                          <Fragment key={d.id}>
+                            <tr
+                              onClick={() => setExpandedRow(expandedRow === d.id ? null : d.id)}
+                              className="border-t border-neutral-100 hover:bg-neutral-50 cursor-pointer transition-colors"
+                            >
+                              <td className="px-4 py-2.5 text-neutral-600 whitespace-nowrap">
+                                {formatDate(d.createdAt)}
+                              </td>
+                              <td className="px-4 py-2.5 text-neutral-600 max-w-[200px]">
+                                {promptText ? (
+                                  <span className="block truncate" title={promptText}>
+                                    {promptText}
+                                  </span>
+                                ) : (
+                                  <span className="text-neutral-300 italic text-xs">
+                                    not cached locally
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-2.5">
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                  d.mode === "compare"
+                                    ? "bg-purple-50 text-purple-700"
+                                    : "bg-blue-50 text-blue-700"
+                                }`}>
+                                  {d.mode}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2.5 text-neutral-900 font-medium whitespace-nowrap">
+                                {d.selectedModel ? getFriendlyModelName(d.selectedModel) : "—"}
+                              </td>
+                              <td className="px-4 py-2.5 text-neutral-600">
+                                {d.taskType?.replace(/_/g, " ") || "—"}
+                              </td>
+                              <td className="px-4 py-2.5 text-neutral-600 whitespace-nowrap">
+                                {d.responseTimeMs != null
+                                  ? `${(d.responseTimeMs / 1000).toFixed(1)}s`
+                                  : "—"}
                               </td>
                             </tr>
-                          )}
-                        </Fragment>
-                      ))}
+                            {expandedRow === d.id && (
+                              <tr className="border-t border-neutral-100">
+                                <td colSpan={6} className="px-4 py-4 bg-neutral-50">
+                                  <DecisionDetail decision={d} promptText={promptText} />
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -381,58 +421,156 @@ function ModelDistribution({ data }: { data: { model: string; count: number }[] 
   );
 }
 
-function DecisionDetail({ decision }: { decision: RoutingDecision }) {
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs animate-enter">
-      <div>
-        <p className="font-medium text-neutral-700 mb-1">Classification</p>
-        <div className="space-y-1 text-neutral-500">
-          <p>Intent: <span className="text-neutral-700">{decision.routingIntent || "—"}</span></p>
-          <p>Category: <span className="text-neutral-700">{decision.routingCategory?.replace(/_/g, " ") || "—"}</span></p>
-          <p>Stakes: <span className="text-neutral-700">{decision.stakes || "—"}</span></p>
-          <p>Prompt length: <span className="text-neutral-700">{decision.promptLength?.toLocaleString() || "—"} chars</span></p>
-        </div>
-      </div>
+function DecisionDetail({ decision, promptText }: { decision: RoutingDecision; promptText: string | null }) {
+  const router = useRouter();
+  const activeSignals = decision.inputSignals
+    ? Object.entries(decision.inputSignals).filter(([, value]) => value)
+    : [];
+  const successColor = decision.expectedSuccess != null
+    ? getSuccessColor(decision.expectedSuccess)
+    : null;
 
-      <div>
-        <p className="font-medium text-neutral-700 mb-1">Scoring</p>
-        <div className="space-y-1 text-neutral-500">
-          <p>Expected success: <span className="text-neutral-700">{decision.expectedSuccess != null ? `${decision.expectedSuccess}%` : "—"}</span></p>
-          <p>Confidence: <span className="text-neutral-700">{decision.confidence || "—"}</span></p>
-          {decision.mode === "compare" && (
-            <>
-              <p>Models compared: <span className="text-neutral-700">
-                {decision.modelsCompared
-                  ? (decision.modelsCompared as string[]).map(getFriendlyModelName).join(", ")
-                  : "—"}
-              </span></p>
-              {decision.verdict && (
-                <p>Verdict: <span className="text-neutral-700">{decision.verdict}</span></p>
-              )}
-            </>
+  const handleReplay = () => {
+    if (promptText) {
+      localStorage.setItem("lastPrompt", promptText);
+      localStorage.setItem("rememberDrafts", "true");
+      router.push("/");
+    }
+  };
+
+  return (
+    <div className="space-y-4 text-xs animate-enter">
+      {/* Prompt + Replay */}
+      {promptText && (
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <p className="font-medium text-neutral-700">Prompt</p>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleReplay();
+              }}
+              className="flex items-center gap-1 text-blue-600 hover:text-blue-700 font-medium transition-colors"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+              </svg>
+              Run again
+            </button>
+          </div>
+          <p className="text-neutral-600 leading-relaxed bg-white rounded-lg border border-neutral-200 px-3 py-2 whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
+            {promptText}
+          </p>
+        </div>
+      )}
+
+      {/* Classification + Expected Success — side by side */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <p className="font-medium text-neutral-700 mb-2">Classification</p>
+          <div className="space-y-1.5 text-neutral-500">
+            <p>Task type: <span className="text-neutral-700">{decision.taskType?.replace(/_/g, " ") || "—"}</span></p>
+            <p>Intent: <span className="text-neutral-700">{decision.routingIntent || "—"}</span></p>
+            <p>Category: <span className="text-neutral-700">{decision.routingCategory?.replace(/_/g, " ") || "—"}</span></p>
+            <p>Length: <span className="text-neutral-700">{decision.promptLength?.toLocaleString() || "—"} chars</span></p>
+            <p className="text-neutral-400">{formatRelativeTime(decision.createdAt)}</p>
+          </div>
+        </div>
+
+        <div>
+          <p className="font-medium text-neutral-700 mb-2">Model fit</p>
+          {decision.expectedSuccess != null && successColor ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-2 bg-neutral-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${successColor.bar}`}
+                    style={{ width: `${decision.expectedSuccess}%` }}
+                  />
+                </div>
+                <span className={`font-semibold text-sm ${successColor.text}`}>
+                  {decision.expectedSuccess}%
+                </span>
+              </div>
+              <p className="text-neutral-400">
+                Expected success for {decision.selectedModel ? getFriendlyModelName(decision.selectedModel) : "selected model"}
+              </p>
+            </div>
+          ) : (
+            <p className="text-neutral-400">No scoring data available</p>
+          )}
+
+          {/* Compare mode: models compared */}
+          {decision.mode === "compare" && decision.modelsCompared && (
+            <div className="mt-3">
+              <p className="text-neutral-500">
+                Compared:{" "}
+                <span className="text-neutral-700">
+                  {(decision.modelsCompared as string[]).map(getFriendlyModelName).join(", ")}
+                </span>
+              </p>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Input Signals */}
-      {decision.inputSignals && Object.keys(decision.inputSignals).length > 0 && (
-        <div className="sm:col-span-2">
-          <p className="font-medium text-neutral-700 mb-1">Input signals</p>
+      {/* Key Factors — muted bars */}
+      {decision.keyFactors && decision.keyFactors.length > 0 && (
+        <div>
+          <p className="font-medium text-neutral-700 mb-2">Key factors</p>
+          <div className="space-y-2">
+            {decision.keyFactors.map((factor) => (
+              <div key={factor.label} className="flex items-center gap-3">
+                <span className="text-neutral-600 w-28 flex-shrink-0 truncate" title={factor.label}>
+                  {factor.label}
+                </span>
+                <div className="flex-1 h-1.5 bg-neutral-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-neutral-300 transition-all"
+                    style={{ width: `${factor.score}%` }}
+                  />
+                </div>
+                <span className="text-neutral-500 w-8 text-right flex-shrink-0">
+                  {factor.score}
+                </span>
+                <span className="text-neutral-400 hidden sm:inline truncate max-w-[180px]" title={factor.shortReason}>
+                  {factor.shortReason}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Input Signals — only active ones */}
+      {activeSignals.length > 0 && (
+        <div>
+          <p className="font-medium text-neutral-700 mb-2">Input signals</p>
           <div className="flex flex-wrap gap-1.5">
-            {Object.entries(decision.inputSignals).map(([key, value]) => (
+            {activeSignals.map(([key]) => (
               <span
                 key={key}
-                className={`px-2 py-0.5 rounded-full text-xs ${
-                  value
-                    ? "bg-green-50 text-green-700"
-                    : "bg-neutral-100 text-neutral-400"
-                }`}
+                className="px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium"
               >
-                {key.replace(/([A-Z])/g, " $1").toLowerCase()}
-                {value ? " yes" : " no"}
+                {key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim()}
               </span>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Compare mode verdict — emphasized callout */}
+      {decision.mode === "compare" && decision.verdict && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg px-4 py-3">
+          <p className="font-medium text-purple-700 mb-1 flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+            </svg>
+            Verdict
+          </p>
+          <p className="text-purple-900 leading-relaxed">
+            {decision.verdict}
+          </p>
         </div>
       )}
     </div>

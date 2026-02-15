@@ -14,6 +14,7 @@ import { LoginModal } from "../components/auth/LoginModal";
 import { AuthGate } from "../components/auth/AuthGate";
 import { UpgradeBanner } from "../components/auth/UpgradeBanner";
 import { Nav } from "../components/Nav";
+import { cachePrompt } from "@/lib/prompt-cache";
 import { PromptComposer } from "../components/PromptComposer";
 import { AutoResponseView } from "../components/AutoResponseView";
 import { CompareResponseView } from "../components/CompareResponseView";
@@ -382,6 +383,7 @@ export default function Home() {
     e.preventDefault();
     if (!prompt.trim()) return;
     addToHistory(prompt);
+    cachePrompt(prompt);
 
     if (isStreaming || abortControllerRef.current) {
       console.warn("Run already in progress, ignoring duplicate submit");
@@ -822,6 +824,7 @@ export default function Home() {
     setDiffSummary(null);
     setDiffError(null);
     addToHistory(followUpText);
+    cachePrompt(followUpText);
     setFollowUpInput("");
     handleStreamSubmit(followUpText);
   };

@@ -111,6 +111,7 @@ export async function GET(request: NextRequest) {
         select: {
           id: true,
           createdAt: true,
+          promptHash: true,
           mode: true,
           taskType: true,
           stakes: true,
