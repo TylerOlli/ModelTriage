@@ -21,8 +21,8 @@ interface NavProps {
 }
 
 const navLinks = [
-  { href: "/pricing", label: "Pricing" },
   { href: "/about", label: "About" },
+  { href: "/pricing", label: "Pricing" },
 ];
 
 const authedLinks = [
@@ -36,15 +36,15 @@ export function Nav({ showTagline = false, onSignInClick }: NavProps) {
   return (
     <header className="mb-10 transition-all duration-300">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          {/* Brand */}
-          <Link href="/" className="group">
-            <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
-              Model<span className="text-blue-600">Triage</span>
-            </h1>
-          </Link>
+        {/* Brand */}
+        <Link href="/" className="group">
+          <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
+            Model<span className="text-blue-600">Triage</span>
+          </h1>
+        </Link>
 
-          {/* Page Links */}
+        {/* Nav Links + User Menu — grouped on the right */}
+        <div className="flex items-center gap-1">
           <nav className="hidden sm:flex items-center gap-1">
             {navLinks.map((link) => (
               <Link
@@ -74,12 +74,12 @@ export function Nav({ showTagline = false, onSignInClick }: NavProps) {
                 </Link>
               ))}
           </nav>
-        </div>
 
-        {/* User Menu */}
-        <UserMenu
-          onSignInClick={onSignInClick ?? (() => {})}
-        />
+          {/* User Menu */}
+          <UserMenu
+            onSignInClick={onSignInClick ?? (() => {})}
+          />
+        </div>
       </div>
 
       {/* Tagline — only on homepage idle state */}

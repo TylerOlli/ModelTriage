@@ -54,14 +54,13 @@ export function UserMenu({ onSignInClick }: UserMenuProps) {
     return (
       <button
         onClick={onSignInClick}
-        className="text-sm font-medium text-neutral-600 hover:text-neutral-900 px-3 py-1.5 rounded-lg hover:bg-neutral-100 transition-colors"
+        className="text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 px-4 py-1.5 rounded-lg transition-colors"
       >
         Sign in
       </button>
     );
   }
 
-  const initial = (user.email?.[0] ?? "U").toUpperCase();
   const planLabel = role === "pro" ? "Pro" : "Free";
 
   return (
@@ -71,8 +70,10 @@ export function UserMenu({ onSignInClick }: UserMenuProps) {
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 rounded-lg hover:bg-neutral-100 px-2 py-1.5 transition-colors"
       >
-        <div className="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-semibold flex items-center justify-center">
-          {initial}
+        <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
         </div>
         {usage && (
           <span className="text-xs text-neutral-500 hidden sm:inline">
@@ -136,13 +137,6 @@ export function UserMenu({ onSignInClick }: UserMenuProps) {
 
           {/* Actions */}
           <div className="px-1 py-1">
-            <Link
-              href="/dashboard"
-              onClick={() => setOpen(false)}
-              className="block w-full text-left px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-50 rounded-lg transition-colors"
-            >
-              Dashboard
-            </Link>
             <Link
               href="/account"
               onClick={() => setOpen(false)}
