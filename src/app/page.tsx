@@ -10,10 +10,10 @@ import type {
 } from "@/lib/session-types";
 import { createTurnId, createSessionId } from "@/lib/session-types";
 import { useAuth } from "../components/auth/AuthProvider";
-import { UserMenu } from "../components/auth/UserMenu";
 import { LoginModal } from "../components/auth/LoginModal";
 import { AuthGate } from "../components/auth/AuthGate";
 import { UpgradeBanner } from "../components/auth/UpgradeBanner";
+import { Nav } from "../components/Nav";
 import { PromptComposer } from "../components/PromptComposer";
 import { AutoResponseView } from "../components/AutoResponseView";
 import { CompareResponseView } from "../components/CompareResponseView";
@@ -873,24 +873,15 @@ export default function Home() {
     <div className="min-h-screen bg-[#fafafa]">
       <div className="max-w-3xl mx-auto px-4 pt-12 pb-16 transition-all duration-300" style={{ maxWidth: comparisonMode && hasResults ? '80rem' : '48rem' }}>
         {/* Identity Bar */}
-        <header className={`mb-10 transition-all duration-300 ${hasResults ? 'text-left' : 'pt-8'}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
-                Model<span className="text-blue-600">Triage</span>
-              </h1>
-              {!hasResults && !isStreaming && (
-                <p className="text-base text-neutral-500 mt-1">
-                  Right LLM. Every time.
-                </p>
-              )}
-            </div>
-            <UserMenu onSignInClick={() => {
+        <div className={hasResults ? '' : 'pt-8'}>
+          <Nav
+            showTagline={!hasResults && !isStreaming}
+            onSignInClick={() => {
               setLoginModalMessage(undefined);
               setShowLoginModal(true);
-            }} />
-          </div>
-        </header>
+            }}
+          />
+        </div>
 
         {/* Usage limit warning banner */}
         <UpgradeBanner />

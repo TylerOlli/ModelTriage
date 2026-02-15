@@ -11,6 +11,8 @@
  * when the API returns a 429 with `usage_limit_exceeded`.
  */
 
+import Link from "next/link";
+
 interface AuthGateProps {
   /** Whether the user needs to sign up (anonymous) or upgrade (free) */
   requiresAuth: boolean;
@@ -74,9 +76,9 @@ export function AuthGate({
           </p>
           <div className="text-sm text-neutral-500">
             Need more?{" "}
-            <span className="text-blue-600 font-medium">
-              Pro plan coming soon
-            </span>
+            <Link href="/pricing" className="text-blue-600 font-medium hover:text-blue-700 underline underline-offset-2">
+              View pricing plans
+            </Link>
           </div>
         </>
       )}
