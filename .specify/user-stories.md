@@ -202,3 +202,166 @@ Acceptance criteria:
 - Can restore exact previous state
 - No confirmation needed if no results exist
 - Smooth animations during transitions
+
+---
+
+# Phase 1: Monetization — Auth & Usage (shipped)
+
+## Authentication
+
+### 17. Sign up and log in
+As a user, I want to create an account and log in so that I can access higher usage limits and personalized features.
+
+Acceptance criteria:
+- Login/signup modal with email and password fields
+- Toggle between login and signup modes
+- Password strength requirements enforced (8+ chars, uppercase, lowercase, number)
+- Clear error messages for invalid credentials or duplicate accounts
+- Successful signup creates a free-tier account automatically
+- Auth state persists across page reloads
+
+---
+
+### 18. View my usage
+As a user, I want to see how many requests I've used today so that I know when I'm approaching my limit.
+
+Acceptance criteria:
+- User menu shows usage bar (used / daily limit)
+- Upgrade banner appears when approaching the limit
+- Auth gate blocks requests when limit exceeded
+- Anonymous users see lifetime usage and prompt to sign up
+- Free users see daily usage and prompt to upgrade
+- Usage resets at midnight UTC for authenticated users
+
+---
+
+## Multi-page navigation
+
+### 19. Navigate between pages
+As a user, I want to access different sections of ModelTriage so that I can view pricing, learn about the product, and manage my account.
+
+Acceptance criteria:
+- Shared navigation bar on all pages
+- Public pages (Pricing, About) visible to all users
+- Authenticated pages (Dashboard) visible only when signed in
+- Sign-in button visible when logged out, styled for visual weight
+- Protected pages redirect to homepage if not authenticated
+
+---
+
+### 20. View pricing plans
+As a user, I want to see what's included in each plan so that I can decide whether to upgrade.
+
+Acceptance criteria:
+- Free and Pro plans displayed side-by-side with feature lists
+- Pro plan visually highlighted
+- Current plan indicated for signed-in users
+- FAQ section answers common questions
+- CTA buttons appropriate to user state (sign up, current plan, coming soon)
+
+---
+
+### 21. Learn about ModelTriage
+As a visitor, I want to understand what ModelTriage does so that I can decide whether to try it.
+
+Acceptance criteria:
+- Clear explanation of core functionality
+- Supported models listed
+- Privacy guarantees explained
+- No authentication required to view
+
+---
+
+## Dashboard and analytics
+
+### 22. View my routing history
+As a user, I want to see my past routing decisions so that I can understand how my prompts are being classified and routed.
+
+Acceptance criteria:
+- Table of routing decisions with model, task type, time, and expected success
+- Expandable detail rows with full classification and scoring
+- Prompt text displayed from client-side cache (matched by hash)
+- "—" shown when prompt not in local cache (privacy-safe)
+- Paginated for performance
+
+---
+
+### 23. View my usage analytics
+As a user, I want to see charts of my usage patterns so that I can understand my consumption.
+
+Acceptance criteria:
+- Daily usage bar chart (last 14 days)
+- Stats cards showing total requests, today's count, remaining quota
+- Model distribution breakdown (which models were used most)
+- All data fetched from authenticated API endpoint
+
+---
+
+## Account management
+
+### 24. Manage my account
+As a user, I want to change my password, export my data, and delete my account so that I have full control over my information.
+
+Acceptance criteria:
+- Profile section shows email and current plan
+- Can change password with strength validation
+- Can download all personal data as JSON
+- Can delete account with explicit confirmation
+- Deletion removes all data (profile, usage, routing decisions)
+- Signed out and redirected to homepage after deletion
+
+---
+
+# Phase 2: Monetization — API & Payments (planned)
+
+## Payments
+
+### 25. Purchase Pro plan
+As a free user, I want to upgrade to Pro so that I can get higher usage limits and API access.
+
+Acceptance criteria:
+- Clicking upgrade on pricing page initiates Stripe Checkout
+- Successful payment upgrades role to "pro" immediately
+- Usage limits increase after upgrade
+- Subscription cancellation downgrades to "free"
+- Payment failure handled gracefully with notification
+
+---
+
+## API access
+
+### 26. Create and manage API keys
+As a Pro user, I want to generate API keys so that I can access ModelTriage programmatically.
+
+Acceptance criteria:
+- Can create API keys with optional labels
+- Key value shown once on creation (never again)
+- Key list shows label, created date, last used, partial preview
+- Can revoke individual keys
+- Maximum of 5 active keys per user
+- Free users see locked section with upgrade prompt
+
+---
+
+### 27. Use the API
+As a developer, I want to send prompts via API so that I can integrate ModelTriage into my applications.
+
+Acceptance criteria:
+- `Authorization: Bearer mt_...` header authenticates the request
+- API flows through the same routing and streaming pipeline as the web UI
+- Usage counts against the same daily Pro limit
+- Rate limit headers included in all responses
+- 403 returned for free users attempting API access
+- 429 returned when limit exceeded with details in response body
+
+---
+
+### 28. View API documentation
+As a developer, I want clear API documentation so that I can integrate quickly.
+
+Acceptance criteria:
+- Endpoint documentation (URL, method, request/response format)
+- Authentication guide (how to create and use API keys)
+- Code examples (curl, Python, JavaScript)
+- Rate limit explanation
+- Error code reference

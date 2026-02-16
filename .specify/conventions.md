@@ -15,27 +15,28 @@
 - Prefer shipping a thin, correct MVP over adding breadth.
 - Optimize for low cost and safety during development.
 
-## Tech stack (locked for MVP unless updated in specs)
+## Tech stack
 Frontend
-- Next.js
+- Next.js 16 (App Router)
+- React 19
 - TypeScript
-- Streaming UI support
+- Tailwind CSS
 
 Backend and hosting
 - Node.js
 - Deployed on Vercel
 
 Data
-- PostgreSQL
+- PostgreSQL (Supabase-hosted)
 - Prisma ORM
 
-Providers (initial)
-- OpenAI
-- Anthropic
-- Optional later: Google, local models via Ollama
+Auth
+- Supabase Auth (email/password)
 
-Local development
-- Docker for local development
+Providers
+- OpenAI (gpt-5-mini, gpt-5.2)
+- Anthropic (claude-sonnet-4-5, claude-opus-4-5, claude-haiku-4-5)
+- Google Gemini (gemini-3-flash-preview, gemini-3-pro-preview)
 
 ## Streaming transport (locked)
 - Use Server-Sent Events (SSE) for streaming model output to the client.
@@ -60,20 +61,24 @@ Local development
 
 Feature flags
 - USE_LIVE_PROVIDERS
-- ENABLE_DB_WRITES
+- AUTH_DISABLED — bypasses all auth and usage limits for local development
 
 Hard limits
 - Enforce a maximum input length per prompt.
 - Enforce a maximum output token limit per model request.
 - Enforce a maximum number of models allowed in Verify Mode.
 
-Numeric defaults (MVP)
+Numeric defaults
 - Max prompt length: 4,000 characters
-- Max output tokens per model: 800
+- Max output tokens per model: 16,000 (default), 32,000 (hard cap)
 - Verify Mode:
   - Default models: 2
-  - Absolute maximum: 3
-- Throttling: 10 requests per session per 5 minutes
+  - Free users: max 2 models
+  - Pro users: max 3 models
+- Usage limits (configurable via env vars):
+  - Anonymous: 3 requests lifetime (`ANONYMOUS_MAX_REQUESTS`)
+  - Free: 15 requests/day (`FREE_DAILY_LIMIT`)
+  - Pro: 200 requests/day (`PRO_DAILY_LIMIT`)
 - File attachments:
   - Max files per request: 3
   - Max images per request: 2
@@ -84,6 +89,7 @@ Numeric defaults (MVP)
   - Text summarization threshold: 12,000 characters
   - Image max dimension: 1024px (resized)
 - Prompt history: 10 most recent prompts
+- Client-side prompt cache: 200 entries max (localStorage)
 - These values are hard limits and must be enforced in code.
 
 Safe defaults
@@ -93,8 +99,11 @@ Safe defaults
 - Verify Mode must clearly communicate increased cost and latency before execution.
 
 Rate limiting
-- Add basic per-session throttling to prevent rapid repeated requests.
-- Prevent automatic retries that would multiply paid calls.
+- Database-backed usage tracking with atomic upserts (Prisma).
+- In-memory rate limiters are NOT used (ineffective on serverless).
+- Anonymous users tracked via fingerprint hash (IP + localStorage anonymousId).
+- Authenticated users tracked via DailyUsage table (resets at midnight UTC).
+- Usage limits checked before streaming begins (pre-flight enforcement).
 
 Logging
 - Never log full prompts or full model outputs in production logs.
@@ -104,18 +113,21 @@ Logging
   - token usage when available
   - estimated cost when available
 
-## Persistence conventions (MVP)
-- MVP includes a working database.
-- Database usage is intentionally minimal and cost-conscious.
-- Persist only:
-  - request metadata (model name, latency, token usage, estimated cost, timestamp)
-  - optional user feedback (preferred response, rating)
+## Persistence conventions
+- PostgreSQL database via Supabase, accessed through Prisma ORM.
+- Two connection URLs: `DATABASE_URL` (pooled, runtime) and `DIRECT_URL` (direct, migrations).
+- Persist:
+  - User profiles and roles (auto-created via Supabase Auth trigger)
+  - Daily usage counts per user (atomic upserts, no race conditions)
+  - Anonymous usage counts per fingerprint (lifetime cap)
+  - Routing decisions with classification, scoring, and prompt hashes
+  - Optional user feedback (preferred response, rating)
 - Do not persist:
-  - full prompt text
-  - full raw model outputs
-  - user profiles or long-term identities
-- Persistence must be safe to disable in local development.
-- All database writes must be gated behind ENABLE_DB_WRITES.
+  - Full prompt text (only SHA-256 hashes)
+  - Full raw model outputs
+  - Uploaded file content (in-memory only)
+- Persistence is always-on in production. Use `AUTH_DISABLED=true` for local dev bypass.
+- Routing decision persistence is fire-and-forget (never blocks the SSE stream).
 
 ## Architecture conventions
 - Use a model gateway layer that provides a unified interface across providers.
@@ -155,10 +167,24 @@ Logging
 - Disagreement is treated as signal, not an error.
 
 ## Data and privacy conventions
-- BYO keys initially.
+- Never store raw prompts in the database (SHA-256 hashes only).
 - Never store provider API keys in the database.
 - Never log secrets, auth headers, or raw tokens.
 - Use environment-based configuration for all secrets on Vercel.
+- Client-side prompt cache uses SHA-256 hashing matching server-side normalization.
+- Prompt text display in dashboard is best-effort (depends on localStorage availability).
+
+## Authentication conventions
+- Supabase Auth handles all user sessions (JWT-based).
+- A Postgres trigger (`supabase/setup.sql`) auto-creates UserProfile on signup.
+- Two session validation modes:
+  - `getSession()` — fast local JWT validation (<1ms), for regular API routes
+  - `getSessionSecure()` — network call to Supabase, for sensitive operations (account deletion)
+- UserProfile cache: 5-minute TTL, per-process (serverless warm instance lifetime).
+- Role changes require profile cache invalidation.
+- Protected pages use `<RequireAuth>` wrapper component.
+- Feature gating centralized in `lib/auth/gates.ts` — no role checks scattered in components.
+- Plan definitions centralized in `lib/constants.ts` — single source of truth for limits, features, pricing.
 
 ## Observability and metrics conventions
 - Record per request:
