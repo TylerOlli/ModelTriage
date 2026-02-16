@@ -20,6 +20,8 @@
     "@anthropic-ai/sdk": "^0.32.1",
     "@google/genai": "^1.40.0",
     "@prisma/client": "^6.19.2",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.95.3",
     "@types/react-syntax-highlighter": "^15.5.13",
     "next": "^16.1.6",
     "openai": "^6.17.0",

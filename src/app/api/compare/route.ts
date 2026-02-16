@@ -9,6 +9,11 @@
  *   - Shadow scoring (Expected Success for the shadow pick)
  *   - Response timing
  *   - Diff summary with verdict
+ *
+ * Auth: Usage limits are NOT checked here — they are enforced
+ * in /api/stream (which runs the models). This endpoint only
+ * generates the diff summary from already-completed responses.
+ * The userId is passed through for analytics attribution.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -18,6 +23,8 @@ import { classifyPrompt } from "@/lib/llm/prompt-classifier";
 import { intentRouter } from "@/lib/llm/intent-router";
 import { scoreForModel } from "@/lib/llm/scoring-engine";
 import type { ModelId } from "@/lib/llm/types";
+import { getSession } from "@/lib/auth/session";
+import { reportError } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -33,6 +40,10 @@ interface ComparisonRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    // Get authenticated user for analytics attribution
+    const sessionUser = await getSession();
+    const userId = sessionUser?.id ?? undefined;
+
     const body = (await request.json()) as ComparisonRequest;
     const { responses, anonymousId, prompt, responseTimeMs } = body;
 
@@ -101,6 +112,7 @@ export async function POST(request: NextRequest) {
           persistCompare({
             prompt,
             anonymousId,
+            userId,
             modelsCompared,
             diffSummary: summary,
             classification: classification
@@ -127,7 +139,7 @@ export async function POST(request: NextRequest) {
       summary,
     });
   } catch (err) {
-    console.error("Comparison summary API error:", err);
+    reportError(err, { context: "compare-api" });
     return NextResponse.json(
       {
         error:

@@ -3,6 +3,14 @@
  * Processes prompts through one or more models in parallel
  * Supports automatic model selection via intent router
  * Supports file attachments (text + images) with strict token guardrails
+ *
+ * Auth & Usage Enforcement:
+ *   - Pre-flight check validates auth session and usage limits
+ *   - Anonymous users: lifetime cap (default 3 requests)
+ *   - Free users: daily cap (default 15/day)
+ *   - Pro users: higher daily cap (default 200/day)
+ *   - Enforcement happens BEFORE the stream opens — streaming
+ *     code is untouched by auth logic.
  */
 
 import { routeToProvider } from "@/lib/llm/router";
@@ -16,6 +24,10 @@ import type { ProcessedImageAttachment } from "@/lib/attachments/processor";
 import { getAttachmentsGist } from "@/lib/attachments/gist-generator";
 import { parseImageGist, generateRoutingReasonFromGist, type ImageGist } from "@/lib/attachments/image-gist-schema";
 import { classifyPrompt } from "@/lib/llm/prompt-classifier";
+import { getSession, getUserProfile } from "@/lib/auth/session";
+import { checkUsageLimit, createFingerprint } from "@/lib/auth/limits";
+import type { UserRole } from "@/lib/auth/gates";
+import { reportError } from "@/lib/errors";
 
 /**
  * Check if a routing reason is a placeholder (not final)
@@ -44,10 +56,9 @@ const DEFAULT_MAX_TOKENS = 16000; // High default for reasoning models (GPT-5 mi
 const MAX_TOKENS_LIMIT = 32000; // Max limit for cost control
 const MODEL_TIMEOUT_MS = 60000; // 60 seconds (reasoning models can take longer)
 
-// Rate limiting (in-memory, simple MVP)
-const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
-const RATE_LIMIT_MAX_REQUESTS = 30;
-const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+// Note: In-memory rate limiting removed in favor of database-backed
+// usage enforcement via lib/auth/limits.ts. In-memory rate limiters
+// are ineffective on serverless (each invocation gets its own memory).
 
 interface InferenceRequest {
   prompt: string;
@@ -74,40 +85,6 @@ function getClientIP(request: Request): string {
     return realIP;
   }
   return "unknown";
-}
-
-/**
- * Check rate limit for IP
- */
-function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
-  const now = Date.now();
-  const record = rateLimitStore.get(ip);
-
-  // Clean up expired entries periodically
-  if (rateLimitStore.size > 1000) {
-    for (const [key, value] of rateLimitStore.entries()) {
-      if (value.resetAt < now) {
-        rateLimitStore.delete(key);
-      }
-    }
-  }
-
-  if (!record || record.resetAt < now) {
-    // New window
-    rateLimitStore.set(ip, {
-      count: 1,
-      resetAt: now + RATE_LIMIT_WINDOW_MS,
-    });
-    return { allowed: true };
-  }
-
-  if (record.count >= RATE_LIMIT_MAX_REQUESTS) {
-    const retryAfter = Math.ceil((record.resetAt - now) / 1000);
-    return { allowed: false, retryAfter };
-  }
-
-  record.count += 1;
-  return { allowed: true };
 }
 
 /**
@@ -189,30 +166,53 @@ async function* streamProvider(
 
 export async function POST(request: Request) {
   try {
-    // Rate limiting
+    // ── Auth & Usage Limit Pre-flight ──────────────────────────
+    // 1. Get authenticated user (if any) from Supabase session
+    // 2. Parse request to get anonymousId for fingerprinting
+    // 3. Check usage limits (DB-backed, atomic increment)
+    // All enforcement happens here — streaming code is untouched.
     const clientIP = getClientIP(request);
-    const rateLimitCheck = checkRateLimit(clientIP);
-    
-    if (!rateLimitCheck.allowed) {
-      return new Response(
-        JSON.stringify({
-          error: `Rate limit exceeded. Maximum ${RATE_LIMIT_MAX_REQUESTS} requests per ${RATE_LIMIT_WINDOW_MS / 60000} minutes. Try again in ${rateLimitCheck.retryAfter} seconds.`,
-        }),
-        {
-          status: 429,
-          headers: {
-            "Content-Type": "application/json",
-            "Retry-After": String(rateLimitCheck.retryAfter),
-          },
-        }
-      );
-    }
 
-    // Parse request (supports both JSON and multipart/form-data)
-    const parsedRequest = await parseInferenceRequest(request);
+    // Run auth check and request parsing in parallel — they're independent
+    const [sessionUser, parsedRequest] = await Promise.all([
+      getSession(),
+      parseInferenceRequest(request),
+    ]);
+
     const { prompt, models, temperature, previousPrompt, previousResponse, files, stream, anonymousId } = parsedRequest;
     const isFollowUp = (parsedRequest as any).isFollowUp === true || (parsedRequest as any).isFollowUp === "true";
     let { maxTokens } = parsedRequest;
+
+    let userRole: UserRole | null = null;
+    let userId: string | null = null;
+    let fingerprint: string | null = null;
+
+    if (sessionUser) {
+      userId = sessionUser.id;
+      // getUserProfile is cached (5-min TTL) so this is fast after first call
+      const profile = await getUserProfile(sessionUser.id);
+      userRole = (profile?.role as UserRole) ?? "free";
+    } else if (anonymousId) {
+      fingerprint = await createFingerprint(clientIP, anonymousId);
+    }
+
+    // Check usage limits (atomic increment — prevents race conditions)
+    const usageCheck = await checkUsageLimit(userId, userRole, fingerprint);
+    if (!usageCheck.allowed) {
+      return new Response(
+        JSON.stringify({
+          error: "usage_limit_exceeded",
+          remaining: usageCheck.remaining,
+          limit: usageCheck.limit,
+          used: usageCheck.used,
+          requiresAuth: usageCheck.requiresAuth ?? false,
+        }),
+        {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
     
     // Construct contextual prompt if this is a follow-up
     let contextualPrompt = prompt;
@@ -988,6 +988,7 @@ ${prompt}`;
                 persistAutoSelect({
                   prompt,
                   anonymousId,
+                  userId: userId ?? undefined,
                   routing: {
                     intent: routingMetadata.intent,
                     category: routingMetadata.category,
@@ -1087,7 +1088,7 @@ ${prompt}`;
       }
     );
   } catch (error) {
-    console.error("Error in inference route:", error);
+    reportError(error, { context: "stream-api" });
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : "Internal server error",

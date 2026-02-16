@@ -1,6 +1,7 @@
 // Prisma configuration file
-// Environment variables are loaded from .env files automatically by Prisma CLI
-// During build on Vercel, the schema file itself handles env vars
+// When prisma.config.ts is present, Prisma skips auto-loading .env files.
+// We load them explicitly here so env vars are available for migrations.
+import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
 export default defineConfig({

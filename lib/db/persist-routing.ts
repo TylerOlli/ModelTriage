@@ -65,6 +65,8 @@ export interface AutoSelectData {
   prompt: string;
   /** Anonymous browser UUID from localStorage */
   anonymousId: string;
+  /** Authenticated user ID (optional — links decision to UserProfile) */
+  userId?: string;
   /** Routing metadata from the intent router */
   routing: RoutingData;
   /** Output of the scoring engine */
@@ -91,6 +93,7 @@ export async function persistAutoSelect(data: AutoSelectData): Promise<void> {
     await prisma.routingDecision.create({
       data: {
         anonymousId: data.anonymousId,
+        userId: data.userId ?? null,
         promptHash,
         promptLength: data.prompt.length,
         mode: "auto",
@@ -121,6 +124,7 @@ export async function persistAutoSelect(data: AutoSelectData): Promise<void> {
     console.log("[DB] Persisted auto-select routing decision:", {
       promptHash: promptHash.substring(0, 12) + "...",
       model: data.routing.chosenModel,
+      userId: data.userId ?? "(anonymous)",
       expectedSuccess: data.scoring?.expectedSuccess,
       responseTimeMs: data.responseTimeMs,
     });
@@ -140,6 +144,8 @@ export interface CompareData {
   prompt: string;
   /** Anonymous browser UUID from localStorage */
   anonymousId: string;
+  /** Authenticated user ID (optional — links decision to UserProfile) */
+  userId?: string;
   /** Model IDs that were compared */
   modelsCompared: string[];
   /** The structured comparison summary from the DiffAnalyzer */
@@ -175,6 +181,7 @@ export async function persistCompare(data: CompareData): Promise<void> {
     await prisma.routingDecision.create({
       data: {
         anonymousId: data.anonymousId,
+        userId: data.userId ?? null,
         promptHash,
         promptLength: data.prompt.length,
         mode: "compare",
@@ -210,6 +217,7 @@ export async function persistCompare(data: CompareData): Promise<void> {
     console.log("[DB] Persisted compare session:", {
       promptHash: promptHash.substring(0, 12) + "...",
       models: data.modelsCompared,
+      userId: data.userId ?? "(anonymous)",
       shadowModel: data.shadowRouting?.chosenModel,
       hasVerdict: !!data.diffSummary.verdict,
       responseTimeMs: data.responseTimeMs,
