@@ -60,25 +60,31 @@ export async function GET(request: NextRequest) {
     });
     const totalRequests = totalResult._sum.count ?? 0;
 
-    // ── Daily counts (last 14 days) ────────────────────────────
-    const fourteenDaysAgo = new Date();
+    // ── Daily counts (last 14 days including today) ────────────────────────────
+    // Get the last 14 days of data, including today (reuse 'today' from above)
+    const fourteenDaysAgo = new Date(today);
     fourteenDaysAgo.setUTCDate(fourteenDaysAgo.getUTCDate() - 13);
-    fourteenDaysAgo.setUTCHours(0, 0, 0, 0);
 
     const dailyRecords = await prisma.dailyUsage.findMany({
       where: {
         userId,
-        date: { gte: fourteenDaysAgo },
+        date: { gte: fourteenDaysAgo, lte: today },
       },
       orderBy: { date: "asc" },
     });
 
-    // Fill in missing days with 0
+    // Fill in missing days with 0 - generate exactly 14 days ending with today
     const dailyCounts: { date: string; count: number }[] = [];
+    const todayStr = today.toISOString().split("T")[0];
+    
     for (let i = 0; i < 14; i++) {
       const d = new Date(fourteenDaysAgo);
       d.setUTCDate(d.getUTCDate() + i);
       const dateStr = d.toISOString().split("T")[0];
+      
+      // Stop if we've gone past today (shouldn't happen, but safety check)
+      if (dateStr > todayStr) break;
+      
       const record = dailyRecords.find(
         (r) => r.date.toISOString().split("T")[0] === dateStr
       );

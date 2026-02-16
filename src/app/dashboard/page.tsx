@@ -352,13 +352,18 @@ function UsageChart({ dailyCounts }: { dailyCounts: { date: string; count: numbe
   return (
     <div className="flex items-end gap-1.5 h-32">
       {dailyCounts.map((d) => {
-        const height = Math.max(2, (d.count / max) * 100);
+        const height = Math.max(4, (d.count / max) * 100);
+        const hasData = d.count > 0;
         return (
           <div key={d.date} className="flex-1 flex flex-col items-center gap-1 group">
-            <div className="relative w-full flex justify-center">
+            <div className="relative w-full flex-1 flex items-end justify-center">
               <div
-                className="w-full max-w-[28px] bg-blue-100 hover:bg-blue-200 rounded-t transition-colors"
-                style={{ height: `${height}%`, minHeight: "2px" }}
+                className={`w-full max-w-[28px] rounded-t transition-colors ${
+                  hasData 
+                    ? 'bg-blue-500 hover:bg-blue-600' 
+                    : 'bg-neutral-100 hover:bg-neutral-200'
+                }`}
+                style={{ height: `${height}%`, minHeight: "4px" }}
               >
                 {/* Tooltip */}
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block">
