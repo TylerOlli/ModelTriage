@@ -312,12 +312,12 @@ Acceptance criteria:
 
 ---
 
-# Phase 2: Monetization — API & Payments (planned)
+# Phase 2: Monetization — Payments & CLI (planned)
 
 ## Payments
 
 ### 25. Purchase Pro plan
-As a free user, I want to upgrade to Pro so that I can get higher usage limits and API access.
+As a free user, I want to upgrade to Pro so that I can get higher usage limits and CLI access.
 
 Acceptance criteria:
 - Clicking upgrade on pricing page initiates Stripe Checkout
@@ -328,40 +328,115 @@ Acceptance criteria:
 
 ---
 
-## API access
+### 26. Manage my subscription
+As a Pro user, I want to manage my subscription so that I can update payment methods or cancel.
 
-### 26. Create and manage API keys
-As a Pro user, I want to generate API keys so that I can access ModelTriage programmatically.
+Acceptance criteria:
+- "Manage subscription" link on account page opens Stripe Customer Portal
+- Can update payment method
+- Can cancel subscription (downgrades to free at end of billing period)
+- Can view invoice history
+- Account page shows current subscription status
+
+---
+
+## API key access
+
+### 27. Create and manage API keys
+As a Pro user, I want to generate API keys so that I can use ModelTriage from the CLI or other tools.
 
 Acceptance criteria:
 - Can create API keys with optional labels
-- Key value shown once on creation (never again)
-- Key list shows label, created date, last used, partial preview
+- Full key value shown once on creation with copy button (never shown again)
+- Key list shows label, key prefix (`mt_abc1...`), created date, last used
 - Can revoke individual keys
 - Maximum of 5 active keys per user
 - Free users see locked section with upgrade prompt
 
 ---
 
-### 27. Use the API
-As a developer, I want to send prompts via API so that I can integrate ModelTriage into my applications.
+### 28. Authenticate via API key
+As a developer, I want to authenticate with an API key so that I can use ModelTriage outside the browser.
 
 Acceptance criteria:
 - `Authorization: Bearer mt_...` header authenticates the request
 - API flows through the same routing and streaming pipeline as the web UI
 - Usage counts against the same daily Pro limit
-- Rate limit headers included in all responses
-- 403 returned for free users attempting API access
+- Rate limit headers included in all API-key-authenticated responses
+- 401 returned for invalid or revoked keys
+- 403 returned for free users attempting API key access
 - 429 returned when limit exceeded with details in response body
 
 ---
 
-### 28. View API documentation
-As a developer, I want clear API documentation so that I can integrate quickly.
+## CLI tool
+
+### 29. Install and authenticate the CLI
+As a developer, I want to install a CLI tool so that I can use ModelTriage from my terminal.
 
 Acceptance criteria:
-- Endpoint documentation (URL, method, request/response format)
-- Authentication guide (how to create and use API keys)
-- Code examples (curl, Python, JavaScript)
-- Rate limit explanation
-- Error code reference
+- Install globally via `npm install -g modeltriage-cli`
+- Binary is named `mt`
+- `mt auth login` prompts for API key (user copies from account page)
+- Key saved to `~/.config/modeltriage/config.json`
+- `mt auth logout` removes saved key
+- `mt auth status` shows user email, plan, and key prefix
+- Clear error message if key is invalid or expired
+
+---
+
+### 30. Run prompts from the terminal
+As a developer, I want to send prompts from my terminal so that I can get AI responses without leaving my workflow.
+
+Acceptance criteria:
+- `mt "prompt text"` sends prompt and streams response
+- Routing info displayed before response (model name and reason)
+- Response streamed in real-time as chunks arrive
+- Basic markdown formatting rendered (bold, code blocks, lists)
+- Loading spinner shown while waiting for first chunk
+- Errors shown as clear messages (no stack traces)
+
+---
+
+### 31. Attach files from the terminal
+As a developer, I want to attach files to CLI prompts so that I can ask questions about my code or logs.
+
+Acceptance criteria:
+- `mt "prompt" --file path/to/file` attaches a file
+- Multiple files: `--file a.ts --file b.ts` (up to 3)
+- Stdin pipe: `cat error.log | mt "debug this"`
+- File size and type limits match web UI constraints
+- Clear error messages for unsupported or oversized files
+
+---
+
+### 32. Compare models from the terminal
+As a developer, I want to run comparison mode from the CLI so that I can verify responses across models.
+
+Acceptance criteria:
+- `mt "prompt" --compare` runs comparison mode
+- Each model's response displayed sequentially with model name label
+- Diff summary shown at the end
+- Free users compare 2 models, Pro users compare 3
+
+---
+
+### 33. Check usage from the terminal
+As a developer, I want to see my usage stats from the CLI so that I know how many requests I have left.
+
+Acceptance criteria:
+- `mt usage` shows current plan, today's count, remaining quota
+- `mt models` lists available models
+- `mt --help` shows all commands and flags
+- `mt --version` shows CLI version
+
+---
+
+### 34. Control CLI output format
+As a developer, I want to control how the CLI formats output so that I can pipe it to other tools.
+
+Acceptance criteria:
+- `--no-color` disables color output for piping
+- `--json` outputs raw JSON instead of formatted text
+- Default output uses colors and markdown formatting
+- Both flags work with all commands

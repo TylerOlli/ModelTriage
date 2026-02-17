@@ -415,17 +415,22 @@
 
 ---
 
-# Phase 2: Monetization — API & Payments (planned)
+# Phase 2: Monetization — Payments & CLI (planned)
 
 ## Stripe integration
 
 - The system must support Pro plan purchases via Stripe Checkout.
 - The system must handle Stripe webhooks for:
-  - Successful payment (upgrade role to "pro")
-  - Subscription cancellation (downgrade role to "free")
-  - Payment failure (send notification, grace period)
+  - `checkout.session.completed` — upgrade role to "pro", store `stripeCustomerId`
+  - `customer.subscription.deleted` — downgrade role to "free"
+  - `invoice.payment_failed` — optional warning flag
 - The `UserProfile.stripeCustomerId` field must link Prisma profiles to Stripe customers.
 - The pricing page CTA must initiate a Stripe Checkout session for Pro upgrades.
+- The system must provide a Stripe Customer Portal for subscription management:
+  - Payment method updates
+  - Subscription cancellation
+  - Invoice history
+- Profile cache must be invalidated after any role change.
 
 ---
 
@@ -435,10 +440,11 @@
 - API keys must:
   - Be generated as secure random tokens with a `mt_` prefix
   - Be stored as SHA-256 hashes in the database (never plain text)
-  - Include metadata: label, created date, last used date, revoked status
+  - Include metadata: key prefix (first 8 chars for display), label, created date, last used date, revoked status
   - Be limited to a reasonable count per user (e.g., 5 active keys)
 - The system must support API key authentication via `Authorization: Bearer mt_...` header.
 - API key auth must resolve to a userId and role, then flow through the existing usage limit pipeline.
+- API key `lastUsedAt` must be updated on each authenticated request.
 - Free users attempting to use API keys must receive a 403 with upgrade guidance.
 
 ---
@@ -448,18 +454,70 @@
 - The account page must include an API key management section (Pro users only).
 - The UI must support:
   - Creating a new key (with optional label)
-  - Displaying the key value once on creation (never shown again)
-  - Listing active keys (label, created date, last used, partial key preview)
-  - Revoking individual keys
+  - Displaying the full key value once on creation (never shown again), with copy button
+  - Listing active keys (label, key prefix, created date, last used, partial key preview)
+  - Revoking individual keys (soft delete via `revokedAt`)
 - Free users must see a locked section directing them to upgrade.
 
 ---
 
 ## API rate limits
 
-- The system may enforce separate daily limits for API vs UI usage.
-- API rate limit headers must be included in responses:
+- API rate limit headers must be included in API-key-authenticated responses:
   - `X-RateLimit-Limit` — daily limit
   - `X-RateLimit-Remaining` — remaining requests
-  - `X-RateLimit-Reset` — UTC timestamp of next reset
+  - `X-RateLimit-Reset` — UTC timestamp of next reset (midnight UTC)
 - Rate limit exceeded responses must return 429 with a JSON body including limit details.
+- API and web UI usage count against the same daily Pro limit.
+
+---
+
+## CLI tool (`modeltriage-cli`)
+
+- The system must provide an npm-installable CLI package: `npm install -g modeltriage-cli`
+- The CLI binary must be named `mt`.
+- The CLI must authenticate via saved API key (stored in `~/.config/modeltriage/config.json`).
+
+### CLI authentication
+- `mt auth login` — prompts user to paste their API key (copied from account page)
+- `mt auth logout` — removes saved API key
+- `mt auth status` — shows current user email, plan tier, and key prefix
+- The CLI must validate the saved key on first use and display a clear error if invalid or expired.
+
+### CLI prompt execution
+- `mt "prompt text"` — sends prompt to ModelTriage API, streams response to terminal
+- The CLI must display routing info before the response: model name and routing reason
+- The CLI must stream response text in real-time as SSE chunks arrive
+- The CLI must render basic markdown formatting (bold, code blocks, lists) with terminal colors
+- The CLI must show a loading spinner while waiting for the first chunk
+
+### CLI file attachments
+- `mt "prompt" --file path/to/file.ts` — attaches a file to the request
+- Multiple files: `mt "prompt" --file a.ts --file b.ts` (up to 3 files)
+- Stdin pipe: `cat error.log | mt "debug this"` — reads stdin as file attachment
+- File size and type limits match the web UI constraints
+
+### CLI comparison mode
+- `mt "prompt" --compare` — runs comparison mode (2 models for free, 3 for pro)
+- The CLI must display each model's response sequentially, labeled with model name
+- The CLI must display the diff summary at the end
+
+### CLI utility commands
+- `mt usage` — shows current plan, today's usage count, remaining quota
+- `mt models` — lists available models
+- `mt --help` — usage guide with all commands and flags
+- `mt --version` — shows CLI version
+
+### CLI output options
+- `--no-color` — disables color output (for piping to files or other tools)
+- `--json` — outputs raw JSON response instead of formatted terminal output
+- Errors must be displayed as clear messages (no stack traces in production)
+
+---
+
+## Pricing and constants updates
+
+- `lib/constants.ts` Pro features list must include "CLI access"
+- Pricing page Pro CTA must link to Stripe Checkout (replace "Coming soon")
+- Pricing FAQ must include questions about billing, cancellation, and CLI usage
+- Account page must show subscription management section for Pro users

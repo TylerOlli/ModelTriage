@@ -9,16 +9,18 @@
 |-------|--------|-------|
 | MVP | Shipped | Core prompt execution, routing, comparison, attachments, history |
 | Phase 1: Auth & Usage | Shipped | Supabase Auth, roles, usage limits, multi-page architecture, dashboard, account |
-| Phase 2: API & Payments | Planned | Stripe integration, API key access for Pro users |
-| Future | Not scoped | Teams, enterprise, learned routing |
+| Phase 2: Payments & CLI | Planned | Stripe integration, API keys, CLI tool (`mt`) for terminal access |
+| Phase 3: Usage-Based Pricing | Future | Overage billing, premium model gating, usage alerts |
+| Phase 4: Teams | Future | Organizations, shared billing, team dashboard, audit logs |
 
 ## Use SpecKit For (Strategic Planning)
 
 ### ✅ Major Features That Need Careful Planning
 - ~~Authentication and user management~~ (Phase 1 — shipped)
 - Billing and payment systems (Phase 2 — next)
-- Public API design (Phase 2 — next)
-- Multi-tenancy / team workspaces (Future)
+- CLI tool and API key system (Phase 2 — next)
+- Usage-based pricing and premium models (Phase 3)
+- Multi-tenancy / team workspaces (Phase 4)
 - Significant architecture changes (e.g., switching databases)
 - Features that affect many parts of the system
 

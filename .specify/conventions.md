@@ -228,6 +228,19 @@ Logging
   - Reset button with double-click confirmation
   - Disable submit when over limit or no prompt entered
 
+## CLI conventions (Phase 2)
+- The CLI is a separate package (`packages/cli/` or standalone repo), published to npm as `modeltriage-cli`.
+- The CLI binary is `mt`.
+- The CLI is a thin HTTP client — all logic stays server-side. No routing, scoring, or provider code in the CLI.
+- The CLI authenticates via saved API key, not browser session cookies.
+- API key storage: `~/.config/modeltriage/config.json` (using platform-standard config directory).
+- The CLI calls the same `/api/stream` endpoint as the web UI with `Authorization: Bearer mt_...`.
+- Streaming: the CLI parses SSE events and renders incrementally (same contract as the browser client).
+- Terminal rendering: use `chalk` for colors, render markdown-ish formatting (bold, code blocks, lists).
+- `--no-color` and `--json` flags must be supported for scripting and piping.
+- Errors must never show stack traces in production — display clear, actionable messages.
+- The CLI must not store prompts, responses, or any user data locally (beyond the API key config).
+
 ## Serverless streaming implementation rules
 - Do not implement streaming in a way that buffers the entire provider response.
 - Write chunks as they arrive and flush immediately to the client.

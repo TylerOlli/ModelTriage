@@ -20,6 +20,7 @@ ModelTriage introduces judgment and transparency into model usage by:
 - Providing smart history and workflow features
 - Tracking usage and routing analytics for authenticated users
 - Offering tiered access (Free/Pro) with usage-based limits
+- Providing CLI access for developers who prefer the terminal
 
 This reduces cognitive load while increasing trust in AI-assisted work.
 
@@ -30,6 +31,7 @@ This reduces cognitive load while increasing trust in AI-assisted work.
 - A system for analyzing files and images with appropriate AI models
 - A workflow tool with history, follow-ups, and context preservation
 - A multi-page application with dashboard, analytics, and account management
+- A CLI tool for terminal-first developers (Phase 2)
 
 ## What ModelTriage is not
 - A general-purpose chat application
@@ -51,17 +53,24 @@ Core prompt execution, streaming, intelligent routing, comparison mode, file att
 - Client-side prompt cache for privacy-safe dashboard display
 - Account management (password change, data export, deletion)
 
-### Phase 2: Monetization — API & Payments (planned)
-- Stripe integration for Pro plan purchases
-- API key management for Pro users (programmatic access)
+### Phase 2: Monetization — Payments & CLI (planned)
+- Stripe integration for Pro plan purchases and subscription management
+- API key management for Pro users
 - API key auth middleware (Bearer token → user/role resolution)
-- Separate API vs UI rate limits
-- API documentation and developer portal
+- CLI tool (`modeltriage-cli` / `mt`) — terminal access to ModelTriage routing and streaming
+- CLI supports prompts, file attachments, comparison mode, and usage checking
+- Rate limit headers on API-key-authenticated responses
 
-### Future (not yet scoped)
-- Enterprise features (organizations, teams, audit logs)
-- Fully learned or self-optimizing routing
-- Real-time collaboration or sharing
+### Phase 3: Usage-Based Pricing & Premium Models (future)
+- Usage-based overage billing beyond daily cap
+- Premium model gating (expensive models restricted to Pro)
+- Usage alerts and monthly usage reports
+
+### Phase 4: Teams & Organizations (future)
+- Team/org entity with shared billing and usage pools
+- Member management (invite, roles, remove)
+- Team dashboard and audit log
+- Enterprise features (SSO, SLAs)
 
 ## Explicit non-goals
 - Long-term prompt or history storage across devices (history is localStorage-only)
