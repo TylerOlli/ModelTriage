@@ -56,11 +56,20 @@ ModelTriage is an LLM decision and verification layer that intelligently routes 
   - Fast models (Gemini Flash, GPT-5-mini) for lightweight requests
 - See [docs/file-attachments.md](docs/file-attachments.md) and [docs/attachment-aware-routing.md](docs/attachment-aware-routing.md) for details
 
+### Multi-Page Architecture
+- **Pricing** (`/pricing`) — Free/Pro plan comparison with feature lists and FAQ
+- **About** (`/about`) — How ModelTriage works, supported models, privacy guarantees
+- **Dashboard** (`/dashboard`) — usage chart, model distribution, routing history with expandable details
+- **Account** (`/account`) — profile management, password change, data export, account deletion
+- Shared `Nav` component with adaptive layout (public vs authenticated links)
+- `RequireAuth` guard redirects unauthenticated users from protected pages
+
 ### Routing Analytics
 - Every routing decision is persisted to PostgreSQL
 - Prompt classification, scoring, and model selection recorded
 - Compare mode includes diff summary and verdict
 - Privacy-safe: only prompt hashes stored, never raw prompts
+- Client-side prompt cache maps hashes to text for dashboard display
 
 ## Local Setup
 
@@ -142,7 +151,7 @@ ModelTriage is an LLM decision and verification layer that intelligently routes 
 ## Architecture
 
 ### Tech Stack
-- **Framework:** Next.js 15 (App Router)
+- **Framework:** Next.js 16 (App Router)
 - **Language:** TypeScript
 - **Styling:** Tailwind CSS
 - **Database:** PostgreSQL (Supabase)
@@ -154,48 +163,63 @@ ModelTriage is an LLM decision and verification layer that intelligently routes 
 
 ```
 modeltriage/
-├── src/app/                  # Next.js App Router
-│   ├── api/
-│   │   ├── stream/           # SSE streaming endpoint
-│   │   ├── compare/          # Comparison summary endpoint
-│   │   ├── usage/            # Usage stats endpoint
-│   │   └── account/delete/   # Account deletion endpoint
-│   ├── auth/callback/        # Supabase auth callback
-│   ├── page.tsx              # Main UI
-│   └── layout.tsx            # Root layout (AuthProvider)
+├── src/app/                       # Next.js App Router
+│   ├── page.tsx                   # Homepage — prompt input, streaming
+│   ├── layout.tsx                 # Root layout (AuthProvider, Nav)
+│   ├── pricing/page.tsx           # Public — plan comparison + FAQ
+│   ├── about/page.tsx             # Public — how ModelTriage works
+│   ├── dashboard/page.tsx         # Authenticated — usage stats, routing history
+│   ├── account/page.tsx           # Authenticated — profile, settings, deletion
+│   ├── auth/callback/             # Supabase auth callback
+│   └── api/
+│       ├── stream/                # SSE streaming endpoint
+│       ├── compare/               # Comparison summary endpoint
+│       ├── usage/                 # Usage stats endpoint
+│       ├── dashboard/             # Dashboard data endpoint
+│       └── account/               # Account delete + export endpoints
 ├── src/components/
-  │   ├── auth/                 # Auth UI components
-  │   │   ├── AuthProvider.tsx  # Auth context + usage state
-  │   │   ├── LoginModal.tsx    # Email/password login/signup
-  │   │   ├── UserMenu.tsx      # User dropdown + usage bar
-  │   │   ├── AuthGate.tsx      # Limit-exceeded prompt
-  │   │   └── UpgradeBanner.tsx # Approaching-limit warning
-  │   ├── PromptComposer.tsx    # Prompt input, files, history, model chips
-  │   ├── AutoResponseView.tsx  # Auto-select mode response display
-  │   ├── CompareResponseView.tsx # Compare mode grid + diff summary
-  │   ├── ConversationHistory.tsx # Previous turns accordion
-  │   └── ...                   # Other UI components
-  ├── lib/
-│   ├── auth/                 # Auth utilities
-│   │   ├── session.ts        # JWT validation + profile cache
-│   │   ├── gates.ts          # Feature flags + limit config
-│   │   ├── limits.ts         # Usage tracking (atomic upserts)
-│   │   ├── supabase-server.ts
-│   │   └── supabase-browser.ts
-│   ├── db/                   # Database utilities
-│   │   ├── prisma.ts         # Prisma client singleton
-│   │   └── persist-routing.ts # Analytics persistence
-│   ├── llm/                  # LLM providers + routing
-  │   ├── diff/                 # Diff analyzer
-  │   ├── attachments/          # File attachment processing
-  │   ├── models.ts             # Model definitions + display utilities
-  │   └── errors.ts             # Centralized error reporting
+│   ├── Nav.tsx                    # Shared navigation bar
+│   ├── PromptComposer.tsx         # Prompt input, files, history, model chips
+│   ├── AutoResponseView.tsx       # Auto-select mode response display
+│   ├── CompareResponseView.tsx    # Compare mode grid + diff summary
+│   ├── ConversationHistory.tsx    # Previous turns accordion
+│   ├── FollowUpComposer.tsx       # Follow-up prompt input
+│   ├── FormattedResponse.tsx      # Markdown rendering
+│   ├── CodeBlock.tsx              # Syntax-highlighted code blocks
+│   ├── ModelSelectionCard.tsx     # "Why this model?" fit scoring
+│   └── auth/                      # Auth UI components
+│       ├── AuthProvider.tsx       # Auth context + usage state
+│       ├── LoginModal.tsx         # Email/password login/signup
+│       ├── UserMenu.tsx           # User dropdown + nav links
+│       ├── AuthGate.tsx           # Limit-exceeded prompt
+│       ├── UpgradeBanner.tsx      # Approaching-limit warning
+│       └── RequireAuth.tsx        # Auth guard for protected pages
+├── lib/
+│   ├── llm/                       # LLM providers + intelligent routing
+│   │   ├── intent-router.ts       # Intent analysis + model selection
+│   │   ├── router.ts              # Model ID → provider mapping
+│   │   ├── providers/             # OpenAI, Anthropic, Gemini
+│   │   ├── scoring-engine.ts      # Multi-signal model scoring
+│   │   └── score-breakdown.ts     # Fit breakdown types + validation
+│   ├── auth/                      # Auth utilities
+│   │   ├── session.ts             # JWT validation + profile cache
+│   │   ├── gates.ts               # Feature flags + limit config
+│   │   └── limits.ts              # Usage tracking (atomic upserts)
+│   ├── db/                        # Database utilities
+│   │   ├── prisma.ts              # Prisma client singleton
+│   │   └── persist-routing.ts     # Routing decision persistence
+│   ├── attachments/               # File attachment processing
+│   ├── diff/                      # Diff analyzer for comparison mode
+│   ├── constants.ts               # Plan definitions (Free/Pro)
+│   ├── models.ts                  # Model definitions + display utilities
+│   ├── prompt-cache.ts            # Client-side prompt hash ↔ text cache
+│   └── errors.ts                  # Centralized error reporting
 ├── prisma/
-│   └── schema.prisma         # Database schema
+│   └── schema.prisma              # Database schema
 ├── supabase/
-│   └── setup.sql             # Trigger + RLS setup
-├── docs/                     # Technical documentation
-└── env.example               # Environment variable reference
+│   └── setup.sql                  # Trigger + RLS setup
+├── docs/                          # Technical documentation
+└── env.example                    # Environment variable reference
 ```
 
 ## Documentation

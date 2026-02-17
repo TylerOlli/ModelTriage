@@ -10,6 +10,7 @@
  */
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { useAuth } from "./AuthProvider";
 
 interface UserMenuProps {
@@ -19,8 +20,6 @@ interface UserMenuProps {
 export function UserMenu({ onSignInClick }: UserMenuProps) {
   const { user, role, usage, loading, signOut } = useAuth();
   const [open, setOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close menu when clicking outside or pressing Escape
@@ -55,14 +54,13 @@ export function UserMenu({ onSignInClick }: UserMenuProps) {
     return (
       <button
         onClick={onSignInClick}
-        className="text-sm font-medium text-neutral-600 hover:text-neutral-900 px-3 py-1.5 rounded-lg hover:bg-neutral-100 transition-colors"
+        className="text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 px-4 py-1.5 rounded-lg transition-colors"
       >
         Sign in
       </button>
     );
   }
 
-  const initial = (user.email?.[0] ?? "U").toUpperCase();
   const planLabel = role === "pro" ? "Pro" : "Free";
 
   return (
@@ -72,8 +70,10 @@ export function UserMenu({ onSignInClick }: UserMenuProps) {
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 rounded-lg hover:bg-neutral-100 px-2 py-1.5 transition-colors"
       >
-        <div className="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-semibold flex items-center justify-center">
-          {initial}
+        <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
         </div>
         {usage && (
           <span className="text-xs text-neutral-500 hidden sm:inline">
@@ -137,6 +137,13 @@ export function UserMenu({ onSignInClick }: UserMenuProps) {
 
           {/* Actions */}
           <div className="px-1 py-1">
+            <Link
+              href="/account"
+              onClick={() => setOpen(false)}
+              className="block w-full text-left px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-50 rounded-lg transition-colors"
+            >
+              Account settings
+            </Link>
             <button
               onClick={async () => {
                 setOpen(false);
@@ -146,57 +153,6 @@ export function UserMenu({ onSignInClick }: UserMenuProps) {
             >
               Sign out
             </button>
-
-            {/* Delete account */}
-            {!confirmDelete ? (
-              <button
-                onClick={() => setConfirmDelete(true)}
-                className="w-full text-left px-3 py-2 text-sm text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-              >
-                Delete account
-              </button>
-            ) : (
-              <div className="px-3 py-2 space-y-2">
-                <p className="text-xs text-red-600 font-medium">
-                  This will permanently delete your account and all data. This cannot be undone.
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={async () => {
-                      setDeleting(true);
-                      try {
-                        const res = await fetch("/api/account/delete", {
-                          method: "DELETE",
-                        });
-                        if (res.ok) {
-                          setOpen(false);
-                          setConfirmDelete(false);
-                          await signOut();
-                        } else {
-                          const data = await res.json();
-                          alert(data.error || "Failed to delete account");
-                        }
-                      } catch {
-                        alert("Failed to delete account. Please try again.");
-                      } finally {
-                        setDeleting(false);
-                      }
-                    }}
-                    disabled={deleting}
-                    className="flex-1 px-2 py-1.5 text-xs font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
-                  >
-                    {deleting ? "Deleting..." : "Confirm delete"}
-                  </button>
-                  <button
-                    onClick={() => setConfirmDelete(false)}
-                    disabled={deleting}
-                    className="flex-1 px-2 py-1.5 text-xs font-medium text-neutral-600 bg-neutral-100 rounded-lg hover:bg-neutral-200 disabled:opacity-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}

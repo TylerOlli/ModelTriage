@@ -616,7 +616,7 @@ DATABASE_URL=postgresql://...
 ### Documentation
 - **Architecture:** `docs/architecture.md`
 - **Streaming API:** `docs/streaming-api.md`
-- **Comparison Mode:** `docs/verify-mode.md`
+- **Comparison Mode:** `docs/comparison-mode.md`
 - **Routing:** `docs/routing.md`
 - **UI States:** `docs/ui-states.md`
 

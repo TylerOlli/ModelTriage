@@ -1,16 +1,24 @@
 # When to Use SpecKit
 
 ## Current Project Phase
-**Status**: Transitioning from MVP to full product with real users  
-**Priority**: Ship quality features quickly while maintaining good documentation
+**Status**: Phase 1 Monetization shipped. Planning Phase 2 (API + Payments).  
+**Priority**: Ship Phase 2 monetization to enable revenue, then evaluate Phase 3 (teams/enterprise).
+
+### Phase Summary
+| Phase | Status | Scope |
+|-------|--------|-------|
+| MVP | Shipped | Core prompt execution, routing, comparison, attachments, history |
+| Phase 1: Auth & Usage | Shipped | Supabase Auth, roles, usage limits, multi-page architecture, dashboard, account |
+| Phase 2: API & Payments | Planned | Stripe integration, API key access for Pro users |
+| Future | Not scoped | Teams, enterprise, learned routing |
 
 ## Use SpecKit For (Strategic Planning)
 
 ### ✅ Major Features That Need Careful Planning
-- Authentication and user management
-- Billing and payment systems
-- Public API design
-- Multi-tenancy / team workspaces
+- ~~Authentication and user management~~ (Phase 1 — shipped)
+- Billing and payment systems (Phase 2 — next)
+- Public API design (Phase 2 — next)
+- Multi-tenancy / team workspaces (Future)
 - Significant architecture changes (e.g., switching databases)
 - Features that affect many parts of the system
 

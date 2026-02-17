@@ -96,23 +96,25 @@
 - The system must enforce the maximum prompt length.
 - The system must enforce the maximum output token limit per model request.
 - The system must enforce the maximum number of models allowed in Verify Mode.
-- The system must enforce per-session rate limits.
+- The system must enforce per-role daily usage limits (see Phase 1: Usage tracking).
 - Requests that exceed limits must be blocked with a clear, user-facing message.
 
 ---
 
-## Persistence (MVP)
+## Persistence
 
-- The system must support a working database connection.
-- Database writes must be gated behind the ENABLE_DB_WRITES feature flag.
-- The system must persist only:
-  - request metadata (model name, latency, token usage, estimated cost, timestamp)
+- The system must support a working database connection (PostgreSQL via Prisma).
+- The system must persist:
+  - User profiles and roles (via Supabase Auth trigger)
+  - Daily usage counts per user (atomic upserts)
+  - Anonymous usage counts per fingerprint (lifetime cap)
+  - Routing decisions with classification, scoring, and prompt hashes
   - optional user feedback (preferred response, rating)
 - The system must not persist:
-  - full prompt text
+  - full prompt text (only SHA-256 hashes)
   - full raw model outputs
-  - user profiles or long-term identities
-- Persistence must be safe to disable in local development without breaking functionality.
+  - uploaded file content (processed in-memory only)
+- Persistence must be safe to disable in local development via `AUTH_DISABLED=true`.
 
 ---
 
@@ -284,3 +286,180 @@
   - Display "X/3" next to "Attach Files" button
 - The system must display security warnings for attachments:
   - Yellow background warning about sensitive data
+
+---
+
+# Phase 1: Monetization — Auth & Usage (shipped)
+
+## Authentication
+
+- The system must support email/password authentication via Supabase Auth.
+- The system must create a UserProfile row automatically on signup (via Postgres trigger).
+- The system must support three user tiers: anonymous, free (signed up), and pro.
+- The system must provide a login/signup modal with:
+  - Email and password fields
+  - Password strength requirements (8+ chars, uppercase, lowercase, number)
+  - Toggle between login and signup modes
+  - Error messages for invalid credentials
+- The system must provide a user menu showing:
+  - Current email and plan tier
+  - Usage bar (used / limit)
+  - Links to Dashboard and Account settings
+  - Sign out action
+- The system must support `AUTH_DISABLED=true` environment variable for local development bypass.
+
+---
+
+## Usage tracking and limits
+
+- The system must enforce per-role daily usage limits:
+  - Anonymous users: lifetime cap (default 3 requests, configurable via `ANONYMOUS_MAX_REQUESTS`)
+  - Free users: daily cap (default 15 requests/day, configurable via `FREE_DAILY_LIMIT`)
+  - Pro users: daily cap (default 200 requests/day, configurable via `PRO_DAILY_LIMIT`)
+- Usage tracking must use atomic database upserts to prevent race conditions.
+- Anonymous usage must be tracked via fingerprint hash (IP + localStorage anonymousId).
+- Daily counters must reset at midnight UTC.
+- The system must display an upgrade banner when a free user approaches their daily limit.
+- The system must display an auth gate when any user exceeds their limit:
+  - Anonymous users: prompt to sign up
+  - Free users: prompt to upgrade to Pro
+- Limits must be configurable via environment variables without redeploying.
+- API-level enforcement must happen before streaming begins.
+
+---
+
+## Multi-page architecture
+
+- The system must serve multiple pages via Next.js App Router:
+  - `/` — Homepage (public, prompt input and streaming)
+  - `/pricing` — Plan comparison (public)
+  - `/about` — Product explanation (public)
+  - `/dashboard` — Usage analytics (authenticated only)
+  - `/account` — Account management (authenticated only)
+- Protected pages must use a `RequireAuth` wrapper that:
+  - Shows a loading spinner during auth initialization
+  - Redirects unauthenticated users to `/`
+- The system must provide a shared `Nav` component with:
+  - Brand link (left)
+  - Page links and user menu (right)
+  - Public links (Pricing, About) visible to all users
+  - Authenticated links (Dashboard) visible only when signed in
+  - Sign-in styled as a bordered button for visual weight when logged out
+
+---
+
+## Pricing page
+
+- The system must display Free and Pro plan tiers with:
+  - Plan name, price, and feature lists
+  - Visual highlight on the Pro plan
+  - Current plan indicator for signed-in users
+  - CTA buttons (sign up for anonymous, current plan indicator for free, "Coming soon" for Pro)
+- The system must include an FAQ section addressing common questions.
+- Plan definitions must be centralized in `lib/constants.ts` for consistency across frontend and backend.
+
+---
+
+## Dashboard
+
+- The system must provide an authenticated dashboard with:
+  - Daily usage bar chart (last 14 days)
+  - Stats cards (total requests, today's count, remaining quota)
+  - Model distribution breakdown
+  - Paginated routing decisions table with expandable detail rows
+- Routing decision detail rows must show:
+  - Prompt text (from client-side cache, matched by SHA-256 hash)
+  - Classification details (category, task type, complexity)
+  - Expected success with color-coded bar
+  - Key factors with neutral progress bars
+  - Input signals (only active ones shown)
+  - Compare mode verdict (when applicable)
+- The system must use a client-side prompt cache (`localStorage`) to display prompt text:
+  - Prompts are hashed client-side using SHA-256 (same normalization as server)
+  - Hash-to-text mappings stored in `localStorage` (capped at 200 entries)
+  - If not in cache, display "—" (privacy-safe degradation)
+
+---
+
+## Account management
+
+- The system must provide an authenticated account page with:
+  - Profile section displaying email and current plan
+  - Password change via Supabase `updateUser()` API
+  - Data export (download all user data as JSON)
+  - Account deletion with confirmation flow
+- Account deletion must:
+  - Require explicit confirmation
+  - Delete all user data (profile, usage, routing decisions)
+  - Use Supabase admin API for auth user removal
+  - Sign the user out and redirect to homepage
+
+---
+
+## Routing analytics persistence
+
+- Every auto-select routing decision must be persisted to PostgreSQL.
+- Persisted data must include:
+  - Prompt hash (SHA-256, never raw text)
+  - Prompt length (character count)
+  - Mode (auto or compare)
+  - Classification (task type, stakes, input signals)
+  - Routing details (intent, category, selected model, confidence)
+  - Scoring (expected success, confidence, key factors)
+  - Response time (wall-clock milliseconds)
+- Compare mode decisions must also include:
+  - Models compared (array)
+  - Diff summary (JSON)
+  - Verdict (one-sentence)
+- Persistence must be fire-and-forget (never block the SSE stream).
+
+---
+
+# Phase 2: Monetization — API & Payments (planned)
+
+## Stripe integration
+
+- The system must support Pro plan purchases via Stripe Checkout.
+- The system must handle Stripe webhooks for:
+  - Successful payment (upgrade role to "pro")
+  - Subscription cancellation (downgrade role to "free")
+  - Payment failure (send notification, grace period)
+- The `UserProfile.stripeCustomerId` field must link Prisma profiles to Stripe customers.
+- The pricing page CTA must initiate a Stripe Checkout session for Pro upgrades.
+
+---
+
+## API key access (Pro only)
+
+- The system must allow Pro users to create API keys for programmatic access.
+- API keys must:
+  - Be generated as secure random tokens with a `mt_` prefix
+  - Be stored as SHA-256 hashes in the database (never plain text)
+  - Include metadata: label, created date, last used date, revoked status
+  - Be limited to a reasonable count per user (e.g., 5 active keys)
+- The system must support API key authentication via `Authorization: Bearer mt_...` header.
+- API key auth must resolve to a userId and role, then flow through the existing usage limit pipeline.
+- Free users attempting to use API keys must receive a 403 with upgrade guidance.
+
+---
+
+## API key management UI
+
+- The account page must include an API key management section (Pro users only).
+- The UI must support:
+  - Creating a new key (with optional label)
+  - Displaying the key value once on creation (never shown again)
+  - Listing active keys (label, created date, last used, partial key preview)
+  - Revoking individual keys
+- Free users must see a locked section directing them to upgrade.
+
+---
+
+## API rate limits
+
+- The system may enforce separate daily limits for API vs UI usage.
+- API rate limit headers must be included in responses:
+  - `X-RateLimit-Limit` — daily limit
+  - `X-RateLimit-Remaining` — remaining requests
+  - `X-RateLimit-Reset` — UTC timestamp of next reset
+- Rate limit exceeded responses must return 429 with a JSON body including limit details.

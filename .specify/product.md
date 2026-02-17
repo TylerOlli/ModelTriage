@@ -18,6 +18,8 @@ ModelTriage introduces judgment and transparency into model usage by:
 - Supporting file attachments (text and images) with intelligent routing
 - Maintaining conversation context for follow-up questions
 - Providing smart history and workflow features
+- Tracking usage and routing analytics for authenticated users
+- Offering tiered access (Free/Pro) with usage-based limits
 
 This reduces cognitive load while increasing trust in AI-assisted work.
 
@@ -27,6 +29,7 @@ This reduces cognitive load while increasing trust in AI-assisted work.
 - Infrastructure for model comparison, not a chatbot
 - A system for analyzing files and images with appropriate AI models
 - A workflow tool with history, follow-ups, and context preservation
+- A multi-page application with dashboard, analytics, and account management
 
 ## What ModelTriage is not
 - A general-purpose chat application
@@ -34,12 +37,36 @@ This reduces cognitive load while increasing trust in AI-assisted work.
 - An autonomous agent system
 - A replacement for application-specific business logic
 
-## Explicit non-goals (MVP)
-- User accounts, authentication, or billing
+## Product phases
+
+### MVP (shipped)
+Core prompt execution, streaming, intelligent routing, comparison mode, file attachments, prompt history, conversation continuation, and safe mode switching. Single-page application with no authentication or persistence beyond routing analytics.
+
+### Phase 1: Monetization — Auth & Usage (shipped)
+- Supabase Auth with email/password signup and login
+- Role-based access control (Free and Pro tiers)
+- Database-backed usage tracking with atomic daily limits
+- Multi-page architecture: pricing, about, dashboard, account
+- Routing analytics persistence (prompt hashes, never raw text)
+- Client-side prompt cache for privacy-safe dashboard display
+- Account management (password change, data export, deletion)
+
+### Phase 2: Monetization — API & Payments (planned)
+- Stripe integration for Pro plan purchases
+- API key management for Pro users (programmatic access)
+- API key auth middleware (Bearer token → user/role resolution)
+- Separate API vs UI rate limits
+- API documentation and developer portal
+
+### Future (not yet scoped)
+- Enterprise features (organizations, teams, audit logs)
+- Fully learned or self-optimizing routing
+- Real-time collaboration or sharing
+
+## Explicit non-goals
 - Long-term prompt or history storage across devices (history is localStorage-only)
-- Enterprise features such as organizations, permissions, or audit logs
+- Enterprise features such as organizations, permissions, or audit logs (until scoped)
 - Automated actions taken on external systems
-- Fully learned or self-optimizing routing in the initial release
 - File storage or persistence (attachments processed in-memory only)
 - Real-time collaboration or sharing
 

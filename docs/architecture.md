@@ -2,395 +2,249 @@
 
 ## Overview
 
-ModelTriage is built on Next.js 15 (App Router) with TypeScript and Tailwind CSS. The architecture separates concerns into UI (Next.js pages), API (SSE streaming endpoints), and core library modules (providers, routing, diff analysis).
+ModelTriage is built on Next.js 16 (App Router) with React 19, TypeScript, and Tailwind CSS. The backend uses Supabase for authentication, PostgreSQL (via Prisma) for data persistence, and Server-Sent Events (SSE) for real-time response streaming. The architecture separates concerns into UI pages, reusable components, API routes, and core library modules (providers, routing, attachments, auth, diff analysis).
+
+## Tech Stack
+
+- **Framework:** Next.js 16 (App Router)
+- **UI:** React 19 + Tailwind CSS
+- **Language:** TypeScript (strict)
+- **Database:** PostgreSQL (Supabase-hosted)
+- **ORM:** Prisma
+- **Auth:** Supabase Auth (email/password)
+- **Runtime:** Node.js (SSE streaming requires non-Edge runtime)
+- **Deployment:** Vercel
 
 ## Folder Structure
 
 ```
 modeltriage/
-├── src/app/                    # Next.js App Router
-│   ├── api/stream/
-│   │   └── route.ts            # SSE streaming endpoint (single + Comparison Mode)
-│   ├── page.tsx                # Main UI with prompt input, Comparison Mode toggle
-│   ├── layout.tsx              # Root layout
-│   └── globals.css             # Global styles
+├── src/app/                       # Next.js App Router — pages + API routes
+│   ├── page.tsx                   # Homepage — prompt input, streaming responses
+│   ├── layout.tsx                 # Root layout (AuthProvider, Nav)
+│   ├── pricing/page.tsx           # Public — Free/Pro plan details + FAQ
+│   ├── about/page.tsx             # Public — How ModelTriage works
+│   ├── dashboard/page.tsx         # Authenticated — usage stats, routing history
+│   ├── account/page.tsx           # Authenticated — profile, password, data export, deletion
+│   ├── auth/callback/route.ts     # Supabase OAuth callback
+│   └── api/
+│       ├── stream/route.ts        # SSE streaming endpoint (single + compare)
+│       ├── compare/route.ts       # Comparison summary endpoint
+│       ├── usage/route.ts         # Usage stats for auth UI
+│       ├── dashboard/route.ts     # Dashboard data (usage chart, decisions)
+│       └── account/
+│           ├── delete/route.ts    # Account + data deletion
+│           └── export/route.ts    # Data export (JSON download)
 │
-├── lib/                        # Core library modules
-│   ├── providers/              # LLM provider abstraction
-│   │   ├── types.ts            # Provider interface definition
-│   │   ├── mock-provider.ts    # MockProvider implementation
-│   │   └── index.ts            # Exports
-│   ├── routing/                # Rules-based model routing
-│   │   ├── types.ts            # Routing types (RoutingDecision)
-│   │   ├── router.ts           # ModelRouter implementation
-│   │   └── index.ts            # Exports
-│   └── diff/                   # Diff analysis for Comparison Mode
-│       ├── types.ts            # Diff types (DiffSummary)
-│       ├── analyzer.ts         # DiffAnalyzer implementation
-│       └── index.ts            # Exports
+├── src/components/                # Reusable React components
+│   ├── Nav.tsx                    # Shared navigation bar
+│   ├── PromptComposer.tsx         # Prompt input, file attachments, history, model chips
+│   ├── AutoResponseView.tsx       # Auto-select mode response display
+│   ├── CompareResponseView.tsx    # Compare mode grid + diff summary
+│   ├── ConversationHistory.tsx    # Previous turns accordion
+│   ├── FollowUpComposer.tsx       # Follow-up prompt input
+│   ├── FormattedResponse.tsx      # Markdown rendering for LLM output
+│   ├── CodeBlock.tsx              # Syntax-highlighted code blocks
+│   ├── ModelSelectionCard.tsx     # "Why this model?" fit scoring panel
+│   └── auth/                      # Auth-related UI
+│       ├── AuthProvider.tsx       # Auth context + usage state
+│       ├── LoginModal.tsx         # Email/password login/signup modal
+│       ├── UserMenu.tsx           # User dropdown, dashboard/account links
+│       ├── AuthGate.tsx           # Limit-exceeded prompt
+│       ├── UpgradeBanner.tsx      # Approaching-limit warning
+│       └── RequireAuth.tsx        # Auth guard wrapper for protected pages
 │
-├── __tests__/                  # Unit tests
-│   ├── attachments/
-│   │   └── processor.test.ts
-│   ├── diff/
-│   │   └── analyzer.test.ts
-│   └── llm/
-│       └── intent-router.test.ts
+├── lib/                           # Core library modules
+│   ├── llm/                       # LLM providers + routing
+│   │   ├── intent-router.ts       # IntentRouter — prompt analysis + model selection
+│   │   ├── router.ts              # routeToProvider() — maps model IDs to providers
+│   │   ├── prompt-classifier.ts   # LLM-based prompt classification (fallback)
+│   │   ├── capability-matrix.ts   # Model capabilities and characteristics
+│   │   ├── scoring-engine.ts      # Multi-signal scoring for model selection
+│   │   ├── scoring-types.ts       # Scoring type definitions
+│   │   ├── score-breakdown.ts     # Fit breakdown types + validation (Zod)
+│   │   ├── types.ts               # LLMRequest, LLMResponse, ModelId
+│   │   └── providers/
+│   │       ├── openai.ts          # OpenAI — gpt-5-mini, gpt-5.2
+│   │       ├── anthropic.ts       # Anthropic — claude-sonnet-4-5, claude-opus-4-5, claude-haiku-4-5
+│   │       └── gemini.ts          # Google — gemini-3-flash-preview, gemini-3-pro-preview
+│   │
+│   ├── auth/                      # Authentication utilities
+│   │   ├── session.ts             # JWT validation + profile cache
+│   │   ├── gates.ts               # Feature flags + limit configuration
+│   │   ├── limits.ts              # Usage tracking (atomic upserts)
+│   │   ├── supabase-server.ts     # Server-side Supabase client
+│   │   └── supabase-browser.ts    # Browser-side Supabase client
+│   │
+│   ├── db/                        # Database utilities
+│   │   ├── prisma.ts              # Prisma client singleton
+│   │   └── persist-routing.ts     # Routing decision persistence
+│   │
+│   ├── attachments/               # File attachment processing
+│   │   ├── processor.ts           # Main attachment processor
+│   │   ├── complexity-detector.ts # Attachment complexity analysis
+│   │   ├── gist-generator.ts      # Text summarization for long files
+│   │   ├── image-resizer.ts       # Image preprocessing for vision models
+│   │   ├── image-gist-schema.ts   # Image analysis schema
+│   │   ├── request-parser.ts      # Multipart form parsing
+│   │   └── vision-support.ts      # Vision model capability detection
+│   │
+│   ├── diff/                      # Comparison analysis
+│   │   ├── analyzer.ts            # DiffAnalyzer — agreement, disagreement, omissions
+│   │   ├── types.ts               # DiffSummary types
+│   │   └── index.ts               # Module exports
+│   │
+│   ├── constants.ts               # Plan definitions (Free/Pro limits, pricing)
+│   ├── models.ts                  # Model definitions + display utilities
+│   ├── session-types.ts           # Session/panel type definitions
+│   ├── prompt-cache.ts            # Client-side prompt hash ↔ text cache
+│   ├── file-validation.ts         # Denylist-based file type validation
+│   ├── response-parser.ts         # LLM response parsing utilities
+│   ├── code-lang-utils.ts         # Code language detection
+│   └── errors.ts                  # Centralized error reporting
 │
-├── docs/                       # Documentation
-├── .specify/                   # Product specifications (source of truth)
-└── package.json
+├── prisma/
+│   └── schema.prisma              # Database schema (Profile, DailyUsage, RoutingDecision)
+│
+├── supabase/
+│   └── setup.sql                  # Auto-profile trigger + Row Level Security
+│
+├── __tests__/                     # Unit + integration tests
+│   ├── llm/                       # Router + scoring tests
+│   ├── diff/                      # Diff analyzer tests
+│   └── attachments/               # Attachment processor tests
+│
+├── docs/                          # Technical documentation
+├── .specify/                      # Product specifications
+└── env.example                    # Environment variable reference
 ```
 
-## Module Descriptions
+## Pages
 
-### `src/app/` - UI and API
+### Public Pages
+| Route | File | Description |
+|-------|------|-------------|
+| `/` | `src/app/page.tsx` | Homepage — prompt input, streaming responses, comparison mode |
+| `/pricing` | `src/app/pricing/page.tsx` | Free/Pro plan comparison with FAQ |
+| `/about` | `src/app/about/page.tsx` | How ModelTriage works, supported models, privacy |
 
-**`src/app/page.tsx`:**
-- Main UI component
-- Handles prompt input, Comparison Mode toggle, model count selection
-- Manages streaming state (isStreaming, panels, error)
-- Calls `/api/stream` endpoint
-- Renders response panels and diff summary
-- Implements localStorage persistence for UI settings
+### Authenticated Pages
+| Route | File | Description |
+|-------|------|-------------|
+| `/dashboard` | `src/app/dashboard/page.tsx` | Usage chart, model distribution, routing history |
+| `/account` | `src/app/account/page.tsx` | Profile, password change, data export, account deletion |
 
-**`src/app/api/stream/route.ts`:**
-- SSE streaming endpoint (`POST /api/stream`)
-- Validates input (prompt length, model count)
-- Routes single-answer requests to appropriate model
-- Multiplexes Comparison Mode requests (2-3 models in parallel)
-- Streams events: routing → chunks → metadata
-- Implements per-model error isolation using `Promise.allSettled`
-
-### `lib/llm/` - LLM Provider Integration
-
-**Purpose:** Unified interface for all LLM provider implementations and intelligent routing.
-
-**`providers/`:**
-- `openai.ts` - OpenAI GPT models (gpt-5-mini, gpt-5.2)
-- `anthropic.ts` - Anthropic Claude models (Opus, Sonnet, Haiku)
-- `gemini.ts` - Google Gemini models (Flash, Pro)
-- Each provider implements: `runModel()` and `streamModel()` functions
-
-**`intent-router.ts`:**
-- `IntentRouter` - Intelligent model selection based on prompt and attachments
-- Analyzes user intent (coding, writing, vision, analysis)
-- Routes to appropriate model with confidence scores
-- Supports attachment-aware routing (images → Gemini, code → Claude)
-
-**`router.ts`:**
-- `routeToProvider()` - Maps model IDs to their provider implementations
-- Handles dynamic imports and streaming setup
-
-**`types.ts`:**
-- `LLMRequest`, `LLMResponse` - Unified request/response types
-- `ModelId` - Type-safe model identifiers
-
-### `lib/diff/` - Comparison Analysis
-
-**Purpose:** Compare outputs from multiple models in Comparison Mode to identify agreement, disagreement, omissions, and conflicts.
-
-**`analyzer.ts`:**
-- `DiffAnalyzer.analyze(responses[])` returns `DiffSummary`
-- Identifies:
-  - **Agreement:** Common phrases across all models
-  - **Disagreement:** Contradictory statements
-  - **Omissions:** Content present in some models but not others
-  - **Conflicting assumptions:** Different foundational approaches
-
-**`types.ts`:**
-- `DiffSummary`: agreement, disagreement, omissions, conflictingAssumptions
-
-**Note:** Diff analysis runs **client-side** and does **not block streaming**.
-
-## SSE Event Contract
-
-The `/api/stream` endpoint streams Server-Sent Events (SSE) in the format: `data: {json}\n\n`
-
-### Event Types
-
-#### 1. Routing Event
-
-Sent **first** to indicate which model was selected and why.
-
-**Single-Answer Mode:**
-```json
-{
-  "type": "routing",
-  "routing": {
-    "model": "mock-quality-1",
-    "reason": "Analytical comparison task requiring nuanced understanding",
-    "confidence": 0.95
-  }
-}
-```
-
-**Comparison Mode (with modelId):**
-```json
-{
-  "type": "routing",
-  "modelId": "model-1",
-  "routing": {
-    "model": "mock-quality-1",
-    "reason": "Analytical comparison task requiring nuanced understanding",
-    "confidence": 0.95
-  }
-}
-```
-
-#### 2. Chunk Event
-
-Sent **multiple times** as content is generated. The `done` field indicates whether this is the final chunk.
-
-**Single-Answer Mode:**
-```json
-{
-  "type": "chunk",
-  "content": "React and Vue are both popular JavaScript frameworks",
-  "done": false
-}
-```
-
-**Final Chunk:**
-```json
-{
-  "type": "chunk",
-  "content": ".",
-  "done": true
-}
-```
-
-**Comparison Mode (with modelId):**
-```json
-{
-  "type": "chunk",
-  "modelId": "model-1",
-  "content": "React and Vue are both popular JavaScript frameworks",
-  "done": false
-}
-```
-
-#### 3. Metadata Event
-
-Sent **once** after streaming completes.
-
-**Single-Answer Mode:**
-```json
-{
-  "type": "metadata",
-  "metadata": {
-    "model": "mock-quality-1",
-    "provider": "mock",
-    "latency": 450,
-    "tokenUsage": {
-      "prompt": 10,
-      "completion": 35,
-      "total": 45
-    },
-    "estimatedCost": 0
-  }
-}
-```
-
-**Comparison Mode (with modelId):**
-```json
-{
-  "type": "metadata",
-  "modelId": "model-1",
-  "metadata": {
-    "model": "mock-quality-1",
-    "provider": "mock",
-    "latency": 450,
-    "tokenUsage": {
-      "prompt": 10,
-      "completion": 35,
-      "total": 45
-    },
-    "estimatedCost": 0
-  }
-}
-```
-
-#### 4. Error Event
-
-Sent if an error occurs during streaming.
-
-**Per-Model Error (Comparison Mode):**
-
-Isolated to a specific panel. Other models continue processing.
-
-```json
-{
-  "type": "error",
-  "modelId": "model-1",
-  "error": "Provider timeout"
-}
-```
-
-**Global Error:**
-
-Affects the entire stream (all panels).
-
-```json
-{
-  "type": "error",
-  "error": "Invalid request"
-}
-```
-
-### Event Flow Examples
-
-**Single-Answer Mode:**
-1. `routing` → model selection and reason
-2. `chunk` (done: false) → first text chunk
-3. `chunk` (done: false) → more text
-4. ...
-5. `chunk` (done: true) → final text chunk
-6. `metadata` → latency, tokens, cost
-
-**Comparison Mode (2 models):**
-1. `routing` (modelId: "model-1") → model selection for panel 1
-2. `routing` (modelId: "model-2") → model selection for panel 2
-3. `chunk` (modelId: "model-1", done: false) → text from model 1
-4. `chunk` (modelId: "model-2", done: false) → text from model 2
-5. ... chunks interleaved as they arrive ...
-6. `chunk` (modelId: "model-1", done: true) → final chunk from model 1
-7. `metadata` (modelId: "model-1") → metadata for model 1
-8. `chunk` (modelId: "model-2", done: true) → final chunk from model 2
-9. `metadata` (modelId: "model-2") → metadata for model 2
-
-## Live LLM Providers
-
-### Real Provider Integration
-
-The application integrates with three major LLM providers:
-
-**OpenAI:**
-- Models: `gpt-5-mini` (fast), `gpt-5.2` (reasoning)
-- Used for: General tasks, complex reasoning
-
-**Anthropic Claude:**
-- Models: `claude-sonnet-4-5`, `claude-opus-4-5`, `claude-haiku-4-5`
-- Used for: Code analysis, writing, detailed responses
-
-**Google Gemini:**
-- Models: `gemini-3-flash-preview` (fast), `gemini-3-pro-preview` (quality)
-- Used for: Vision tasks (screenshots), multimodal requests
-- ✅ **Streaming simulation** - behaves like real providers (async chunks)
-- ✅ **Standard interface** - implements the `Provider` interface that real providers will use
-
-### Implementation Details
-
-**Deterministic responses:**
-- Uses a simple hash of the prompt to seed response generation
-- Same prompt → same response (every time)
-- Enables predictable testing
-
-**Streaming simulation:**
-- Splits response into chunks
-- Yields chunks with configurable delay (mimics network latency)
-- Returns async iterator compatible with real provider streaming
-
-**Metadata generation:**
-- Token usage from provider APIs
-- Real latency measurement
-- Cost estimation based on provider pricing
-| **Reliability** | 100% | Subject to API outages |
-| **Offline** | ✅ Works | ❌ Requires internet |
-| **Testing** | ✅ Deterministic | ❌ Non-deterministic |
-| **Setup** | None | API keys required |
+### API Routes
+| Route | Method | Auth | Description |
+|-------|--------|------|-------------|
+| `/api/stream` | POST | Optional | SSE streaming — single or comparison mode |
+| `/api/compare` | POST | Optional | Comparison summary generation |
+| `/api/usage` | GET | Required | Current usage stats for auth UI |
+| `/api/dashboard` | GET | Required | Dashboard data (chart, decisions, distribution) |
+| `/api/account/delete` | DELETE | Required | Full account + data deletion |
+| `/api/account/export` | GET | Required | JSON data export download |
 
 ## Data Flow
 
 ### Single-Answer Request
 
 ```
-User Input (page.tsx)
+User Input (PromptComposer)
   ↓
-POST /api/stream { prompt }
+POST /api/stream { prompt, attachments? }
+  ↓
+Auth check → Usage limit check → Increment usage
   ↓
 IntentRouter.route(prompt, attachments)
-  ↓ RoutingDecision
+  ↓ RoutingDecision (model, reason, confidence, fitBreakdown)
+  ↓
+persistRoutingDecision() → PostgreSQL
+  ↓
 Provider.stream(prompt, config)
   ↓ AsyncIterator<StreamChunk>
 SSE Events: routing → chunks → metadata
   ↓
-Client parses SSE events
-  ↓
-UI updates progressively
+Client parses SSE → AutoResponseView updates progressively
 ```
 
 ### Comparison Mode Request
 
 ```
-User Input (page.tsx)
+User Input (PromptComposer)
   ↓
-POST /api/stream { prompt, models: ["model-1", "model-2"] }
+POST /api/stream { prompt, models: ["model-1", "model-2", ...] }
   ↓
-For each model in parallel:
+Auth check → Usage limit check → Increment usage
+  ↓
+For each model in parallel (Promise.allSettled):
   ├─ IntentRouter.route(prompt, model, attachments)
+  ├─ persistRoutingDecision()
   ├─ Provider.stream(prompt, config)
   └─ SSE Events: routing → chunks → metadata (all with modelId)
   ↓
-Client parses SSE events by modelId
-  ↓
-Each panel updates independently
+Client parses SSE by modelId → CompareResponseView panels update independently
   ↓
 After all streams complete:
   DiffAnalyzer.analyze(responses) → DiffSummary
   ↓
-UI shows comparison summary
+UI shows comparison summary with verdict
 ```
+
+## SSE Event Contract
+
+The `/api/stream` endpoint streams events in `data: {json}\n\n` format.
+
+| Event | When | Fields |
+|-------|------|--------|
+| `routing` | First | `model`, `reason`, `confidence`, `fitBreakdown` |
+| `chunk` | Multiple | `content`, `done` (boolean) |
+| `metadata` | After streaming | `model`, `provider`, `latency`, `tokenUsage`, `estimatedCost` |
+| `error` | On failure | `error` message |
+
+In Comparison Mode, each event also includes a `modelId` field to identify the panel.
+
+## LLM Providers
+
+| Provider | Models | Strengths |
+|----------|--------|-----------|
+| **OpenAI** | `gpt-5-mini` (fast), `gpt-5.2` (reasoning) | General tasks, complex reasoning |
+| **Anthropic** | `claude-sonnet-4-5`, `claude-opus-4-5`, `claude-haiku-4-5` | Code analysis, writing, detailed responses |
+| **Google Gemini** | `gemini-3-flash-preview` (fast), `gemini-3-pro-preview` (quality) | Vision tasks, multimodal requests |
+
+All providers implement the same streaming interface via `runModel()` and `streamModel()` functions.
+
+## Authentication & Authorization
+
+```
+Browser → Supabase Auth (email/password)
+  ↓ JWT
+API routes → lib/auth/session.ts → validate JWT → load profile
+  ↓
+lib/auth/gates.ts → check role + feature flags
+  ↓
+lib/auth/limits.ts → atomic DailyUsage upsert → allow or deny
+```
+
+**User tiers:**
+- **Anonymous:** Lifetime cap (default 3 requests), tracked via localStorage `anonId`
+- **Free:** Daily cap (default 15 requests/day)
+- **Pro:** Higher daily cap (default 200 requests/day)
+
+**Protected pages** use `<RequireAuth>` wrapper component, which redirects unauthenticated users to `/`.
+
+## Database Schema (Prisma)
+
+Key models:
+- **Profile** — user metadata, role, Stripe fields (future)
+- **DailyUsage** — per-user daily request counts (atomic upserts)
+- **RoutingDecision** — every routing decision with classification, scoring, model selection, prompt hash (never raw prompts)
 
 ## Key Design Decisions
 
-### 1. SSE over WebSockets
-- **Simpler protocol** - one-way server-to-client
-- **HTTP compatible** - works through proxies and load balancers
-- **Auto-reconnect** - browser handles reconnection
-- **No buffering** - chunks sent immediately
-
-### 2. Node.js Runtime (not Edge)
-- **Streaming support** - Edge runtime has limitations
-- **Provider compatibility** - some SDKs require Node.js
-- **Debugging** - better tooling and error messages
-
-### 3. Client-Side Diff Analysis
-- **Non-blocking** - doesn't delay streaming
-- **Parallel processing** - runs while streams complete
-- **Graceful degradation** - if diff fails, streaming still works
-
-### 4. Multi-Provider Support
-- **OpenAI, Anthropic, Gemini** - three major providers integrated
-- **Consistent interface** - all providers return same data structure
-- **Dynamic routing** - requests routed to optimal provider
-
-### 5. Rules-Based Routing (not ML)
-- **Transparent** - users see why a model was chosen
-- **Predictable** - same prompt always routes to same model
-- **Maintainable** - rules can be adjusted without retraining
-- **Cost-effective** - no ML inference overhead
-
-## Limitations and Trade-offs
-
-### Current MVP Constraints
-
-1. **No database** - all state is in-memory or localStorage
-2. **No authentication** - no user accounts or sessions
-3. **Single user** - no multi-tenancy
-4. **No retries** - errors require manual "Try again"
-5. **Simple diff** - text-based comparison only (no semantic analysis)
-6. **Max 3 models** - Comparison Mode limited to 3 parallel streams
-7. **4,000 char prompt limit** - enforced at API level
-8. **800 token max output** - enforced per request
-
-### Intentional Design Choices
-
-1. **Real providers** - OpenAI, Anthropic, and Gemini integrated
-2. **Client-side persistence** - localStorage for UI settings only
-3. **No prompt history** - no saved sessions or replay
-4. **No export** - no download or share functionality
-5. **No benchmarking** - no performance tracking or comparison
-6. **No rate limiting** - assumed single-user local development
-
-These constraints keep the MVP focused and implementation complexity low while allowing future expansion.
+1. **SSE over WebSockets** — simpler one-way protocol, HTTP-compatible, auto-reconnect
+2. **Node.js runtime (not Edge)** — required for streaming and provider SDK compatibility
+3. **Client-side diff analysis** — non-blocking, runs after streams complete
+4. **Rules-based routing (not ML)** — transparent, predictable, maintainable, no inference overhead
+5. **Privacy-by-design** — prompt hashes stored, never raw prompts; client-side prompt cache for display
+6. **Atomic usage tracking** — Prisma `upsert` prevents race conditions in daily counters
+7. **Component architecture** — UI split into focused components vs monolithic page.tsx

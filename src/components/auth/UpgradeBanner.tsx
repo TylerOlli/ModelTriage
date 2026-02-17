@@ -9,6 +9,7 @@
  */
 
 import { useState } from "react";
+import Link from "next/link";
 import { useAuth } from "./AuthProvider";
 
 export function UpgradeBanner() {
@@ -37,7 +38,9 @@ export function UpgradeBanner() {
             <>
               {usage.remaining} request{usage.remaining !== 1 ? "s" : ""}{" "}
               remaining today.{" "}
-              <span className="font-medium">Pro plan coming soon.</span>
+              <Link href="/pricing" className="font-medium text-amber-900 underline underline-offset-2 hover:text-amber-700">
+                Upgrade to Pro
+              </Link>
             </>
           )}
         </p>
