@@ -35,6 +35,11 @@ Technical documentation for the ModelTriage codebase.
 - [Multi-Page Architecture](./multi-page-architecture.md) — Pages, navigation, auth guards
 - [Prompt Cache](./prompt-cache.md) — Client-side prompt hash ↔ text cache for dashboard
 
+### Monetization (Phase 2)
+- [Stripe Integration](./stripe-integration.md) — Checkout, webhooks, customer portal
+- [API Keys](./api-keys.md) — Key generation, auth middleware, management UI
+- [CLI Tool](./cli.md) — Installation, commands, architecture
+
 ### UI & UX
 - [UI States](./ui-states.md) — Application states and transitions
 - [Reasoning Expand/Collapse](./reasoning-expand-collapse.md) — Expandable routing reasoning text
@@ -60,6 +65,9 @@ These documents capture past decisions, spec rewrites, and strategy changes:
 - **Model routing**: See `routing.md`, `attachment-aware-routing.md`, `fit-scoring.md`
 - **File uploads**: See `file-attachments.md` and `drag-drop-attachments.md`
 - **Dashboard**: See `multi-page-architecture.md` and `prompt-cache.md`
+- **Payments**: See `stripe-integration.md`
+- **API keys**: See `api-keys.md`
+- **CLI**: See `cli.md`
 - **UI changes**: See `ui-states.md` and specific feature docs
 - **Deployment**: See `deployment-checklist.md`
 

@@ -1,0 +1,39 @@
+{
+  "name": "modeltriage-cli",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "ModelTriage CLI — intelligent LLM routing from your terminal",
+  "bin": {
+    "mt": "./dist/index.js",
+    "modeltriage": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "keywords": [
+    "llm",
+    "ai",
+    "model-routing",
+    "cli",
+    "modeltriage"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "conf": "^13.1.0",
+    "ora": "^8.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist"
+  ]
+}

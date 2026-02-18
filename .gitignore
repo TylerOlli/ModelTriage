@@ -47,3 +47,7 @@ next-env.d.ts
 # prisma
 # Generated client is in node_modules/@prisma/client (standard location)
 
+# cli
+/cli/dist/
+/cli/node_modules/
+

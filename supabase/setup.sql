@@ -107,9 +107,24 @@ CREATE POLICY "Users can view own routing decisions"
 -- No INSERT/UPDATE/DELETE for users — only the server manages these
 
 
+-- ── api_keys ─────────────────────────────────────────────────────
+
+ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
+
+-- Users can view their own API keys
+DROP POLICY IF EXISTS "Users can view own API keys" ON public.api_keys;
+CREATE POLICY "Users can view own API keys"
+  ON public.api_keys
+  FOR SELECT
+  USING (auth.uid()::text = user_id);
+
+-- No INSERT/UPDATE/DELETE for users — only the server manages API keys
+
+
 -- ═══════════════════════════════════════════════════════════════════
 -- Done! Verify by checking:
 --   1. Sign up a new user → check user_profiles has a row
 --   2. In the Supabase Table Editor, RLS should show as "Enabled"
---      on user_profiles, daily_usage, anonymous_usage, routing_decisions
+--      on user_profiles, daily_usage, anonymous_usage, routing_decisions,
+--      api_keys
 -- ═══════════════════════════════════════════════════════════════════

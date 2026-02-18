@@ -3,11 +3,11 @@
 /**
  * Account Settings Page
  *
- * Authenticated-only page for managing profile, plan,
- * password, data export, and account deletion.
+ * Authenticated-only page for managing profile, plan, subscription,
+ * API keys, password, data export, and account deletion.
  */
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Nav } from "../../components/Nav";
 import { LoginModal } from "../../components/auth/LoginModal";
@@ -20,6 +20,14 @@ export default function AccountPage() {
       <AccountContent />
     </RequireAuth>
   );
+}
+
+interface ApiKeyDisplay {
+  id: string;
+  keyPrefix: string;
+  label: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
 }
 
 function AccountContent() {
@@ -43,6 +51,18 @@ function AccountContent() {
   // Export state
   const [exporting, setExporting] = useState(false);
 
+  // Subscription management state
+  const [managingSub, setManagingSub] = useState(false);
+
+  // API key state
+  const [apiKeys, setApiKeys] = useState<ApiKeyDisplay[]>([]);
+  const [loadingKeys, setLoadingKeys] = useState(false);
+  const [creatingKey, setCreatingKey] = useState(false);
+  const [newKeyLabel, setNewKeyLabel] = useState("");
+  const [showNewKeyForm, setShowNewKeyForm] = useState(false);
+  const [revealedKey, setRevealedKey] = useState<string | null>(null);
+  const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
+
   const planLabel = role === "pro" ? "Pro" : "Free";
   const memberSince = user?.created_at
     ? new Date(user.created_at).toLocaleDateString("en-US", {
@@ -51,6 +71,28 @@ function AccountContent() {
         day: "numeric",
       })
     : "—";
+
+  // Load API keys on mount
+  const fetchApiKeys = useCallback(async () => {
+    setLoadingKeys(true);
+    try {
+      const res = await fetch("/api/keys");
+      if (res.ok) {
+        const data = await res.json();
+        setApiKeys(data.keys || []);
+      }
+    } catch {
+      // Silently fail — keys just won't show
+    } finally {
+      setLoadingKeys(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (role === "pro") {
+      fetchApiKeys();
+    }
+  }, [role, fetchApiKeys]);
 
   const handlePasswordChange = async () => {
     setPasswordError(null);
@@ -106,6 +148,66 @@ function AccountContent() {
       alert("Failed to export data. Please try again.");
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    setManagingSub(true);
+    try {
+      const res = await fetch("/api/stripe/portal", { method: "POST" });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || "Failed to open subscription portal");
+      }
+    } catch {
+      alert("Something went wrong. Please try again.");
+    } finally {
+      setManagingSub(false);
+    }
+  };
+
+  const handleCreateKey = async () => {
+    setCreatingKey(true);
+    setRevealedKey(null);
+    try {
+      const res = await fetch("/api/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: newKeyLabel.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setRevealedKey(data.key);
+        setNewKeyLabel("");
+        setShowNewKeyForm(false);
+        fetchApiKeys();
+      } else {
+        alert(data.error || "Failed to create API key");
+      }
+    } catch {
+      alert("Something went wrong. Please try again.");
+    } finally {
+      setCreatingKey(false);
+    }
+  };
+
+  const handleRevokeKey = async (keyId: string) => {
+    if (!confirm("Revoke this API key? Any tools using it will stop working.")) return;
+    setRevokingKeyId(keyId);
+    try {
+      const res = await fetch(`/api/keys/${keyId}`, { method: "DELETE" });
+      if (res.ok) {
+        setApiKeys((prev) => prev.filter((k) => k.id !== keyId));
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to revoke key");
+      }
+    } catch {
+      alert("Something went wrong. Please try again.");
+    } finally {
+      setRevokingKeyId(null);
     }
   };
 
@@ -204,7 +306,17 @@ function AccountContent() {
                 </div>
               )}
 
-              {role !== "pro" && (
+              {role === "pro" ? (
+                <div className="pt-2">
+                  <button
+                    onClick={handleManageSubscription}
+                    disabled={managingSub}
+                    className="text-sm text-blue-600 font-medium hover:text-blue-700 disabled:opacity-50"
+                  >
+                    {managingSub ? "Opening..." : "Manage subscription →"}
+                  </button>
+                </div>
+              ) : (
                 <div className="pt-2">
                   <Link
                     href="/pricing"
@@ -216,6 +328,142 @@ function AccountContent() {
               )}
             </div>
           </section>
+
+          {/* API Keys Section (Pro only) */}
+          {role === "pro" && (
+            <section className="bg-white rounded-xl border border-neutral-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-neutral-900">
+                  API keys
+                </h3>
+                <span className="text-xs text-neutral-400">
+                  {apiKeys.length} / 5 active
+                </span>
+              </div>
+
+              {/* Revealed new key banner */}
+              {revealedKey && (
+                <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-4 animate-enter">
+                  <p className="text-xs font-medium text-green-800 mb-1">
+                    Your new API key (copy it now — it won&apos;t be shown again):
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-xs bg-green-100 px-2 py-1 rounded font-mono break-all text-green-900">
+                      {revealedKey}
+                    </code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(revealedKey);
+                      }}
+                      className="text-xs text-green-700 font-medium hover:text-green-800 whitespace-nowrap"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => setRevealedKey(null)}
+                    className="text-xs text-green-600 mt-2 hover:text-green-700"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+
+              {/* Key list */}
+              {loadingKeys ? (
+                <p className="text-sm text-neutral-400">Loading keys...</p>
+              ) : apiKeys.length === 0 && !showNewKeyForm ? (
+                <p className="text-sm text-neutral-400 mb-4">
+                  No API keys yet. Create one to use the CLI tool or access the API.
+                </p>
+              ) : (
+                <div className="space-y-2 mb-4">
+                  {apiKeys.map((key) => (
+                    <div
+                      key={key.id}
+                      className="flex items-center justify-between px-3 py-2.5 bg-neutral-50 rounded-lg"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs font-mono text-neutral-700">
+                            {key.keyPrefix}...
+                          </code>
+                          {key.label && (
+                            <span className="text-xs text-neutral-500">
+                              {key.label}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-neutral-400 mt-0.5">
+                          Created{" "}
+                          {new Date(key.createdAt).toLocaleDateString()}
+                          {key.lastUsedAt && (
+                            <>
+                              {" · Last used "}
+                              {new Date(key.lastUsedAt).toLocaleDateString()}
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleRevokeKey(key.id)}
+                        disabled={revokingKeyId === key.id}
+                        className="text-xs text-red-500 font-medium hover:text-red-600 disabled:opacity-50 ml-3"
+                      >
+                        {revokingKeyId === key.id ? "Revoking..." : "Revoke"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Create new key form */}
+              {showNewKeyForm ? (
+                <div className="space-y-3 animate-enter">
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1">
+                      Label (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={newKeyLabel}
+                      onChange={(e) => setNewKeyLabel(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="e.g. My laptop, CI/CD"
+                      maxLength={50}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCreateKey}
+                      disabled={creatingKey}
+                      className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    >
+                      {creatingKey ? "Creating..." : "Create key"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowNewKeyForm(false);
+                        setNewKeyLabel("");
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-neutral-600 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                apiKeys.length < 5 && (
+                  <button
+                    onClick={() => setShowNewKeyForm(true)}
+                    className="text-sm text-blue-600 font-medium hover:text-blue-700"
+                  >
+                    + Create new API key
+                  </button>
+                )
+              )}
+            </section>
+          )}
 
           {/* Password Section */}
           <section className="bg-white rounded-xl border border-neutral-200 p-6">

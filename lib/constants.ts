@@ -44,9 +44,11 @@ export const PLANS = {
       "File attachments",
       "Conversation follow-ups",
       "Routing explanations",
+      "API key access",
+      "CLI tool (modeltriage-cli)",
       "Priority support",
     ],
-    cta: "Coming soon",
+    cta: "Upgrade to Pro",
     highlighted: true,
   },
 } as const;

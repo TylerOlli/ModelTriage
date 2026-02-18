@@ -25,8 +25,10 @@ import { getAttachmentsGist } from "@/lib/attachments/gist-generator";
 import { parseImageGist, generateRoutingReasonFromGist, type ImageGist } from "@/lib/attachments/image-gist-schema";
 import { classifyPrompt } from "@/lib/llm/prompt-classifier";
 import { getSession, getUserProfile } from "@/lib/auth/session";
-import { checkUsageLimit, createFingerprint } from "@/lib/auth/limits";
+import { checkUsageLimit, createFingerprint, getCurrentUsage } from "@/lib/auth/limits";
 import type { UserRole } from "@/lib/auth/gates";
+import { getDailyLimit } from "@/lib/auth/gates";
+import { resolveApiKey } from "@/lib/api-keys";
 import { reportError } from "@/lib/errors";
 
 /**
@@ -167,15 +169,45 @@ async function* streamProvider(
 export async function POST(request: Request) {
   try {
     // ── Auth & Usage Limit Pre-flight ──────────────────────────
-    // 1. Get authenticated user (if any) from Supabase session
-    // 2. Parse request to get anonymousId for fingerprinting
-    // 3. Check usage limits (DB-backed, atomic increment)
+    // Three auth paths (checked in priority order):
+    //   1. API key via Authorization: Bearer mt_... header
+    //   2. Supabase session cookie (web UI)
+    //   3. Anonymous fingerprint (IP + localStorage anonymousId)
     // All enforcement happens here — streaming code is untouched.
     const clientIP = getClientIP(request);
 
-    // Run auth check and request parsing in parallel — they're independent
+    // Check for API key auth first (before parsing body, since we need the header)
+    const authHeader = request.headers.get("authorization");
+    let apiKeyAuth: { userId: string; role: UserRole } | null = null;
+    let isApiKeyRequest = false;
+
+    if (authHeader?.startsWith("Bearer mt_")) {
+      const token = authHeader.substring(7); // "Bearer " is 7 chars
+      apiKeyAuth = await resolveApiKey(token);
+
+      if (!apiKeyAuth) {
+        return new Response(
+          JSON.stringify({ error: "Invalid or revoked API key" }),
+          { status: 401, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      if (apiKeyAuth.role !== "pro") {
+        return new Response(
+          JSON.stringify({
+            error: "API key access requires a Pro plan",
+            upgrade: "/pricing",
+          }),
+          { status: 403, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      isApiKeyRequest = true;
+    }
+
+    // Run session check and request parsing in parallel — they're independent
     const [sessionUser, parsedRequest] = await Promise.all([
-      getSession(),
+      apiKeyAuth ? Promise.resolve(null) : getSession(),
       parseInferenceRequest(request),
     ]);
 
@@ -187,9 +219,12 @@ export async function POST(request: Request) {
     let userId: string | null = null;
     let fingerprint: string | null = null;
 
-    if (sessionUser) {
+    if (apiKeyAuth) {
+      // API key auth — already resolved
+      userId = apiKeyAuth.userId;
+      userRole = apiKeyAuth.role;
+    } else if (sessionUser) {
       userId = sessionUser.id;
-      // getUserProfile is cached (5-min TTL) so this is fast after first call
       const profile = await getUserProfile(sessionUser.id);
       userRole = (profile?.role as UserRole) ?? "free";
     } else if (anonymousId) {
@@ -212,6 +247,14 @@ export async function POST(request: Request) {
           headers: { "Content-Type": "application/json" },
         }
       );
+    }
+
+    // Build rate limit headers (included on API key responses)
+    const rateLimitHeaders: Record<string, string> = {};
+    if (isApiKeyRequest) {
+      rateLimitHeaders["X-RateLimit-Limit"] = String(usageCheck.limit);
+      rateLimitHeaders["X-RateLimit-Remaining"] = String(usageCheck.remaining);
+      rateLimitHeaders["X-RateLimit-Used"] = String(usageCheck.used);
     }
     
     // Construct contextual prompt if this is a follow-up
@@ -1019,6 +1062,7 @@ ${prompt}`;
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
           Connection: "keep-alive",
+          ...rateLimitHeaders,
         },
       });
     }
@@ -1084,7 +1128,7 @@ ${prompt}`;
       }),
       {
         status: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...rateLimitHeaders },
       }
     );
   } catch (error) {

@@ -46,8 +46,38 @@ model UserProfile {
   createdAt        DateTime @default(now()) @map("created_at")
 
   dailyUsage DailyUsage[]
+  apiKeys    ApiKey[]
 
   @@map("user_profiles")
+}
+
+// ─── API Key ─────────────────────────────────────────────────
+//
+// API keys for programmatic access (Pro users only).
+// Keys are stored as SHA-256 hashes — the plain-text key is
+// shown once on creation and never stored.
+//
+// keyPrefix stores the first 8 characters (e.g. "mt_abc1...")
+// for display purposes in the key management UI.
+//
+// Revocation is a soft delete via revokedAt timestamp.
+// Max 5 active (non-revoked) keys per user.
+
+model ApiKey {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  keyHash   String    @unique @map("key_hash") // SHA-256 of full key
+  keyPrefix String    @map("key_prefix") // first 8 chars for display
+  label     String?   // optional user-provided label
+  createdAt DateTime  @default(now()) @map("created_at")
+  lastUsedAt DateTime? @map("last_used_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  user UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([keyHash])
+  @@map("api_keys")
 }
 
 // ─── Daily Usage ──────────────────────────────────────────────

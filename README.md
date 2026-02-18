@@ -39,7 +39,22 @@ ModelTriage is an LLM decision and verification layer that intelligently routes 
 - **Password strength requirements** — 8+ chars, uppercase/lowercase, number
 - Configurable limits via environment variables (no redeploy needed)
 - `AUTH_DISABLED=true` env var for local development bypass
-- Designed for future Stripe integration (`stripeCustomerId` in schema)
+
+### Payments & CLI (Phase 2)
+- **Stripe integration** — Checkout for Pro purchases, Customer Portal for management
+- **Webhook-driven lifecycle** — automatic upgrade/downgrade on subscription changes
+- **API key system** — Pro users generate up to 5 keys for programmatic access
+  - SHA-256 hashed storage (plain key shown once on creation)
+  - Bearer token auth on `/api/stream`
+  - Rate limit headers (`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Used`)
+- **CLI tool** (`modeltriage-cli` / `mt`) — terminal access to ModelTriage
+  - `mt ask` — stream prompts with auto model selection
+  - `mt compare` — side-by-side multi-model comparison
+  - `mt ask -f file.ts` — attach files for context
+  - `cat log.txt | mt ask "explain"` — stdin pipe support
+  - `mt usage` — check daily request count
+  - `mt models` — list available models
+  - `--json` flag on all commands for scripting
 
 ### File Attachments with Smart Routing
 - Attach up to **3 files** per request (text or images)
@@ -169,14 +184,21 @@ modeltriage/
 │   ├── pricing/page.tsx           # Public — plan comparison + FAQ
 │   ├── about/page.tsx             # Public — how ModelTriage works
 │   ├── dashboard/page.tsx         # Authenticated — usage stats, routing history
-│   ├── account/page.tsx           # Authenticated — profile, settings, deletion
+│   ├── account/page.tsx           # Authenticated — profile, API keys, settings
 │   ├── auth/callback/             # Supabase auth callback
 │   └── api/
-│       ├── stream/                # SSE streaming endpoint
+│       ├── stream/                # SSE streaming endpoint (session + API key auth)
 │       ├── compare/               # Comparison summary endpoint
 │       ├── usage/                 # Usage stats endpoint
 │       ├── dashboard/             # Dashboard data endpoint
-│       └── account/               # Account delete + export endpoints
+│       ├── account/               # Account delete + export endpoints
+│       ├── keys/                  # API key CRUD endpoints
+│       │   ├── route.ts           # POST (create) + GET (list)
+│       │   └── [id]/route.ts      # DELETE (revoke)
+│       └── stripe/                # Stripe integration
+│           ├── checkout/          # Create Checkout Session
+│           ├── webhook/           # Handle subscription events
+│           └── portal/            # Customer Portal session
 ├── src/components/
 │   ├── Nav.tsx                    # Shared navigation bar
 │   ├── PromptComposer.tsx         # Prompt input, files, history, model chips
@@ -210,12 +232,27 @@ modeltriage/
 │   │   └── persist-routing.ts     # Routing decision persistence
 │   ├── attachments/               # File attachment processing
 │   ├── diff/                      # Diff analyzer for comparison mode
+│   ├── stripe.ts                  # Stripe client singleton
+│   ├── api-keys.ts                # API key generation, hashing, resolution
 │   ├── constants.ts               # Plan definitions (Free/Pro)
 │   ├── models.ts                  # Model definitions + display utilities
 │   ├── prompt-cache.ts            # Client-side prompt hash ↔ text cache
 │   └── errors.ts                  # Centralized error reporting
+├── cli/                           # CLI package (modeltriage-cli)
+│   ├── package.json               # npm package config
+│   ├── tsconfig.json              # TypeScript config
+│   └── src/
+│       ├── index.ts               # Entry point
+│       ├── config.ts              # API key + server URL storage
+│       ├── api.ts                 # HTTP client
+│       └── commands/              # CLI commands
+│           ├── auth.ts            # login/logout/status
+│           ├── prompt.ts          # ask (streaming)
+│           ├── compare.ts         # compare (multi-model)
+│           ├── usage.ts           # usage stats
+│           └── models.ts          # model list
 ├── prisma/
-│   └── schema.prisma              # Database schema
+│   └── schema.prisma              # Database schema (incl. ApiKey model)
 ├── supabase/
 │   └── setup.sql                  # Trigger + RLS setup
 ├── docs/                          # Technical documentation

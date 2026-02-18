@@ -6,6 +6,7 @@
  * Public page showing plan comparison (Free vs Pro).
  * Wired to the auth system — shows "Current plan" badge
  * for logged-in users and opens the login modal for signups.
+ * Pro upgrade triggers Stripe Checkout.
  */
 
 import { useState } from "react";
@@ -13,15 +14,16 @@ import { Nav } from "../../components/Nav";
 import { LoginModal } from "../../components/auth/LoginModal";
 import { useAuth } from "../../components/auth/AuthProvider";
 import { PLANS } from "@/lib/constants";
+import Link from "next/link";
 
 const faqs = [
   {
     q: "What counts as a request?",
-    a: "Each time you submit a prompt — whether in auto-select or comparison mode — counts as one request. Follow-up questions in the same conversation also count as one request each.",
+    a: "Each time you submit a prompt — whether in auto-select or comparison mode — counts as one request. Follow-up questions in the same conversation also count as one request each. CLI and API requests count toward the same daily limit.",
   },
   {
     q: "When do daily limits reset?",
-    a: "Daily limits reset at midnight UTC. Your remaining count is always visible in the user menu.",
+    a: "Daily limits reset at midnight UTC. Your remaining count is always visible in the user menu or via `mt usage` in the CLI.",
   },
   {
     q: "Can I try ModelTriage without signing up?",
@@ -35,14 +37,48 @@ const faqs = [
     q: "How does comparison mode work?",
     a: "Comparison mode runs your prompt through 2-3 models in parallel and shows a side-by-side diff summary. Free users can compare 2 models; Pro users can compare up to 3.",
   },
+  {
+    q: "What is the CLI tool?",
+    a: "Pro users get access to modeltriage-cli (mt) — a command-line tool for sending prompts, attaching files, and comparing models directly from your terminal. Install with npm install -g modeltriage-cli.",
+  },
+  {
+    q: "How do API keys work?",
+    a: "Pro users can generate up to 5 API keys from their account page. Keys are used by the CLI tool to authenticate requests. Each key can be individually revoked.",
+  },
+  {
+    q: "Can I cancel my subscription?",
+    a: "Yes. Manage your subscription from the account page. You can cancel anytime through the Stripe customer portal. Your Pro features remain active until the end of your billing period.",
+  },
 ];
 
 export default function PricingPage() {
   const { user, role } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [upgrading, setUpgrading] = useState(false);
 
   const currentPlan = user ? (role || "free") : null;
+
+  const handleUpgrade = async () => {
+    if (!user) {
+      setShowLoginModal(true);
+      return;
+    }
+    setUpgrading(true);
+    try {
+      const res = await fetch("/api/stripe/checkout", { method: "POST" });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || "Failed to start checkout");
+      }
+    } catch {
+      alert("Something went wrong. Please try again.");
+    } finally {
+      setUpgrading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#fafafa]">
@@ -155,15 +191,19 @@ export default function PricingPage() {
               ))}
             </ul>
 
-            <button
-              disabled
-              className="w-full py-2.5 px-4 text-sm font-medium rounded-xl bg-blue-600 text-white opacity-60 cursor-not-allowed"
-            >
-              {PLANS.pro.cta}
-            </button>
-            <p className="text-xs text-neutral-400 text-center mt-2">
-              Stripe integration coming in Phase 2
-            </p>
+            {currentPlan === "pro" ? (
+              <div className="text-center text-sm text-neutral-400 font-medium py-2.5">
+                Your current plan
+              </div>
+            ) : (
+              <button
+                onClick={handleUpgrade}
+                disabled={upgrading}
+                className="w-full py-2.5 px-4 text-sm font-medium rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 transition-colors"
+              >
+                {upgrading ? "Redirecting..." : PLANS.pro.cta}
+              </button>
+            )}
           </div>
         </div>
 
