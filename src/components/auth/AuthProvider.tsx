@@ -21,6 +21,7 @@ import {
   type ReactNode,
 } from "react";
 import { createSupabaseBrowser } from "@/lib/auth/supabase-browser";
+import { getAnonymousId } from "@/lib/anonymous-id";
 import type { User } from "@supabase/supabase-js";
 
 interface UsageInfo {
@@ -73,12 +74,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       let url = "/api/usage";
 
-      // For anonymous users, pass anonymousId so the server can hash it with IP
       if (!user) {
-        const anonymousId = localStorage.getItem("mt_anonymous_id");
-        if (anonymousId) {
-          url += `?anonymousId=${encodeURIComponent(anonymousId)}`;
-        }
+        const anonymousId = getAnonymousId();
+        url += `?anonymousId=${encodeURIComponent(anonymousId)}`;
       }
 
       const res = await fetch(url);
