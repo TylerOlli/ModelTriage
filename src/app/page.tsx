@@ -9,6 +9,7 @@ import type {
   ModelPanelData,
 } from "@/lib/session-types";
 import { createTurnId, createSessionId } from "@/lib/session-types";
+import { getAnonymousId } from "@/lib/anonymous-id";
 import { useAuth } from "../components/auth/AuthProvider";
 import { LoginModal } from "../components/auth/LoginModal";
 import { AuthGate } from "../components/auth/AuthGate";
@@ -22,20 +23,6 @@ import { ConversationHistory } from "../components/ConversationHistory";
 
 // ModelPanel type alias — canonical definition lives in lib/session-types.ts
 type ModelPanel = ModelPanelData;
-
-/**
- * Get or create an anonymous user ID for routing analytics.
- * Stored in localStorage — not linked to any account.
- */
-function getAnonymousId(): string {
-  const STORAGE_KEY = "mt_anonymous_id";
-  const existing = localStorage.getItem(STORAGE_KEY);
-  if (existing) return existing;
-
-  const id = crypto.randomUUID();
-  localStorage.setItem(STORAGE_KEY, id);
-  return id;
-}
 
 /**
  * Helper to detect if a routing reason is generic/fallback text
